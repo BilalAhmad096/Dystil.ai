@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register | DYSTIL</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+
+    <div id="header"></div>
+
+    <main>
+        <section class="form-section">
+            <h1>Register for Bootcamp</h1>
+            <p>Fill in your details and choose the package that fits your career goal.</p>
+
+            <form class="register-form">
+                <label>Full Name</label>
+                <input type="text" placeholder="Enter your full name" required>
+
+                <label>Email / Phone</label>
+                <input type="text" placeholder="Enter your email or phone number" required>
+
+                <label>University / Degree</label>
+                <input type="text" placeholder="Enter your university or degree">
+
+                <label>Career Goal</label>
+                <textarea placeholder="Tell us your career goal"></textarea>
+
+                <label>Previous Tech Skills</label>
+                <textarea placeholder="Example: Python, Excel, AI tools, cloud, etc."></textarea>
+
+                <label>Past Experience</label>
+                <textarea placeholder="Mention any academic, work or project experience"></textarea>
+
+                <label>CV Upload</label>
+                <input type="file">
+
+                <label>Package</label>
+                <select required>
+                    <option value="">Select Package</option>
+                    <option value="foundation">Foundation Bootcamp</option>
+                    <option value="advanced">Advanced Bootcamp</option>
+                </select>
+
+                <button type="submit">Submit Registration</button>
+            </form>
+        </section>
+    </main>
+
+    <div id="footer"></div>
+    <script src="../assets/js/script.js"></script>
+    <script>
+        loadStudentLayout();
+    </script>
+</body>
+</html>
