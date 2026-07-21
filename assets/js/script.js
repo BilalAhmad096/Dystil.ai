@@ -43,7 +43,7 @@ function setupLinksAndImages() {
         image.style.cursor = "pointer";
 
         image.addEventListener("click", function() {
-            window.location.href = basePath + "home.html";
+            window.location.href = basePath + "index.html";
         });
     });
 }
