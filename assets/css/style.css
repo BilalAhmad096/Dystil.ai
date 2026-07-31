@@ -6384,4 +6384,217 @@ ABOUT HERO
 
 .advanced-price span {
     color: var(--accent);
+}/* =========================================================
+   MOBILE HEADER / HAMBURGER MENU
+   Add this at the VERY BOTTOM of style.css
+   Desktop view remains unchanged.
+========================================================= */
+
+.mobile-menu-toggle,
+.mobile-menu-panel,
+.mobile-menu-backdrop {
+    display: none;
+}
+
+/* Keep header horizontal on tablet sizes.
+   This overrides the older responsive rule that stacked the header at 1100px. */
+@media screen and (max-width: 1100px) {
+    .site-header,
+    .student-header,
+    .corporate-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        min-height: 90px;
+        padding: 16px 6%;
+    }
+
+    .navbar {
+        flex-direction: row;
+        gap: 20px;
+    }
+}
+
+@media screen and (max-width: 900px) {
+    body.mobile-menu-open {
+        overflow: hidden;
+    }
+
+    .site-header,
+    .student-header,
+    .corporate-header {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        min-height: 82px;
+        padding: 14px 6%;
+        background: rgba(7, 17, 31, 0.98);
+        border-bottom: 1px solid rgba(88, 101, 242, 0.25);
+    }
+
+    .logo img {
+        width: 128px;
+    }
+
+    .site-header > .navbar,
+    .site-header > .get-started-btn {
+        display: none;
+    }
+
+    .mobile-menu-toggle {
+        width: 48px;
+        height: 48px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.06);
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: 0.3s ease;
+        position: relative;
+        z-index: 1002;
+    }
+
+    .mobile-menu-toggle:hover {
+        background: rgba(88, 101, 242, 0.18);
+        border-color: rgba(88, 101, 242, 0.55);
+    }
+
+    .mobile-menu-toggle span {
+        width: 24px;
+        height: 2px;
+        border-radius: 999px;
+        background: var(--white);
+        transition: 0.3s ease;
+    }
+
+    .mobile-menu-toggle.active span:nth-child(1) {
+        transform: translateY(8px) rotate(45deg);
+    }
+
+    .mobile-menu-toggle.active span:nth-child(2) {
+        opacity: 0;
+    }
+
+    .mobile-menu-toggle.active span:nth-child(3) {
+        transform: translateY(-8px) rotate(-45deg);
+    }
+
+    .mobile-menu-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 998;
+        display: block;
+        background: rgba(3, 8, 20, 0.62);
+        opacity: 0;
+        visibility: hidden;
+        transition: 0.3s ease;
+        backdrop-filter: blur(6px);
+    }
+
+    .mobile-menu-backdrop.active {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .mobile-menu-panel {
+        position: fixed;
+        top: 0;
+        right: -100%;
+        z-index: 999;
+        display: flex;
+        flex-direction: column;
+        width: min(86vw, 390px);
+        height: 100vh;
+        padding: 105px 24px 30px;
+        background:
+            radial-gradient(circle at top right, rgba(88, 101, 242, 0.24), transparent 36%),
+            linear-gradient(180deg, #07111f 0%, #11162a 100%);
+        border-left: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: -24px 0 70px rgba(0, 0, 0, 0.35);
+        transition: right 0.35s ease;
+        overflow-y: auto;
+    }
+
+    .mobile-menu-panel.active {
+        right: 0;
+    }
+
+    .mobile-menu-panel .navbar {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 8px;
+        width: 100%;
+        flex-wrap: nowrap;
+    }
+
+    .mobile-menu-panel .navbar a {
+        width: 100%;
+        padding: 15px 18px;
+        border-radius: 16px;
+        color: #e8edf7;
+        background: rgba(255, 255, 255, 0.045);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 17px;
+        font-weight: 800;
+        letter-spacing: 0.6px;
+    }
+
+    .mobile-menu-panel .navbar a::after {
+        display: none;
+    }
+
+    .mobile-menu-panel .navbar a:hover,
+    .mobile-menu-panel .navbar a.active {
+        color: var(--white);
+        background: linear-gradient(135deg, rgba(88, 101, 242, 0.34), rgba(242, 168, 75, 0.16));
+        border-color: rgba(88, 101, 242, 0.45);
+        transform: translateX(4px);
+    }
+
+    .mobile-menu-panel .get-started-btn {
+        display: block;
+        width: 100%;
+        margin-top: 18px;
+        padding: 17px 24px;
+        text-align: center;
+        border-radius: 999px;
+        font-size: 17px;
+        letter-spacing: 1px;
+    }
+}
+
+@media screen and (max-width: 520px) {
+    .site-header,
+    .student-header,
+    .corporate-header {
+        min-height: 76px;
+        padding: 12px 5%;
+    }
+
+    .logo img {
+        width: 118px;
+    }
+
+    .mobile-menu-toggle {
+        width: 46px;
+        height: 46px;
+        border-radius: 13px;
+    }
+
+    .mobile-menu-panel {
+        width: 88vw;
+        padding: 96px 20px 28px;
+    }
+
+    .mobile-menu-panel .navbar a {
+        padding: 14px 16px;
+        font-size: 16px;
+    }
 }
