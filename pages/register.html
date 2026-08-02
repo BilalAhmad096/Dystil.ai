@@ -17,44 +17,52 @@
             <h1>Register for Bootcamp</h1>
             <p>Fill in your details and choose the package that fits your career goal.</p>
 
-            <form class="register-form">
-                <label>Full Name</label>
-                <input type="text" placeholder="Enter your full name" required>
+            <form class="register-form" method="post" data-enquiry-form data-form-type="Bootcamp Registration">
+                <label for="register-full-name">Full Name</label>
+                <input id="register-full-name" name="fullName" type="text" placeholder="Enter your full name" autocomplete="name" maxlength="120" required>
 
-                <label>Email</label>
-                <input type="email" placeholder="Enter your email" required>
+                <label for="register-email">Email</label>
+                <input id="register-email" name="email" type="email" placeholder="Enter your email" autocomplete="email" maxlength="254" required>
 
-                <label>Phone</label>
-                <input type="text" placeholder="Enter your phone number" required>
+                <label for="register-phone">Phone</label>
+                <input id="register-phone" name="phone" type="tel" placeholder="Enter your phone number" autocomplete="tel" maxlength="40" required>
 
-                <label>University / Degree</label>
-                <input type="text" placeholder="Enter your university or degree">
+                <label for="register-university">University / Degree</label>
+                <input id="register-university" name="universityDegree" type="text" placeholder="Enter your university or degree" autocomplete="organization" maxlength="250">
 
-                <label>Career Goal</label>
-                <textarea placeholder="Tell us your career goal"></textarea>
+                <label for="register-career-goal">Career Goal</label>
+                <textarea id="register-career-goal" name="careerGoal" placeholder="Tell us your career goal" maxlength="4000"></textarea>
 
-                <label>Previous Tech Skills</label>
-                <textarea placeholder="Example: Python, Excel, AI tools, cloud, etc."></textarea>
+                <label for="register-tech-skills">Previous Tech Skills</label>
+                <textarea id="register-tech-skills" name="techSkills" placeholder="Example: Python, Excel, AI tools, cloud, etc." maxlength="4000"></textarea>
 
-                <label>Past Experience</label>
-                <textarea placeholder="Mention any academic, work or project experience"></textarea>
+                <label for="register-experience">Past Experience</label>
+                <textarea id="register-experience" name="experience" placeholder="Mention any academic, work or project experience" maxlength="4000"></textarea>
 
-                <label>CV Upload</label>
-                <input type="file">
+                <label for="register-cv">CV Upload</label>
+                <input id="register-cv" name="cv" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+                <p class="form-help">PDF, DOC or DOCX, up to 4 MB.</p>
 
-                <label>Package</label>
-                <select required>
+                <label for="register-package">Package</label>
+                <select id="register-package" name="package" required>
                     <option value="">Select Package</option>
-                    <option value="foundation">Foundation Bootcamp</option>
-                    <option value="advanced">Advanced Bootcamp</option>
+                    <option value="Foundation Bootcamp">Foundation Bootcamp</option>
+                    <option value="Advanced Bootcamp">Advanced Bootcamp</option>
                 </select>
 
+                <div class="form-honeypot" aria-hidden="true">
+                    <label for="register-website">Website</label>
+                    <input id="register-website" name="website" type="text" tabindex="-1" autocomplete="off">
+                </div>
+
                 <button type="submit">Submit Registration</button>
+                <p class="form-status" role="status" aria-live="polite"></p>
             </form>
         </section>
     </main>
 
     <div id="footer"></div>
+    <script src="../assets/js/form-config.js"></script>
     <script src="../assets/js/script.js"></script>
     <script>
         loadStudentLayout();

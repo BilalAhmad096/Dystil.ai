@@ -43,7 +43,7 @@
                     <div class="contact-detail-card">
                         <span>✉</span>
                         <h3>Email</h3>
-                        <p>contactus@dystil.ai</p>
+                        <p><a href="mailto:askus@dystil.ai">askus@dystil.ai</a></p>
                     </div>
 
                     <!-- <div class="contact-detail-card">
@@ -60,18 +60,18 @@
                 </div>
             </div>
 
-            <form class="student-contact-form">
-                <label>Full Name</label>
-                <input type="text" placeholder="Enter your full name" required>
+            <form class="student-contact-form" method="post" data-enquiry-form data-form-type="Student Enquiry">
+                <label for="student-full-name">Full Name</label>
+                <input id="student-full-name" name="fullName" type="text" placeholder="Enter your full name" autocomplete="name" maxlength="120" required>
 
-                <label>Email</label>
-                <input type="email" placeholder="Enter your email" required>
+                <label for="student-email">Email</label>
+                <input id="student-email" name="email" type="email" placeholder="Enter your email" autocomplete="email" maxlength="254" required>
 
-                <label>Phone</label>
-                <input type="text" placeholder="Enter your phone number" required>
+                <label for="student-phone">Phone</label>
+                <input id="student-phone" name="phone" type="tel" placeholder="Enter your phone number" autocomplete="tel" maxlength="40" required>
 
-                <label>I am interested in</label>
-                <select required>
+                <label for="student-interest">I am interested in</label>
+                <select id="student-interest" name="interest" required>
                     <option value="">Select an option</option>
                     <option>Free Taster Session</option>
                     <option>Foundation Bootcamp</option>
@@ -80,10 +80,16 @@
                     <option>Project Bootcamp</option>
                 </select>
 
-                <label>Your Message</label>
-                <textarea placeholder="Tell us what you would like to know"></textarea>
+                <label for="student-message">Your Message</label>
+                <textarea id="student-message" name="message" placeholder="Tell us what you would like to know" maxlength="4000"></textarea>
+
+                <div class="form-honeypot" aria-hidden="true">
+                    <label for="student-website">Website</label>
+                    <input id="student-website" name="website" type="text" tabindex="-1" autocomplete="off">
+                </div>
 
                 <button type="submit">Send Message</button>
+                <p class="form-status" role="status" aria-live="polite"></p>
             </form>
         </section>
 
@@ -95,6 +101,7 @@
 
     <div id="footer"></div>
 
+    <script src="../assets/js/form-config.js"></script>
     <script src="../assets/js/script.js"></script>
     <script>
         loadStudentLayout();

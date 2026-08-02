@@ -6810,3 +6810,55 @@ ABOUT HERO
         padding: 24px 20px 34px;
     }
 }
+/* Shared enquiry form feedback and spam protection */
+.form-honeypot {
+    position: absolute !important;
+    left: -10000px !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+}
+
+.form-help,
+.form-status {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.form-help {
+    color: #66736d;
+    margin-top: -8px;
+}
+
+.form-status:empty {
+    display: none;
+}
+
+.form-status {
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: #edf2f0;
+    color: #243c33;
+}
+
+.form-status-success {
+    background: #e5f6ee;
+    color: #12633f;
+    border: 1px solid #a9dec5;
+}
+
+.form-status-error {
+    background: #fff0f0;
+    color: #9d2727;
+    border: 1px solid #efb5b5;
+}
+
+.student-contact-form button:disabled,
+.corporate-contact-form button:disabled,
+.register-form button:disabled {
+    cursor: wait;
+    opacity: 0.7;
+    transform: none;
+}

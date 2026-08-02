@@ -1,0 +1,10 @@
+name = "dystil-contact"
+main = "server.js"
+compatibility_date = "2026-08-02"
+workers_dev = true
+preview_urls = false
+
+[vars]
+ALLOWED_ORIGINS = "https://dystil.ai,https://www.dystil.ai"
+ADMIN_EMAIL = "askus@dystil.ai"
+FROM_EMAIL = "askus@dystil.ai"

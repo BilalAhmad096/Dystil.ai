@@ -131,3 +131,89 @@ document.addEventListener("click", function(e) {
         clickedItem.classList.add("active");
     }
 });
+
+/* Website enquiry forms */
+function setupEnquiryForms() {
+    document.querySelectorAll("[data-enquiry-form]").forEach(function(form) {
+        if (form.dataset.enquiryReady === "true") return;
+
+        form.dataset.enquiryReady = "true";
+        form.addEventListener("submit", submitEnquiryForm);
+    });
+}
+
+async function submitEnquiryForm(event) {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    const status = form.querySelector(".form-status");
+    const submitButton = form.querySelector('button[type="submit"]');
+    const endpoint = window.DYSTIL_FORM_ENDPOINT || "";
+    const cv = form.querySelector('input[name="cv"]')?.files[0];
+
+    if (!endpoint || endpoint.includes("YOUR-WORKERS-SUBDOMAIN")) {
+        showFormStatus(status, "error", "This form is not connected yet. Please email askus@dystil.ai.");
+        return;
+    }
+
+    if (cv && cv.size > 4 * 1024 * 1024) {
+        showFormStatus(status, "error", "Please upload a CV that is 4 MB or smaller.");
+        return;
+    }
+
+    const originalButtonText = submitButton.textContent;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(function() {
+        controller.abort();
+    }, 30000);
+
+    submitButton.disabled = true;
+    submitButton.textContent = "Sending…";
+    showFormStatus(status, "", "Sending your details securely…");
+
+    try {
+        const formData = new FormData(form);
+        formData.set("formType", form.dataset.formType || "Website Enquiry");
+
+        const response = await fetch(endpoint, {
+            method: "POST",
+            body: formData,
+            signal: controller.signal
+        });
+
+        let result = {};
+        try {
+            result = await response.json();
+        } catch {
+            result = {};
+        }
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || "We could not send your details. Please try again.");
+        }
+
+        form.reset();
+        showFormStatus(status, "success", result.message || "Thanks — your details have been sent.");
+    } catch (error) {
+        const message = error.name === "AbortError"
+            ? "The request took too long. Please try again or email askus@dystil.ai."
+            : error.message;
+
+        showFormStatus(status, "error", message || "We could not send your details. Please email askus@dystil.ai.");
+    } finally {
+        window.clearTimeout(timeout);
+        submitButton.disabled = false;
+        submitButton.textContent = originalButtonText;
+    }
+}
+
+function showFormStatus(element, type, message) {
+    if (!element) return;
+
+    element.classList.remove("form-status-success", "form-status-error");
+    if (type === "success") element.classList.add("form-status-success");
+    if (type === "error") element.classList.add("form-status-error");
+    element.textContent = message;
+}
+
+setupEnquiryForms();

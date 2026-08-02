@@ -1,21 +1,12 @@
 {
-  "name": "backend",
+  "name": "dystil-contact-worker",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "type": "module",
+  "description": "Dystil website form email backend for Cloudflare Workers",
   "scripts": {
-  "start": "node server.js",
-  "dev": "node server.js"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "express-rate-limit": "^8.6.1",
-    "nodemailer": "^9.0.3"
+    "dev": "npx wrangler dev",
+    "deploy": "npx wrangler deploy",
+    "test": "node --test"
   }
 }

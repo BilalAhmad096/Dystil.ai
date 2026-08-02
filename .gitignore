@@ -1,0 +1,11 @@
+# Local Cloudflare files and secrets
+backend/.dev.vars
+backend/.wrangler/
+
+# Dependencies are installed during development/deployment
+backend/node_modules/
+
+# Local logs and OS files
+*.log
+.DS_Store
+Thumbs.db

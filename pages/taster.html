@@ -204,18 +204,18 @@
                 </div>
             </div>
 
-            <form class="student-contact-form">
-                <label>Full Name</label>
-                <input type="text" placeholder="Enter your full name" required>
+            <form class="student-contact-form" method="post" data-enquiry-form data-form-type="Free Taster Registration">
+                <label for="taster-full-name">Full Name</label>
+                <input id="taster-full-name" name="fullName" type="text" placeholder="Enter your full name" autocomplete="name" maxlength="120" required>
 
-                <label>Email Address</label>
-                <input type="email" placeholder="Enter your email address" required>
+                <label for="taster-email">Email Address</label>
+                <input id="taster-email" name="email" type="email" placeholder="Enter your email address" autocomplete="email" maxlength="254" required>
 
-                <label>Phone Number</label>
-                <input type="text" placeholder="Enter your phone number">
+                <label for="taster-phone">Phone Number</label>
+                <input id="taster-phone" name="phone" type="tel" placeholder="Enter your phone number" autocomplete="tel" maxlength="40">
 
-                <label>You are currently a</label>
-                <select required>
+                <label for="taster-status">You are currently a</label>
+                <select id="taster-status" name="currentStatus" required>
                     <option value="">Select one option</option>
                     <option>Student</option>
                     <option>Graduate</option>
@@ -223,8 +223,8 @@
                     <option>Other</option>
                 </select>
 
-                <label>Area of Interest</label>
-                <select required>
+                <label for="taster-interest">Area of Interest</label>
+                <select id="taster-interest" name="areaOfInterest" required>
                     <option value="">Select your interest</option>
                     <option>AI and Automation</option>
                     <option>Data Science</option>
@@ -234,16 +234,23 @@
                     <option>Not sure yet</option>
                 </select>
 
-                <label>Message</label>
-                <textarea placeholder="Tell us what you would like to learn from the session"></textarea>
+                <label for="taster-message">Message</label>
+                <textarea id="taster-message" name="message" placeholder="Tell us what you would like to learn from the session" maxlength="4000"></textarea>
+
+                <div class="form-honeypot" aria-hidden="true">
+                    <label for="taster-website">Website</label>
+                    <input id="taster-website" name="website" type="text" tabindex="-1" autocomplete="off">
+                </div>
 
                 <button type="submit">Sign Up for Free Taster</button>
+                <p class="form-status" role="status" aria-live="polite"></p>
             </form>
         </section>
     </main>
 
     <div id="footer"></div>
 
+    <script src="../assets/js/form-config.js"></script>
     <script src="../assets/js/script.js"></script>
     <script>
         loadStudentLayout();

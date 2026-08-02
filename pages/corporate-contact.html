@@ -38,7 +38,7 @@
                         <span>✉</span>
                         <div>
                             <h3>Email</h3>
-                            <p>example@dystil.com</p>
+                            <p><a href="mailto:askus@dystil.ai">askus@dystil.ai</a></p>
                         </div>
                     </div>
                 </div>
@@ -54,18 +54,18 @@
                 </div>
             </div>
 
-            <form class="corporate-contact-form">
-                <label>Full Name *</label>
-                <input type="text" placeholder="John" required>
+            <form class="corporate-contact-form" method="post" data-enquiry-form data-form-type="Corporate Enquiry">
+                <label for="corporate-full-name">Full Name *</label>
+                <input id="corporate-full-name" name="fullName" type="text" placeholder="John" autocomplete="name" maxlength="120" required>
 
-                <label>info@dystil.com *</label>
-                <input type="email" placeholder="Enter your email" required>
+                <label for="corporate-email">Work Email *</label>
+                <input id="corporate-email" name="email" type="email" placeholder="Enter your email" autocomplete="email" maxlength="254" required>
 
-                <label>Company *</label>
-                <input type="text" placeholder="Dystil" required>
+                <label for="corporate-company">Company *</label>
+                <input id="corporate-company" name="company" type="text" placeholder="Dystil" autocomplete="organization" maxlength="160" required>
 
-                <label>Primary Focus Area *</label>
-                <select required>
+                <label for="corporate-focus">Primary Focus Area *</label>
+                <select id="corporate-focus" name="focusArea" required>
                     <option value=""></option>
                     <option>AI Upskilling</option>
                     <option>Workflow Audit</option>
@@ -73,16 +73,23 @@
                     <option>Enterprise Platform</option>
                 </select>
 
-                <label>Biggest Challenge?</label>
-                <textarea placeholder="Give a detailed example"></textarea>
+                <label for="corporate-challenge">Biggest Challenge?</label>
+                <textarea id="corporate-challenge" name="challenge" placeholder="Give a detailed example" maxlength="4000"></textarea>
+
+                <div class="form-honeypot" aria-hidden="true">
+                    <label for="corporate-website">Website</label>
+                    <input id="corporate-website" name="website" type="text" tabindex="-1" autocomplete="off">
+                </div>
 
                 <button type="submit">Get Custom Roadmap</button>
+                <p class="form-status" role="status" aria-live="polite"></p>
             </form>
         </section>
     </main>
 
     <div id="footer"></div>
 
+    <script src="../assets/js/form-config.js"></script>
     <script src="../assets/js/script.js"></script>
     <script>
         loadCorporateLayout();
