@@ -1,3 +1,15 @@
+/* Show clean URLs when a page is opened through an older .html link */
+(function stripHtmlExtension() {
+    if (!window.location.protocol.startsWith("http")) return;
+    if (!window.location.pathname.endsWith(".html")) return;
+
+    const cleanPath = window.location.pathname
+        .replace(/\/index\.html$/, "/")
+        .replace(/\.html$/, "");
+
+    window.history.replaceState(null, "", cleanPath + window.location.search + window.location.hash);
+})();
+
 const isPageFolder = window.location.pathname.includes("/pages/");
 const basePath = isPageFolder ? "../" : "";
 
@@ -43,13 +55,19 @@ function setupLinksAndImages() {
         image.style.cursor = "pointer";
 
         image.addEventListener("click", function() {
-            window.location.href = basePath + "index.html";
+            window.location.href = basePath || "./";
         });
     });
 }
 
+function normalisePage(value) {
+    const page = value.replace(/\.html$/, "");
+
+    return page === "" || page === "index" ? "home" : page;
+}
+
 function setActiveLink() {
-    const currentPage = window.location.pathname.split("/").pop();
+    const currentPage = normalisePage(window.location.pathname.split("/").pop());
 
     document.querySelectorAll(".navbar a").forEach(function(link) {
         link.classList.remove("active");
@@ -59,7 +77,7 @@ function setActiveLink() {
         if (!href) return;
 
         const cleanHref = href.split("#")[0];
-        const linkPage = cleanHref.split("/").pop();
+        const linkPage = normalisePage(cleanHref.split("/").pop());
 
         if (currentPage === linkPage) {
             link.classList.add("active");
