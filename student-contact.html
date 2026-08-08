@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Us | DYSTIL Students</title>
+    <meta name="description" content="Practical AI learning and workforce transformation for businesses, students, and the future of work.">
+    <link rel="canonical" href="https://dystil.ai/student-contact">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="DYSTIL">
+    <meta property="og:title" content="Contact Us | DYSTIL Students">
+    <meta property="og:description" content="Practical AI learning and workforce transformation for businesses, students, and the future of work.">
+    <meta property="og:url" content="https://dystil.ai/student-contact">
+    <meta property="og:image" content="https://dystil.ai/assets/images/social-preview.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+    <meta property="og:image:alt" content="DYSTIL logo">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Contact Us | DYSTIL Students">
+    <meta name="twitter:description" content="Practical AI learning and workforce transformation for businesses, students, and the future of work.">
+    <meta name="twitter:image" content="https://dystil.ai/assets/images/social-preview.png">
+    <meta name="twitter:image:alt" content="DYSTIL logo">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="icon" type="image/png" href="assets/images/favicon.png">
+    <link rel="shortcut icon" type="image/x-icon" href="assets/images/favicon.ico">
+    <link rel="apple-touch-icon" href="assets/images/favicon.png">
+</head>
+<body>
+
+    <div id="header"></div>
+
+    <main>
+        <section class="contact-hero">
+            <div class="student-badge">GET IN TOUCH</div>
+
+            <h1>
+                Have Questions? <br>
+                <span>Talk to Dystil Students.</span>
+            </h1>
+
+            <p>
+                Whether you want to join a bootcamp, explore a free taster session,
+                understand the right pathway, or ask about projects, our team is here
+                to guide you.
+            </p>
+        </section>
+
+        <section class="student-contact-section">
+            <div class="contact-info-panel">
+                <span class="contact-label">CONTACT DETAILS</span>
+
+                <h2>Let’s help you choose the right next step.</h2>
+
+                <p>
+                    Share your details and we’ll guide you toward the best Dystil
+                    Students pathway based on your background, goals and availability.
+                </p>
+
+                <div class="contact-detail-grid">
+                    <div class="contact-detail-card">
+                        <span>✉</span>
+                        <h3>Email</h3>
+                        <p><a href="mailto:askus@dystil.ai">askus@dystil.ai</a></p>
+                    </div>
+
+                    <!-- <div class="contact-detail-card">
+                        <span>☎</span>
+                        <h3>Student Advisor</h3>
+                        <p>07591 966501</p>
+                    </div> -->
+
+                    <!-- <div class="contact-detail-card">
+                        <span>⚡</span>
+                        <h3>Best For</h3>
+                        <p>Bootcamps, projects, career pathways and taster sessions.</p>
+                    </div> -->
+                </div>
+            </div>
+
+            <form class="student-contact-form" method="post" data-enquiry-form data-form-type="Student Enquiry">
+                <label for="student-full-name">Full Name</label>
+                <input id="student-full-name" name="fullName" type="text" placeholder="Enter your full name" autocomplete="name" maxlength="120" required>
+
+                <label for="student-email">Email</label>
+                <input id="student-email" name="email" type="email" placeholder="Enter your email" autocomplete="email" maxlength="254" required>
+
+                <label for="student-phone">Phone</label>
+                <input id="student-phone" name="phone" type="tel" placeholder="Enter your phone number" autocomplete="tel" maxlength="40" required>
+
+                <label for="student-interest">I am interested in</label>
+                <select id="student-interest" name="interest" required>
+                    <option value="">Select an option</option>
+                    <option>Free Taster Session</option>
+                    <option>Foundation Bootcamp</option>
+                    <option>Advanced Bootcamp</option>
+                    <option>Career Pathways</option>
+                    <option>Project Bootcamp</option>
+                </select>
+
+                <label for="student-message">Your Message</label>
+                <textarea id="student-message" name="message" placeholder="Tell us what you would like to know" maxlength="4000"></textarea>
+
+                <div class="form-honeypot" aria-hidden="true">
+                    <label for="student-website">Website</label>
+                    <input id="student-website" name="website" type="text" tabindex="-1" autocomplete="off">
+                </div>
+
+                <button type="submit">Send Message</button>
+                <p class="form-status" role="status" aria-live="polite"></p>
+            </form>
+        </section>
+
+        <section class="register-cta">
+            <h2>Ready to start your career accelerator journey?</h2>
+            <a href="register" class="register-btn">Register Now</a>
+        </section>
+    </main>
+
+    <div id="footer"></div>
+
+    <script src="assets/js/form-config.js"></script>
+    <script src="assets/js/script.js"></script>
+    <script>
+        loadStudentLayout();
+    </script>
+    <script src="assets/js/mobile-menu.js"></script>
+</body>
+</html>

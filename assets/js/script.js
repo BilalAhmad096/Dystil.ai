@@ -10,18 +10,15 @@
     window.history.replaceState(null, "", cleanPath + window.location.search + window.location.hash);
 })();
 
-const isPageFolder = window.location.pathname.includes("/pages/");
-const basePath = isPageFolder ? "../" : "";
-
 function loadComponent(id, file) {
     const element = document.getElementById(id);
 
     if (!element) return;
 
-    fetch(basePath + file)
+    fetch(file)
         .then(function(response) {
             if (!response.ok) {
-                throw new Error("File not found: " + basePath + file);
+                throw new Error("File not found: " + file);
             }
 
             return response.text();
@@ -43,7 +40,7 @@ function setupLinksAndImages() {
 
         if (!target) return;
 
-        link.href = basePath + target;
+        link.href = target;
     });
 
     document.querySelectorAll("[data-src]").forEach(function(image) {
@@ -51,11 +48,11 @@ function setupLinksAndImages() {
 
         if (!target) return;
 
-        image.src = basePath + target;
+        image.src = target;
         image.style.cursor = "pointer";
 
         image.addEventListener("click", function() {
-            window.location.href = basePath || "./";
+            window.location.href = "./";
         });
     });
 }
