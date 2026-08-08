@@ -52,19 +52,20 @@ function setupLinksAndImages() {
         image.style.cursor = "pointer";
 
         image.addEventListener("click", function() {
-            window.location.href = "./";
+            window.location.href = "/";
         });
     });
 }
 
-function normalisePage(value) {
-    const page = value.replace(/\.html$/, "");
+/* Compare whole paths, since /corporate/home and /students/home share a last segment */
+function normalisePath(pathname) {
+    const path = pathname.replace(/\/index\.html$/, "/").replace(/\.html$/, "");
 
-    return page === "" || page === "index" ? "home" : page;
+    return path === "" ? "/" : path;
 }
 
 function setActiveLink() {
-    const currentPage = normalisePage(window.location.pathname.split("/").pop());
+    const currentPath = normalisePath(window.location.pathname);
 
     document.querySelectorAll(".navbar a").forEach(function(link) {
         link.classList.remove("active");
@@ -73,28 +74,27 @@ function setActiveLink() {
 
         if (!href) return;
 
-        const cleanHref = href.split("#")[0];
-        const linkPage = normalisePage(cleanHref.split("/").pop());
+        const linkPath = normalisePath(new URL(href, window.location.origin).pathname);
 
-        if (currentPage === linkPage) {
+        if (currentPath === linkPath) {
             link.classList.add("active");
         }
     });
 }
 
 function loadMainLayout() {
-    loadComponent("header", "components/main-header.html");
-    loadComponent("footer", "components/main-footer.html");
+    loadComponent("header", "/components/main-header.html");
+    loadComponent("footer", "/components/main-footer.html");
 }
 
 function loadStudentLayout() {
-    loadComponent("header", "components/student-header.html");
-    loadComponent("footer", "components/student-footer.html");
+    loadComponent("header", "/components/student-header.html");
+    loadComponent("footer", "/components/student-footer.html");
 }
 
 function loadCorporateLayout() {
-    loadComponent("header", "components/corporate-header.html");
-    loadComponent("footer", "components/corporate-footer.html");
+    loadComponent("header", "/components/corporate-header.html");
+    loadComponent("footer", "/components/corporate-footer.html");
 }
 
 /* Student bootcamp detail toggle */

@@ -100,7 +100,7 @@ is included in the website or repository.
 
 ## Verify the live flow
 
-1. Open `https://dystil.ai/student-contact` in a private browser
+1. Open `https://dystil.ai/students/contact` in a private browser
    window and send a test enquiry.
 2. Confirm that `askus@dystil.ai` receives the full details.
 3. Confirm that the test visitor receives the acknowledgement from
