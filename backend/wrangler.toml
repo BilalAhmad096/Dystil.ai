@@ -4,6 +4,11 @@ compatibility_date = "2026-08-02"
 workers_dev = true
 preview_urls = false
 
+[[d1_databases]]
+binding = "DB"
+database_name = "dystil-submissions"
+database_id = "4a352612-0ed3-4187-a0c5-14eae4e8ac34"
+
 [vars]
 ALLOWED_ORIGINS = "https://dystil.ai,https://www.dystil.ai"
 ADMIN_EMAIL = "askus@dystil.ai"

@@ -2,12 +2,71 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "./server.js";
 
+// Enough of the D1 binding for the three statements the Worker runs. Counters
+// carry across tests, so assertions compare consecutive numbers rather than
+// expecting any particular one.
+function makeFakeDatabase() {
+    const counters = new Map();
+    const rows = [];
+
+    return {
+        rows,
+        prepare(sql) {
+            return {
+                bind(...args) {
+                    return {
+                        async first() {
+                            if (!sql.includes("reference_counters")) throw new Error(`Unexpected statement: ${sql}`);
+
+                            const key = `${args[0]}|${args[1]}`;
+                            const next = (counters.get(key) || 0) + 1;
+                            counters.set(key, next);
+
+                            return { next_number: next };
+                        },
+                        async run() {
+                            if (sql.includes("INSERT INTO submissions")) {
+                                rows.push({
+                                    reference: args[0],
+                                    form_type: args[1],
+                                    full_name: args[2],
+                                    email: args[3],
+                                    details: args[4],
+                                    cv_filename: args[5],
+                                    submitted_at: args[6],
+                                    delivery_status: "pending"
+                                });
+
+                                return { success: true };
+                            }
+
+                            if (sql.includes("UPDATE submissions")) {
+                                const row = rows.find((candidate) => candidate.reference === args[1]);
+                                if (row) row.delivery_status = args[0];
+
+                                return { success: true };
+                            }
+
+                            throw new Error(`Unexpected statement: ${sql}`);
+                        }
+                    };
+                }
+            };
+        }
+    };
+}
+
 const env = {
     BREVO_API_KEY: "xkeysib-test-key",
     ALLOWED_ORIGINS: "https://dystil.ai,https://www.dystil.ai",
     ADMIN_EMAIL: "askus@dystil.ai",
-    FROM_EMAIL: "askus@dystil.ai"
+    FROM_EMAIL: "askus@dystil.ai",
+    DB: makeFakeDatabase()
 };
+
+function referenceNumber(reference) {
+    return Number(reference.split("-").at(-1));
+}
 
 function makeRequest(fields, origin = "https://dystil.ai", ipAddress = "") {
     const body = new FormData();
@@ -166,6 +225,120 @@ test("escapes visitor content in the HTML email", async function() {
         assert.doesNotMatch(calls[0].body.htmlContent, /<script>/);
         assert.doesNotMatch(calls[0].body.htmlContent, /<img src=x/);
         assert.match(calls[0].body.htmlContent, /&lt;script&gt;/);
+    });
+});
+
+test("gives each form its own reference prefix", async function() {
+    await withMockedEmailApi(async function() {
+        const taster = await worker.fetch(makeRequest({
+            formType: "Free Taster Registration",
+            fullName: "Jamie",
+            email: "jamie@example.com",
+            currentStatus: "Student",
+            areaOfInterest: "Cloud"
+        }), env);
+
+        const corporate = await worker.fetch(makeRequest({
+            formType: "Corporate Enquiry",
+            fullName: "Taylor",
+            email: "taylor@example.com",
+            company: "Example Ltd",
+            focusArea: "AI Upskilling"
+        }), env);
+
+        assert.match((await taster.json()).reference, /^DYS-TAS-\d{2}-\d{4}$/);
+        assert.match((await corporate.json()).reference, /^DYS-COR-\d{2}-\d{4}$/);
+    });
+});
+
+test("counts each form separately and in order", async function() {
+    await withMockedEmailApi(async function() {
+        const first = await worker.fetch(makeRequest(studentEnquiry), env);
+        const second = await worker.fetch(makeRequest({ ...studentEnquiry, email: "other@example.com" }), env);
+
+        const firstReference = (await first.json()).reference;
+        const secondReference = (await second.json()).reference;
+
+        assert.equal(referenceNumber(secondReference), referenceNumber(firstReference) + 1);
+    });
+});
+
+test("stores the whole submission and marks it sent", async function() {
+    await withMockedEmailApi(async function() {
+        const response = await worker.fetch(makeRequest(studentEnquiry), env);
+        const { reference } = await response.json();
+        const row = env.DB.rows.find((candidate) => candidate.reference === reference);
+
+        assert.equal(row.form_type, "Student Enquiry");
+        assert.equal(row.email, "sam@example.com");
+        assert.equal(row.cv_filename, null);
+        assert.equal(row.delivery_status, "sent");
+        assert.equal(JSON.parse(row.details).interest, "Foundation Bootcamp");
+    });
+});
+
+test("records the CV filename without storing the file", async function() {
+    await withMockedEmailApi(async function() {
+        const response = await worker.fetch(makeRequest({
+            formType: "Bootcamp Registration",
+            fullName: "Alex Graduate",
+            email: "alex@example.com",
+            phone: "07000 000000",
+            package: "Foundation Bootcamp",
+            cv: new File(["sample cv"], "Alex CV.pdf", { type: "application/pdf" })
+        }), env);
+
+        const { reference } = await response.json();
+        const row = env.DB.rows.find((candidate) => candidate.reference === reference);
+
+        assert.match(reference, /^DYS-BOT-\d{2}-\d{4}$/);
+        assert.equal(row.cv_filename, "Alex CV.pdf");
+        assert.equal("cv" in JSON.parse(row.details), false);
+    });
+});
+
+test("puts the reference in both emails", async function() {
+    await withMockedEmailApi(async function(calls) {
+        const response = await worker.fetch(makeRequest(studentEnquiry), env);
+        const { reference } = await response.json();
+
+        assert.equal(calls[0].body.subject, `[${reference}] New Student Enquiry — Sam Student`);
+        assert.match(calls[0].body.htmlContent, new RegExp(reference));
+        assert.match(calls[1].body.subject, new RegExp(reference));
+        assert.match(calls[1].body.textContent, new RegExp(reference));
+    });
+});
+
+test("marks the record failed when the provider fails", async function() {
+    await withMockedEmailApi(async function() {
+        const response = await worker.fetch(makeRequest(studentEnquiry), env);
+
+        assert.equal(response.status, 502);
+        assert.equal(env.DB.rows.at(-1).delivery_status, "failed");
+    }, 500);
+});
+
+test("blocks the submission when the database is unavailable", async function() {
+    await withMockedEmailApi(async function(calls) {
+        const brokenEnv = {
+            ...env,
+            DB: {
+                prepare() {
+                    return { bind() {
+                        return {
+                            async first() { throw new Error("D1 is unavailable."); },
+                            async run() { throw new Error("D1 is unavailable."); }
+                        };
+                    } };
+                }
+            }
+        };
+
+        const response = await worker.fetch(makeRequest(studentEnquiry), brokenEnv);
+
+        assert.equal(response.status, 503);
+        assert.equal(calls.length, 0);
+        assert.match((await response.json()).message, /could not record your enquiry/i);
     });
 });
 

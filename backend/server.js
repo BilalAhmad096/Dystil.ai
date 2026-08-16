@@ -4,6 +4,27 @@ const DUPLICATE_WINDOW_SECONDS = 60;
 const BURST_WINDOW_SECONDS = 600;
 const BURST_LIMIT = 10;
 
+// The reference number tells us at a glance which form was filled in, and each
+// form counts from 0001 again every January: DYS-TAS-26-0001.
+const FORM_CODES = {
+    "Student Enquiry": "STU",
+    "Corporate Enquiry": "COR",
+    "Bootcamp Registration": "BOT",
+    "Free Taster Registration": "TAS"
+};
+
+const NEXT_REFERENCE_SQL = `
+    INSERT INTO reference_counters (form_type, year, next_number) VALUES (?, ?, 1)
+    ON CONFLICT (form_type, year) DO UPDATE SET next_number = next_number + 1
+    RETURNING next_number`;
+
+const SAVE_SUBMISSION_SQL = `
+    INSERT INTO submissions
+        (reference, form_type, full_name, email, details, cv_filename, submitted_at, delivery_status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`;
+
+const MARK_DELIVERY_SQL = "UPDATE submissions SET delivery_status = ? WHERE reference = ?";
+
 const FORM_SCHEMAS = {
     "Student Enquiry": [
         ["fullName", "Full name"],
@@ -154,13 +175,29 @@ export default {
             timeZone: "Europe/London"
         });
 
+        // Every enquiry is recorded before it is sent, so nothing is lost if the
+        // email provider fails. Without that record there is no reference number
+        // to quote, so a storage failure stops the submission.
+        let reference;
+        try {
+            reference = await allocateReference(env.DB, formType);
+            await saveSubmission(env.DB, reference, formType, values, cvResult.attachment, submittedAt);
+        } catch (error) {
+            console.error("Could not record the submission.", error instanceof Error ? error.message : "Unknown error");
+
+            return respond({
+                success: false,
+                message: "We could not record your enquiry right now. Please try again shortly or email askus@dystil.ai."
+            }, 503);
+        }
+
         const adminEmailPayload = {
             sender: { name: "Dystil Website", email: fromEmail },
             to: [{ email: adminEmail, name: "Dystil" }],
             replyTo: { email: values.email, name: values.fullName },
-            subject: `New ${formType} — ${values.fullName}`,
-            htmlContent: buildAdminHtml(formType, schema, values, cvResult.attachment, submittedAt),
-            textContent: buildAdminText(formType, schema, values, cvResult.attachment, submittedAt)
+            subject: `[${reference}] New ${formType} — ${values.fullName}`,
+            htmlContent: buildAdminHtml(formType, schema, values, cvResult.attachment, submittedAt, reference),
+            textContent: buildAdminText(formType, schema, values, cvResult.attachment, submittedAt, reference)
         };
 
         if (cvResult.attachment) {
@@ -174,9 +211,9 @@ export default {
             sender: { name: "Dystil", email: fromEmail },
             to: [{ email: values.email, name: values.fullName }],
             replyTo: { email: adminEmail, name: "Dystil" },
-            subject: "We’ve received your enquiry | Dystil",
-            htmlContent: buildConfirmationHtml(values.fullName, formType),
-            textContent: buildConfirmationText(values.fullName, formType)
+            subject: `We’ve received your enquiry | ${reference}`,
+            htmlContent: buildConfirmationHtml(values.fullName, formType, reference),
+            textContent: buildConfirmationText(values.fullName, formType, reference)
         };
 
         const [adminResult, confirmationResult] = await Promise.all([
@@ -184,8 +221,12 @@ export default {
             sendEmail(env.BREVO_API_KEY, confirmationEmailPayload, `confirmation-${submissionId}`)
         ]);
 
-        if (!adminResult.ok || !confirmationResult.ok) {
+        const delivered = adminResult.ok && confirmationResult.ok;
+        await markDelivery(env.DB, reference, delivered ? "sent" : "failed");
+
+        if (!delivered) {
             console.error("Email delivery request failed.", {
+                reference,
                 adminStatus: adminResult.status,
                 confirmationStatus: confirmationResult.status
             });
@@ -200,7 +241,8 @@ export default {
 
         return respond({
             success: true,
-            message: "Thanks — your details have been sent. Please check your inbox for confirmation."
+            reference,
+            message: `Thanks — your details have been sent. Your reference is ${reference}. Please check your inbox for confirmation.`
         }, 200);
     }
 };
@@ -398,6 +440,46 @@ async function recordSubmission(rateLimit) {
     }))));
 }
 
+// One statement, so two submissions arriving together cannot take the same
+// number. A gap appears if the row insert then fails, which is harmless.
+async function allocateReference(db, formType) {
+    if (!db) throw new Error("No database binding is configured.");
+
+    const year = new Date().toLocaleDateString("en-GB", { year: "2-digit", timeZone: "Europe/London" });
+    const row = await db.prepare(NEXT_REFERENCE_SQL).bind(formType, year).first();
+
+    if (!row) throw new Error("The reference counter returned nothing.");
+
+    return `DYS-${FORM_CODES[formType]}-${year}-${String(row.next_number).padStart(4, "0")}`;
+}
+
+// The CV is kept out of the database and stays an email attachment, so only its
+// filename is recorded here.
+async function saveSubmission(db, reference, formType, values, attachment, submittedAt) {
+    await db.prepare(SAVE_SUBMISSION_SQL).bind(
+        reference,
+        formType,
+        values.fullName,
+        values.email,
+        JSON.stringify(values),
+        attachment ? attachment.filename : null,
+        submittedAt
+    ).run();
+}
+
+// A failure here leaves the row saying "pending" while the emails are already
+// away, which is worth a log but not worth failing the visitor's submission.
+async function markDelivery(db, reference, status) {
+    try {
+        await db.prepare(MARK_DELIVERY_SQL).bind(status, reference).run();
+    } catch (error) {
+        console.error("Could not update the delivery status.", {
+            reference,
+            message: error instanceof Error ? error.message : "Unknown error"
+        });
+    }
+}
+
 async function sendEmail(apiKey, payload, idempotencyKey) {
     try {
         const response = await fetch(BREVO_API_URL, {
@@ -442,7 +524,13 @@ function formatHtmlValue(value) {
     return escapeHtml(value || "—").replace(/\r?\n/g, "<br>");
 }
 
-function buildAdminHtml(formType, schema, values, attachment, submittedAt) {
+function buildAdminHtml(formType, schema, values, attachment, submittedAt, reference) {
+    const referenceRow = `
+        <tr>
+            <td style="padding:10px;border:1px solid #e5e7eb;font-weight:700;vertical-align:top;width:34%;">Reference</td>
+            <td style="padding:10px;border:1px solid #e5e7eb;vertical-align:top;"><strong>${escapeHtml(reference)}</strong></td>
+        </tr>`;
+
     const rows = schema.map(([field, label]) => `
         <tr>
             <td style="padding:10px;border:1px solid #e5e7eb;font-weight:700;vertical-align:top;width:34%;">${escapeHtml(label)}</td>
@@ -464,19 +552,19 @@ function buildAdminHtml(formType, schema, values, attachment, submittedAt) {
                 </div>
                 <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;">
                     <p style="margin-top:0;">Reply to this email to contact <strong>${escapeHtml(values.fullName)}</strong>.</p>
-                    <table style="border-collapse:collapse;width:100%;font-size:14px;">${rows}${cvRow}</table>
+                    <table style="border-collapse:collapse;width:100%;font-size:14px;">${referenceRow}${rows}${cvRow}</table>
                 </div>
             </div>
         </body></html>`;
 }
 
-function buildAdminText(formType, schema, values, attachment, submittedAt) {
+function buildAdminText(formType, schema, values, attachment, submittedAt, reference) {
     const lines = schema.map(([field, label]) => `${label}: ${values[field] || "—"}`);
     if (attachment) lines.push(`CV: ${attachment.filename} (${formatFileSize(attachment.size)}) — attached`);
-    return [`New ${formType}`, `Submitted ${submittedAt}`, "", ...lines].join("\n");
+    return [`New ${formType}`, `Reference ${reference}`, `Submitted ${submittedAt}`, "", ...lines].join("\n");
 }
 
-function buildConfirmationHtml(fullName, formType) {
+function buildConfirmationHtml(fullName, formType, reference) {
     return `<!doctype html>
         <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
             <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
@@ -485,6 +573,7 @@ function buildConfirmationHtml(fullName, formType) {
                 </div>
                 <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
                     <p style="margin-top:0;">Your enquiry has been sent successfully and received by Dystil.</p>
+                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;">Your reference is <strong>${escapeHtml(reference)}</strong>. Please quote it if you contact us about this enquiry.</p>
                     <p>We’ve recorded it as <strong>${escapeHtml(formType)}</strong>. A member of our team will review your details and contact you shortly.</p>
                     <p>If you need to add anything, reply to this email or contact us at <a href="mailto:askus@dystil.ai" style="color:#147a59;">askus@dystil.ai</a>.</p>
                     <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
@@ -493,8 +582,8 @@ function buildConfirmationHtml(fullName, formType) {
         </body></html>`;
 }
 
-function buildConfirmationText(fullName, formType) {
-    return `Thank you, ${fullName}.\n\nYour enquiry has been sent successfully and received by Dystil.\n\nWe’ve recorded it as ${formType}. A member of our team will review your details and contact you shortly.\n\nIf you need to add anything, reply to this email or contact askus@dystil.ai.\n\nKind regards,\nThe Dystil Team`;
+function buildConfirmationText(fullName, formType, reference) {
+    return `Thank you, ${fullName}.\n\nYour enquiry has been sent successfully and received by Dystil.\n\nYour reference is ${reference}. Please quote it if you contact us about this enquiry.\n\nWe’ve recorded it as ${formType}. A member of our team will review your details and contact you shortly.\n\nIf you need to add anything, reply to this email or contact askus@dystil.ai.\n\nKind regards,\nThe Dystil Team`;
 }
 
 function formatFileSize(bytes) {

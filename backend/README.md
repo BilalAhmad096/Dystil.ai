@@ -110,6 +110,54 @@ students/taster.html
 corporate/contact.html
 ```
 
+## Submission records and reference numbers
+
+Every submission is written to the `dystil-submissions` D1 database before the
+emails are sent, and is given a reference number that names the form and the
+year:
+
+| Form | Reference |
+| --- | --- |
+| Student Enquiry | `DYS-STU-26-0001` |
+| Corporate Enquiry | `DYS-COR-26-0001` |
+| Bootcamp Registration | `DYS-BOT-26-0001` |
+| Free Taster Registration | `DYS-TAS-26-0001` |
+
+Each form counts from `0001` again every January. The reference appears in the
+subject line of the notification to `askus@dystil.ai`, in the visitor's
+confirmation, and in the message shown on the website.
+
+The record holds the form type, name, email, every field the visitor filled in,
+the CV filename, the submission time, and whether the emails were delivered
+(`pending`, `sent` or `failed`). **The CV file itself is not stored** — it stays
+an email attachment.
+
+Because the reference cannot exist without the record, a database failure stops
+the submission and asks the visitor to try again rather than sending an enquiry
+that cannot be traced.
+
+### Reading the records
+
+```powershell
+npx wrangler d1 execute dystil-submissions --remote --command "SELECT reference, form_type, full_name, email, submitted_at, delivery_status FROM submissions ORDER BY submitted_at DESC LIMIT 20"
+```
+
+Anything that never reached the inbox:
+
+```powershell
+npx wrangler d1 execute dystil-submissions --remote --command "SELECT * FROM submissions WHERE delivery_status <> 'sent'"
+```
+
+### Data protection
+
+The database holds personal data that visitors typed, so it needs the same care
+as the mailbox: say in the website privacy policy that enquiry details are
+stored, decide how long records are kept, and delete a person's rows on request.
+
+```powershell
+npx wrangler d1 execute dystil-submissions --remote --command "DELETE FROM submissions WHERE email = 'person@example.com'"
+```
+
 ## Verify the live flow
 
 1. Open `https://dystil.ai/students/contact` in a private browser
