@@ -166,7 +166,6 @@ export default {
             return respond({ success: false, message: rateLimit.message }, 429);
         }
 
-        const submissionId = crypto.randomUUID();
         const fromEmail = env.FROM_EMAIL || "askus@dystil.ai";
         const adminEmail = env.ADMIN_EMAIL || "askus@dystil.ai";
         const submittedAt = new Date().toLocaleString("en-GB", {
@@ -217,8 +216,8 @@ export default {
         };
 
         const [adminResult, confirmationResult] = await Promise.all([
-            sendEmail(env.BREVO_API_KEY, adminEmailPayload, `admin-${submissionId}`),
-            sendEmail(env.BREVO_API_KEY, confirmationEmailPayload, `confirmation-${submissionId}`)
+            sendEmail(env.BREVO_API_KEY, adminEmailPayload, crypto.randomUUID()),
+            sendEmail(env.BREVO_API_KEY, confirmationEmailPayload, crypto.randomUUID())
         ]);
 
         const delivered = adminResult.ok && confirmationResult.ok;
@@ -480,6 +479,10 @@ async function markDelivery(db, reference, status) {
     }
 }
 
+// Brevo takes the idempotency key as a request header holding a bare UUID, and
+// remembers it for 30 minutes. Putting it in the body instead only stamps a
+// custom header onto the email that gets delivered, which is what this used to
+// do. The two emails are separate calls and so need separate keys.
 async function sendEmail(apiKey, payload, idempotencyKey) {
     try {
         const response = await fetch(BREVO_API_URL, {
@@ -487,15 +490,10 @@ async function sendEmail(apiKey, payload, idempotencyKey) {
             headers: {
                 "accept": "application/json",
                 "api-key": apiKey,
+                "idempotencyKey": idempotencyKey,
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({
-                ...payload,
-                headers: {
-                    ...payload.headers,
-                    "Idempotency-Key": idempotencyKey
-                }
-            })
+            body: JSON.stringify(payload)
         });
 
         if (!response.ok) {

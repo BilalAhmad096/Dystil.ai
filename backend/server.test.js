@@ -228,6 +228,24 @@ test("escapes visitor content in the HTML email", async function() {
     });
 });
 
+test("sends a distinct idempotency key as a request header", async function() {
+    await withMockedEmailApi(async function(calls) {
+        await worker.fetch(makeRequest(studentEnquiry), env);
+
+        const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+        const adminKey = calls[0].options.headers.idempotencyKey;
+        const confirmationKey = calls[1].options.headers.idempotencyKey;
+
+        assert.match(adminKey, uuid);
+        assert.match(confirmationKey, uuid);
+        assert.notEqual(adminKey, confirmationKey);
+
+        // The key belongs on the request, never on the delivered email.
+        assert.equal("headers" in calls[0].body, false);
+        assert.equal("headers" in calls[1].body, false);
+    });
+});
+
 test("gives each form its own reference prefix", async function() {
     await withMockedEmailApi(async function() {
         const taster = await worker.fetch(makeRequest({
