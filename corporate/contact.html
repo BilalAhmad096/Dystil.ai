@@ -72,7 +72,9 @@
                 </div>
             </div>
 
-            <form class="corporate-contact-form" method="post" data-enquiry-form data-form-type="Corporate Enquiry">
+            <form class="corporate-contact-form" method="post" action="https://dystil-contact.dystil-ai.workers.dev/api/enquiry" enctype="multipart/form-data" data-enquiry-form data-form-type="Corporate Enquiry">
+                <input type="hidden" name="formType" value="Corporate Enquiry">
+
                 <label for="corporate-full-name">Full Name *</label>
                 <input id="corporate-full-name" name="fullName" type="text" placeholder="John" autocomplete="name" maxlength="120" required>
 

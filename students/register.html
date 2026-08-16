@@ -35,7 +35,9 @@
             <h1>Register for Bootcamp</h1>
             <p>Fill in your details and choose the package that fits your career goal.</p>
 
-            <form class="register-form" method="post" data-enquiry-form data-form-type="Bootcamp Registration">
+            <form class="register-form" method="post" action="https://dystil-contact.dystil-ai.workers.dev/api/enquiry" enctype="multipart/form-data" data-enquiry-form data-form-type="Bootcamp Registration">
+                <input type="hidden" name="formType" value="Bootcamp Registration">
+
                 <label for="register-full-name">Full Name</label>
                 <input id="register-full-name" name="fullName" type="text" placeholder="Enter your full name" autocomplete="name" maxlength="120" required>
 

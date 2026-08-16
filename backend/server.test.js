@@ -169,6 +169,48 @@ test("escapes visitor content in the HTML email", async function() {
     });
 });
 
+test("answers a browser form post with a page rather than JSON", async function() {
+    await withMockedEmailApi(async function(calls) {
+        const request = makeRequest(studentEnquiry);
+        request.headers.set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+
+        const response = await worker.fetch(request, env);
+        const page = await response.text();
+
+        assert.equal(response.status, 200);
+        assert.equal(calls.length, 2);
+        assert.match(response.headers.get("Content-Type"), /text\/html/);
+        assert.match(page, /^<!doctype html>/);
+        assert.match(page, /Thank you/);
+        assert.match(page, /https:\/\/dystil\.ai/);
+    });
+});
+
+test("shows a browser the reason a submission was rejected", async function() {
+    await withMockedEmailApi(async function(calls) {
+        const request = makeRequest({ ...studentEnquiry, email: "not-an-email" });
+        request.headers.set("Accept", "text/html");
+
+        const response = await worker.fetch(request, env);
+
+        assert.equal(response.status, 400);
+        assert.equal(calls.length, 0);
+        assert.match(await response.text(), /valid email address/);
+    });
+});
+
+test("still answers the website's own fetch call with JSON", async function() {
+    await withMockedEmailApi(async function() {
+        const request = makeRequest(studentEnquiry);
+        request.headers.set("Accept", "*/*");
+
+        const response = await worker.fetch(request, env);
+
+        assert.match(response.headers.get("Content-Type"), /application\/json/);
+        assert.equal((await response.json()).success, true);
+    });
+});
+
 test("lets two visitors sharing one address both send a form", async function() {
     await withFakeCache(async function() {
         await withMockedEmailApi(async function(calls) {

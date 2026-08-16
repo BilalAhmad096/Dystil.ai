@@ -98,6 +98,18 @@ window.DYSTIL_FORM_ENDPOINT = "https://dystil-contact.dystil-ai.workers.dev/api/
 Commit and push that change to the branch used by GitHub Pages. No email secret
 is included in the website or repository.
 
+Each of the four forms also carries the same URL in its `action` attribute, so a
+visitor whose JavaScript fails to load still submits successfully and gets a
+result page back instead of raw JSON. If the Worker URL ever changes, update
+`assets/js/form-config.js` and all four form pages together:
+
+```text
+students/contact.html
+students/register.html
+students/taster.html
+corporate/contact.html
+```
+
 ## Verify the live flow
 
 1. Open `https://dystil.ai/students/contact` in a private browser

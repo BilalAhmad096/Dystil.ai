@@ -78,7 +78,9 @@
                 </div>
             </div>
 
-            <form class="student-contact-form" method="post" data-enquiry-form data-form-type="Student Enquiry">
+            <form class="student-contact-form" method="post" action="https://dystil-contact.dystil-ai.workers.dev/api/enquiry" enctype="multipart/form-data" data-enquiry-form data-form-type="Student Enquiry">
+                <input type="hidden" name="formType" value="Student Enquiry">
+
                 <label for="student-full-name">Full Name</label>
                 <input id="student-full-name" name="fullName" type="text" placeholder="Enter your full name" autocomplete="name" maxlength="120" required>
 

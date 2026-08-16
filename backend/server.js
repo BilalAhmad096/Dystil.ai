@@ -69,6 +69,7 @@ export default {
         const origin = request.headers.get("Origin") || "";
         const allowedOrigins = getAllowedOrigins(env);
         const corsHeaders = buildCorsHeaders(origin, allowedOrigins);
+        const respond = buildResponder(request, corsHeaders);
         const url = new URL(request.url);
 
         if (request.method === "OPTIONS") {
@@ -80,7 +81,7 @@ export default {
         }
 
         if (request.method !== "POST" || !["/api/enquiry", "/api/submit-form"].includes(url.pathname)) {
-            return jsonResponse({ success: false, message: "Not found." }, 404, corsHeaders);
+            return respond({ success: false, message: "Not found." }, 404);
         }
 
         if (!allowedOrigins.has(origin)) {
@@ -89,35 +90,35 @@ export default {
 
         if (!env.BREVO_API_KEY) {
             console.error("BREVO_API_KEY is not configured.");
-            return jsonResponse({ success: false, message: "The enquiry service is not configured yet." }, 503, corsHeaders);
+            return respond({ success: false, message: "The enquiry service is not configured yet." }, 503);
         }
 
         const contentType = request.headers.get("Content-Type") || "";
         if (!contentType.startsWith("multipart/form-data") && !contentType.startsWith("application/x-www-form-urlencoded")) {
-            return jsonResponse({ success: false, message: "Unsupported form format." }, 415, corsHeaders);
+            return respond({ success: false, message: "Unsupported form format." }, 415);
         }
 
         const contentLength = Number(request.headers.get("Content-Length") || 0);
         if (contentLength > MAX_CV_SIZE + 100000) {
-            return jsonResponse({ success: false, message: "The uploaded CV must be 4 MB or smaller." }, 413, corsHeaders);
+            return respond({ success: false, message: "The uploaded CV must be 4 MB or smaller." }, 413);
         }
 
         let formData;
         try {
             formData = await request.formData();
         } catch {
-            return jsonResponse({ success: false, message: "We could not read the form. Please try again." }, 400, corsHeaders);
+            return respond({ success: false, message: "We could not read the form. Please try again." }, 400);
         }
 
         // A hidden field catches basic form bots without inconveniencing visitors.
         if (cleanText(formData.get("website"), 200)) {
-            return jsonResponse({ success: true, message: "Thanks — your details have been sent." }, 200, corsHeaders);
+            return respond({ success: true, message: "Thanks — your details have been sent." }, 200);
         }
 
         const formType = cleanText(formData.get("formType"), 80);
         const schema = FORM_SCHEMAS[formType];
         if (!schema) {
-            return jsonResponse({ success: false, message: "Unknown form type." }, 400, corsHeaders);
+            return respond({ success: false, message: "Unknown form type." }, 400);
         }
 
         const values = {};
@@ -127,21 +128,21 @@ export default {
 
         const missingField = REQUIRED_FIELDS[formType].find((field) => !values[field]);
         if (missingField) {
-            return jsonResponse({ success: false, message: "Please complete all required fields." }, 400, corsHeaders);
+            return respond({ success: false, message: "Please complete all required fields." }, 400);
         }
 
         if (!isValidEmail(values.email)) {
-            return jsonResponse({ success: false, message: "Please enter a valid email address." }, 400, corsHeaders);
+            return respond({ success: false, message: "Please enter a valid email address." }, 400);
         }
 
         const cvResult = await readCvAttachment(formData.get("cv"));
         if (cvResult.error) {
-            return jsonResponse({ success: false, message: cvResult.error }, 400, corsHeaders);
+            return respond({ success: false, message: cvResult.error }, 400);
         }
 
         const rateLimit = await checkRateLimit(request, formType, values.email);
         if (rateLimit.blocked) {
-            return jsonResponse({ success: false, message: rateLimit.message }, 429, corsHeaders);
+            return respond({ success: false, message: rateLimit.message }, 429);
         }
 
         const submissionId = crypto.randomUUID();
@@ -189,18 +190,18 @@ export default {
                 confirmationStatus: confirmationResult.status
             });
 
-            return jsonResponse({
+            return respond({
                 success: false,
                 message: "We could not send your enquiry right now. Please email askus@dystil.ai directly."
-            }, 502, corsHeaders);
+            }, 502);
         }
 
         await recordSubmission(rateLimit);
 
-        return jsonResponse({
+        return respond({
             success: true,
             message: "Thanks — your details have been sent. Please check your inbox for confirmation."
-        }, 200, corsHeaders);
+        }, 200);
     }
 };
 
@@ -227,6 +228,54 @@ function buildCorsHeaders(origin, allowedOrigins) {
     }
 
     return headers;
+}
+
+// Visitors whose JavaScript failed to load post straight to this endpoint, and
+// a browser left showing raw JSON would look broken, so they get a page back.
+// The website's own fetch call sends "Accept: */*" and still receives JSON.
+function buildResponder(request, corsHeaders) {
+    const wantsHtml = (request.headers.get("Accept") || "").includes("text/html");
+
+    return function(body, status) {
+        return wantsHtml
+            ? htmlResponse(body, status, corsHeaders)
+            : jsonResponse(body, status, corsHeaders);
+    };
+}
+
+function htmlResponse(body, status, extraHeaders = {}) {
+    return new Response(buildResultPage(body), {
+        status,
+        headers: {
+            ...extraHeaders,
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "no-store"
+        }
+    });
+}
+
+function buildResultPage(body) {
+    const heading = body.success ? "Thank you" : "We could not send your details";
+
+    return `<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(heading)} | Dystil</title>
+</head>
+<body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
+    <div style="max-width:620px;margin:0 auto;padding:48px 16px;">
+        <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
+            <h1 style="font-size:24px;margin:0;">${escapeHtml(heading)}</h1>
+        </div>
+        <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
+            <p style="margin-top:0;">${escapeHtml(body.message)}</p>
+            <p style="margin-bottom:0;"><a href="https://dystil.ai" style="color:#147a59;">Return to dystil.ai</a></p>
+        </div>
+    </div>
+</body>
+</html>`;
 }
 
 function jsonResponse(body, status, extraHeaders = {}) {

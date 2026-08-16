@@ -222,7 +222,9 @@
                 </div>
             </div>
 
-            <form class="student-contact-form" method="post" data-enquiry-form data-form-type="Free Taster Registration">
+            <form class="student-contact-form" method="post" action="https://dystil-contact.dystil-ai.workers.dev/api/enquiry" enctype="multipart/form-data" data-enquiry-form data-form-type="Free Taster Registration">
+                <input type="hidden" name="formType" value="Free Taster Registration">
+
                 <label for="taster-full-name">Full Name</label>
                 <input id="taster-full-name" name="fullName" type="text" placeholder="Enter your full name" autocomplete="name" maxlength="120" required>
 
