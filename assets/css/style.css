@@ -6819,16 +6819,18 @@ ABOUT HERO
     overflow: hidden !important;
 }
 
-.form-help,
-.form-privacy,
-.form-status {
+/* These are all written as p.<class> so they outrank the wider
+   ".form-section p" rule above, which would otherwise set them in 22px body
+   text and drop the status colours back to grey. */
+p.form-help,
+p.form-privacy,
+p.form-status {
     grid-column: 1 / -1;
     margin: 0;
     font-size: 0.9rem;
     line-height: 1.5;
 }
 
-/* Kept at p.form-privacy so it outranks the wider ".form-section p" rule. */
 p.form-privacy {
     color: #66736d;
     font-size: 0.85rem;
@@ -6844,29 +6846,29 @@ p.form-privacy {
     text-decoration: underline;
 }
 
-.form-help {
+p.form-help {
     color: #66736d;
     margin-top: -8px;
 }
 
-.form-status:empty {
+p.form-status:empty {
     display: none;
 }
 
-.form-status {
+p.form-status {
     padding: 12px 14px;
     border-radius: 8px;
     background: #edf2f0;
     color: #243c33;
 }
 
-.form-status-success {
+p.form-status-success {
     background: #e5f6ee;
     color: #12633f;
     border: 1px solid #a9dec5;
 }
 
-.form-status-error {
+p.form-status-error {
     background: #fff0f0;
     color: #9d2727;
     border: 1px solid #efb5b5;
