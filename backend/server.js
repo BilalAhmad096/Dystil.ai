@@ -4,6 +4,13 @@ const DUPLICATE_WINDOW_SECONDS = 60;
 const BURST_WINDOW_SECONDS = 600;
 const BURST_LIMIT = 10;
 
+// The submissions view is unlisted, so the password is the only thing standing
+// between a stranger and everybody's contact details. Wrong guesses are capped
+// hard enough that guessing is not worth attempting.
+const ADMIN_ATTEMPT_LIMIT = 5;
+const ADMIN_ATTEMPT_WINDOW_SECONDS = 900;
+const ADMIN_PAGE_SIZE = 500;
+
 // The reference number tells us at a glance which form was filled in, and each
 // form counts from 0001 again every January: DYS-TAS-26-0001.
 const FORM_CODES = {
@@ -24,6 +31,12 @@ const SAVE_SUBMISSION_SQL = `
     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`;
 
 const MARK_DELIVERY_SQL = "UPDATE submissions SET delivery_status = ? WHERE reference = ?";
+
+const LIST_SUBMISSIONS_SQL = `
+    SELECT reference, form_type, full_name, email, details, cv_filename, submitted_at, delivery_status
+    FROM submissions
+    ORDER BY submitted_at DESC
+    LIMIT ?`;
 
 const FORM_SCHEMAS = {
     "Student Enquiry": [
@@ -99,6 +112,14 @@ export default {
             }
 
             return new Response(null, { status: 204, headers: corsHeaders });
+        }
+
+        if (request.method === "POST" && url.pathname === "/api/submissions") {
+            if (!allowedOrigins.has(origin)) {
+                return jsonResponse({ success: false, message: "Origin not allowed." }, 403);
+            }
+
+            return listSubmissions(request, env, corsHeaders);
         }
 
         if (request.method !== "POST" || !["/api/enquiry", "/api/submit-form"].includes(url.pathname)) {
@@ -258,7 +279,7 @@ function getAllowedOrigins(env) {
 function buildCorsHeaders(origin, allowedOrigins) {
     const headers = {
         "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Headers": "Content-Type, X-Admin-Key",
         "Access-Control-Max-Age": "86400",
         "Content-Type": "application/json; charset=utf-8",
         "Vary": "Origin"
@@ -411,6 +432,91 @@ async function checkRateLimit(request, formType, email) {
             { key: burstKey, seconds: BURST_WINDOW_SECONDS }
         ]
     };
+}
+
+// Reads the submissions for the unlisted /students/database page. The password
+// travels in a header rather than the URL so it never reaches a browser history,
+// a referrer, or an access log.
+async function listSubmissions(request, env, corsHeaders) {
+    if (!env.ADMIN_KEY) {
+        console.error("ADMIN_KEY is not configured.");
+        return jsonResponse({ success: false, message: "The submissions view is not configured yet." }, 503, corsHeaders);
+    }
+
+    const address = request.headers.get("CF-Connecting-IP") || "unknown";
+
+    if (await adminAttemptsExhausted(address)) {
+        return jsonResponse({
+            success: false,
+            message: "Too many incorrect passwords. Please wait fifteen minutes and try again."
+        }, 429, corsHeaders);
+    }
+
+    if (!(await secretsMatch(request.headers.get("X-Admin-Key"), env.ADMIN_KEY))) {
+        await recordFailedAdminAttempt(address);
+        return jsonResponse({ success: false, message: "That password was not recognised." }, 401, corsHeaders);
+    }
+
+    if (!env.DB) {
+        return jsonResponse({ success: false, message: "No database is connected." }, 503, corsHeaders);
+    }
+
+    try {
+        const { results } = await env.DB.prepare(LIST_SUBMISSIONS_SQL).bind(ADMIN_PAGE_SIZE).all();
+
+        return jsonResponse({ success: true, submissions: results || [] }, 200, corsHeaders);
+    } catch (error) {
+        console.error("Could not read the submissions.", error);
+        return jsonResponse({ success: false, message: "Could not read the submissions." }, 500, corsHeaders);
+    }
+}
+
+// Compares digests rather than the strings themselves, so neither the length of
+// the password nor the position of the first wrong character can be timed.
+async function secretsMatch(candidate, expected) {
+    if (typeof candidate !== "string" || typeof expected !== "string" || !candidate) return false;
+
+    const encoder = new TextEncoder();
+    const [candidateDigest, expectedDigest] = await Promise.all([
+        crypto.subtle.digest("SHA-256", encoder.encode(candidate)),
+        crypto.subtle.digest("SHA-256", encoder.encode(expected))
+    ]);
+
+    const left = new Uint8Array(candidateDigest);
+    const right = new Uint8Array(expectedDigest);
+    let difference = 0;
+
+    for (let index = 0; index < left.length; index += 1) {
+        difference |= left[index] ^ right[index];
+    }
+
+    return difference === 0;
+}
+
+async function adminAttemptsExhausted(address) {
+    if (typeof caches === "undefined" || !caches.default) return false;
+
+    return (await findFreeAdminAttemptKey(address)) === null;
+}
+
+async function recordFailedAdminAttempt(address) {
+    if (typeof caches === "undefined" || !caches.default) return;
+
+    const key = await findFreeAdminAttemptKey(address);
+    if (!key) return;
+
+    await caches.default.put(key, new Response("1", {
+        headers: { "Cache-Control": `public, max-age=${ADMIN_ATTEMPT_WINDOW_SECONDS}` }
+    }));
+}
+
+async function findFreeAdminAttemptKey(address) {
+    for (let slot = 0; slot < ADMIN_ATTEMPT_LIMIT; slot += 1) {
+        const key = await buildLimitKey("admin", address, String(slot));
+        if (!(await caches.default.match(key))) return key;
+    }
+
+    return null;
 }
 
 async function findFreeBurstKey(address) {

@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submissions | DYSTIL</title>
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <meta name="referrer" content="no-referrer">
+    <link rel="icon" type="image/png" href="/assets/images/favicon.png">
+    <link rel="shortcut icon" type="image/x-icon" href="/assets/images/favicon.ico">
+    <style>
+        :root {
+            --dark-deep: #07111f;
+            --dark: #11162a;
+            --dark-soft: #1d2542;
+            --primary: #5865f2;
+            --primary-dark: #4653df;
+            --accent: #f2a84b;
+            --white: #ffffff;
+            --light-text: #aeb7c7;
+            --line: rgba(255, 255, 255, 0.14);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: var(--dark-deep);
+            color: var(--white);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        /* ---------- LOCK SCREEN ---------- */
+        .lock {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .lock-card {
+            width: 100%;
+            max-width: 380px;
+            background: var(--dark);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 34px 30px;
+        }
+
+        .lock-card h1 { font-size: 21px; letter-spacing: -0.01em; margin-bottom: 6px; }
+        .lock-card p { font-size: 14px; color: var(--light-text); margin-bottom: 22px; }
+
+        label { display: block; font-size: 12px; letter-spacing: 1.4px; font-weight: bold; color: var(--accent); margin-bottom: 8px; }
+
+        input[type="password"], input[type="search"] {
+            width: 100%;
+            padding: 12px 14px;
+            font-size: 15px;
+            font-family: inherit;
+            color: var(--white);
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+        }
+
+        input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+        button {
+            font-family: inherit;
+            cursor: pointer;
+            border: none;
+            border-radius: 999px;
+            background: var(--primary);
+            color: var(--white);
+            font-weight: bold;
+        }
+
+        .lock-card button { width: 100%; margin-top: 16px; padding: 13px; font-size: 15px; }
+        .lock-card button:hover { background: var(--primary-dark); }
+
+        .error {
+            margin-top: 14px;
+            font-size: 13px;
+            color: #ffb4a8;
+            background: rgba(226, 84, 68, 0.14);
+            border: 1px solid rgba(226, 84, 68, 0.4);
+            border-radius: 8px;
+            padding: 10px 12px;
+        }
+
+        [hidden] { display: none !important; }
+
+        /* ---------- DASHBOARD ---------- */
+        .wrap { max-width: 1400px; margin: 0 auto; padding: 26px 22px 60px; }
+
+        .bar {
+            display: flex; flex-wrap: wrap; gap: 14px;
+            align-items: center; justify-content: space-between;
+            margin-bottom: 22px;
+        }
+
+        .bar h1 { font-size: 22px; letter-spacing: -0.01em; }
+        .bar .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .bar button { padding: 9px 18px; font-size: 13px; }
+        .bar .ghost { background: transparent; border: 1px solid var(--line); color: var(--light-text); }
+        .bar .ghost:hover { color: var(--white); border-color: var(--primary); }
+
+        .counts { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+
+        .count {
+            background: var(--dark);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 12px 16px;
+            min-width: 132px;
+            cursor: pointer;
+        }
+
+        .count.on { border-color: var(--accent); background: var(--dark-soft); }
+        .count span { display: block; font-size: 11px; letter-spacing: 1.2px; color: var(--light-text); font-weight: bold; }
+        .count strong { display: block; font-size: 24px; margin-top: 4px; }
+
+        .tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }
+        .tools input[type="search"] { max-width: 320px; }
+        .tools .meta { font-size: 13px; color: var(--light-text); }
+
+        .scroller { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px; }
+
+        th {
+            text-align: left;
+            font-size: 11px;
+            letter-spacing: 1.2px;
+            color: var(--accent);
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--line);
+            background: var(--dark);
+            position: sticky;
+            top: 0;
+        }
+
+        td { padding: 12px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); vertical-align: top; }
+        tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: rgba(88, 101, 242, 0.09); }
+
+        td.ref { font-family: Consolas, Menlo, monospace; color: var(--accent); white-space: nowrap; }
+        td.when { white-space: nowrap; color: var(--light-text); }
+        td a { color: #9aa3ff; }
+
+        .tag { display: inline-block; font-size: 11px; font-weight: bold; padding: 3px 9px; border-radius: 999px; white-space: nowrap; background: rgba(88, 101, 242, 0.22); }
+        .tag.TAS { background: rgba(242, 168, 75, 0.22); color: #f8c98a; }
+        .tag.BOT { background: rgba(88, 101, 242, 0.28); color: #b9c0ff; }
+        .tag.STU { background: rgba(120, 200, 160, 0.2); color: #9fdcc0; }
+        .tag.COR { background: rgba(255, 255, 255, 0.14); color: #d6dceb; }
+
+        .status { font-size: 11px; font-weight: bold; letter-spacing: 0.6px; }
+        .status.sent { color: #8fe0b6; }
+        .status.pending, .status.failed { color: #ffb4a8; }
+
+        .details { color: var(--light-text); font-size: 12.5px; max-width: 460px; white-space: pre-wrap; }
+
+        .empty { padding: 40px; text-align: center; color: var(--light-text); font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <div class="lock" id="lock">
+        <form class="lock-card" id="lock-form">
+            <h1>Submissions</h1>
+            <p>This page is not linked from the website. Enter the password to view form submissions.</p>
+
+            <label for="key">PASSWORD</label>
+            <input id="key" type="password" autocomplete="current-password" autofocus required>
+
+            <button type="submit" id="unlock">View submissions</button>
+
+            <p class="error" id="lock-error" hidden></p>
+        </form>
+    </div>
+
+    <div class="wrap" id="board" hidden>
+        <div class="bar">
+            <h1>Form submissions</h1>
+            <div class="actions">
+                <button class="ghost" id="refresh" type="button">Refresh</button>
+                <button id="csv" type="button">Download CSV</button>
+                <button class="ghost" id="lockout" type="button">Lock</button>
+            </div>
+        </div>
+
+        <div class="counts" id="counts"></div>
+
+        <div class="tools">
+            <input id="search" type="search" placeholder="Search name, email, reference or details">
+            <span class="meta" id="meta"></span>
+        </div>
+
+        <div class="scroller">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Reference</th>
+                        <th>Form</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Submitted</th>
+                        <th>Details</th>
+                        <th>CV</th>
+                        <th>Email sent</th>
+                    </tr>
+                </thead>
+                <tbody id="rows"></tbody>
+            </table>
+            <p class="empty" id="empty" hidden>Nothing to show.</p>
+        </div>
+    </div>
+
+    <script>
+        const API = "https://dystil-contact.dystil-ai.workers.dev/api/submissions";
+        const CODES = { "Free Taster Registration": "TAS", "Bootcamp Registration": "BOT", "Student Enquiry": "STU", "Corporate Enquiry": "COR" };
+
+        const lock = document.getElementById("lock");
+        const lockForm = document.getElementById("lock-form");
+        const lockError = document.getElementById("lock-error");
+        const unlockBtn = document.getElementById("unlock");
+        const board = document.getElementById("board");
+        const rows = document.getElementById("rows");
+        const empty = document.getElementById("empty");
+        const meta = document.getElementById("meta");
+        const search = document.getElementById("search");
+        const counts = document.getElementById("counts");
+
+        // Held in memory only. Closing the tab forgets it, so a shared or stolen
+        // laptop never carries the password forward.
+        let key = "";
+        let all = [];
+        let formFilter = "";
+
+        lockForm.addEventListener("submit", async function (event) {
+            event.preventDefault();
+            const entered = document.getElementById("key").value;
+            if (!entered) return;
+
+            unlockBtn.disabled = true;
+            unlockBtn.textContent = "Checking…";
+            lockError.hidden = true;
+
+            try {
+                const data = await load(entered);
+                key = entered;
+                all = data;
+                lock.hidden = true;
+                board.hidden = false;
+                render();
+            } catch (error) {
+                lockError.textContent = error.message;
+                lockError.hidden = false;
+            } finally {
+                unlockBtn.disabled = false;
+                unlockBtn.textContent = "View submissions";
+            }
+        });
+
+        async function load(password) {
+            let response;
+
+            try {
+                response = await fetch(API, { method: "POST", headers: { "X-Admin-Key": password } });
+            } catch {
+                throw new Error("Could not reach the server. Check your connection and try again.");
+            }
+
+            const body = await response.json().catch(function () { return {}; });
+
+            if (!response.ok || !body.success) {
+                throw new Error(body.message || "Could not load the submissions.");
+            }
+
+            return body.submissions || [];
+        }
+
+        document.getElementById("refresh").addEventListener("click", async function () {
+            const button = this;
+            button.disabled = true;
+            button.textContent = "Refreshing…";
+
+            try {
+                all = await load(key);
+                render();
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = "Refresh";
+            }
+        });
+
+        // Empties the table as well as the variables, so locking the page really
+        // does take the details off the screen rather than just covering them.
+        document.getElementById("lockout").addEventListener("click", function () {
+            key = "";
+            all = [];
+            formFilter = "";
+            rows.innerHTML = "";
+            counts.innerHTML = "";
+            meta.textContent = "";
+            search.value = "";
+            document.getElementById("key").value = "";
+            board.hidden = true;
+            lock.hidden = false;
+        });
+
+        search.addEventListener("input", render);
+
+        counts.addEventListener("click", function (event) {
+            const card = event.target.closest(".count");
+            if (!card) return;
+            formFilter = card.dataset.form === formFilter ? "" : card.dataset.form;
+            render();
+        });
+
+        function visible() {
+            const term = search.value.trim().toLowerCase();
+
+            return all.filter(function (row) {
+                if (formFilter && row.form_type !== formFilter) return false;
+                if (!term) return true;
+
+                return [row.reference, row.full_name, row.email, row.details, row.form_type]
+                    .some(function (field) { return String(field || "").toLowerCase().includes(term); });
+            });
+        }
+
+        function render() {
+            const tally = new Map();
+            all.forEach(function (row) { tally.set(row.form_type, (tally.get(row.form_type) || 0) + 1); });
+
+            counts.innerHTML = "";
+            counts.appendChild(countCard("", "ALL FORMS", all.length));
+            Object.keys(CODES).forEach(function (form) {
+                if (tally.get(form)) counts.appendChild(countCard(form, form.toUpperCase(), tally.get(form)));
+            });
+
+            const list = visible();
+            rows.innerHTML = "";
+
+            list.forEach(function (row) {
+                const tr = document.createElement("tr");
+                tr.appendChild(cell(row.reference, "ref"));
+                tr.appendChild(tagCell(row.form_type));
+                tr.appendChild(cell(row.full_name));
+                tr.appendChild(mailCell(row.email));
+                tr.appendChild(cell(formatDate(row.submitted_at), "when"));
+                tr.appendChild(cell(row.details, "details"));
+                tr.appendChild(cell(row.cv_filename || "—"));
+                tr.appendChild(statusCell(row.delivery_status));
+                rows.appendChild(tr);
+            });
+
+            empty.hidden = list.length > 0;
+            meta.textContent = list.length === all.length
+                ? all.length + " submission" + (all.length === 1 ? "" : "s")
+                : "Showing " + list.length + " of " + all.length;
+        }
+
+        function countCard(form, label, total) {
+            const card = document.createElement("div");
+            card.className = "count" + (form === formFilter && form ? " on" : "");
+            card.dataset.form = form;
+            card.innerHTML = "<span></span><strong></strong>";
+            card.querySelector("span").textContent = label;
+            card.querySelector("strong").textContent = total;
+            return card;
+        }
+
+        function cell(text, className) {
+            const td = document.createElement("td");
+            if (className) td.className = className;
+            td.textContent = text == null ? "" : String(text);
+            return td;
+        }
+
+        function tagCell(form) {
+            const td = document.createElement("td");
+            const span = document.createElement("span");
+            span.className = "tag " + (CODES[form] || "");
+            span.textContent = form || "—";
+            td.appendChild(span);
+            return td;
+        }
+
+        function mailCell(email) {
+            const td = document.createElement("td");
+            const link = document.createElement("a");
+            link.href = "mailto:" + email;
+            link.textContent = email;
+            td.appendChild(link);
+            return td;
+        }
+
+        function statusCell(status) {
+            const td = document.createElement("td");
+            const span = document.createElement("span");
+            span.className = "status " + (status || "");
+            span.textContent = status === "sent" ? "Sent" : (status || "—");
+            td.appendChild(span);
+            return td;
+        }
+
+        function formatDate(value) {
+            const date = new Date(value);
+            if (isNaN(date)) return value || "—";
+
+            return date.toLocaleString("en-GB", {
+                day: "2-digit", month: "short", year: "numeric",
+                hour: "2-digit", minute: "2-digit", timeZone: "Europe/London"
+            });
+        }
+
+        document.getElementById("csv").addEventListener("click", function () {
+            const list = visible();
+            const header = ["Reference", "Form", "Name", "Email", "Submitted", "Details", "CV", "Email sent"];
+            const lines = [header].concat(list.map(function (row) {
+                return [row.reference, row.form_type, row.full_name, row.email, row.submitted_at, row.details, row.cv_filename || "", row.delivery_status];
+            }));
+
+            const csv = lines.map(function (line) {
+                return line.map(function (field) {
+                    return '"' + String(field == null ? "" : field).replace(/"/g, '""') + '"';
+                }).join(",");
+            }).join("\r\n");
+
+            const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "dystil-submissions-" + new Date().toISOString().slice(0, 10) + ".csv";
+            link.click();
+            URL.revokeObjectURL(url);
+        });
+    </script>
+
+</body>
+</html>

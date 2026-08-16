@@ -148,6 +148,41 @@ Anything that never reached the inbox:
 npx wrangler d1 execute dystil-submissions --remote --command "SELECT * FROM submissions WHERE delivery_status <> 'sent'"
 ```
 
+### The submissions page
+
+`https://dystil.ai/students/database` shows the same records in the browser:
+counts per form, a search box, and a CSV download. Nothing on the website links
+to it, so it is only reachable by typing the address.
+
+The page is useless without the password. It sends whatever is typed to
+`POST /api/submissions` in the `X-Admin-Key` header, and the Worker returns
+nothing at all unless it matches. Set the password once:
+
+```powershell
+npx wrangler secret put ADMIN_KEY
+```
+
+Then redeploy with `npm run deploy`. To change it later, run the same command
+again with a new value; anyone still holding the old one loses access
+immediately.
+
+What protects the data:
+
+- the password is compared as a digest, so its length and its characters cannot
+  be worked out from how long the answer takes;
+- five wrong guesses from one address lock that address out for fifteen minutes,
+  and the lockout holds even if the next guess is correct;
+- the request must come from `dystil.ai`, so another website cannot read the
+  records even with the password;
+- the password is never written to disk. It lives in the tab until it is closed,
+  and it travels in a header rather than the address bar, so it stays out of
+  browser history, referrer headers and access logs;
+- the page asks search engines not to index it, though that is a courtesy rather
+  than a protection.
+
+Treat the password like the mailbox password: an unlisted address is not a lock,
+and everybody who has it can read every enquiry the site has ever received.
+
 ### Data protection
 
 The database holds personal data that visitors typed, so it needs the same care

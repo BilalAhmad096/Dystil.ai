@@ -509,3 +509,123 @@ test("returns a useful error if the email provider fails", async function() {
         assert.equal(calls.length, 2);
     }, 500);
 });
+
+// ---------------------------------------------------------------------------
+// The unlisted submissions view at /students/database
+// ---------------------------------------------------------------------------
+
+function makeReadableDatabase(rows) {
+    return {
+        prepare(sql) {
+            return {
+                bind(limit) {
+                    return {
+                        async all() {
+                            if (!sql.includes("FROM submissions")) throw new Error(`Unexpected statement: ${sql}`);
+                            return { results: rows.slice(0, limit) };
+                        }
+                    };
+                }
+            };
+        }
+    };
+}
+
+const storedRows = [
+    {
+        reference: "DYS-TAS-26-0002",
+        form_type: "Free Taster Registration",
+        full_name: "Jamie Graduate",
+        email: "jamie@example.com",
+        details: "Current status: Graduate",
+        cv_filename: null,
+        submitted_at: "2026-08-16T10:00:00.000Z",
+        delivery_status: "sent"
+    },
+    {
+        reference: "DYS-TAS-26-0001",
+        form_type: "Free Taster Registration",
+        full_name: "Sam Student",
+        email: "sam@example.com",
+        details: "Current status: Student",
+        cv_filename: null,
+        submitted_at: "2026-08-15T10:00:00.000Z",
+        delivery_status: "sent"
+    }
+];
+
+function makeListRequest(password, origin = "https://dystil.ai", ipAddress = "") {
+    const headers = { Origin: origin };
+    if (password !== null) headers["X-Admin-Key"] = password;
+    if (ipAddress) headers["CF-Connecting-IP"] = ipAddress;
+
+    return new Request("https://dystil-contact.example/api/submissions", { method: "POST", headers });
+}
+
+const adminEnv = { ...env, ADMIN_KEY: "correct horse battery", DB: makeReadableDatabase(storedRows) };
+
+test("returns the submissions when the password is right", async function() {
+    const response = await worker.fetch(makeListRequest("correct horse battery"), adminEnv);
+    const result = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(result.success, true);
+    assert.equal(result.submissions.length, 2);
+    assert.equal(result.submissions[0].reference, "DYS-TAS-26-0002");
+});
+
+test("refuses the wrong password and sends back no data", async function() {
+    const response = await worker.fetch(makeListRequest("guess"), adminEnv);
+    const result = await response.json();
+
+    assert.equal(response.status, 401);
+    assert.equal(result.success, false);
+    assert.equal(result.submissions, undefined);
+});
+
+test("refuses a request carrying no password at all", async function() {
+    const response = await worker.fetch(makeListRequest(null), adminEnv);
+
+    assert.equal(response.status, 401);
+    assert.equal((await response.json()).submissions, undefined);
+});
+
+test("refuses to read the submissions from another website", async function() {
+    const response = await worker.fetch(makeListRequest("correct horse battery", "https://not-dystil.example"), adminEnv);
+
+    assert.equal(response.status, 403);
+    assert.equal((await response.json()).submissions, undefined);
+});
+
+test("stays shut when no password has been configured", async function() {
+    const response = await worker.fetch(makeListRequest("anything"), { ...adminEnv, ADMIN_KEY: "" });
+
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).submissions, undefined);
+});
+
+test("stops guessing after five wrong passwords from one address", async function() {
+    await withFakeCache(async function() {
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+            const response = await worker.fetch(makeListRequest("wrong", "https://dystil.ai", "203.0.113.9"), adminEnv);
+            assert.equal(response.status, 401);
+        }
+
+        const blocked = await worker.fetch(makeListRequest("wrong", "https://dystil.ai", "203.0.113.9"), adminEnv);
+        assert.equal(blocked.status, 429);
+
+        // The lockout holds even once the right password turns up.
+        const withRightPassword = await worker.fetch(
+            makeListRequest("correct horse battery", "https://dystil.ai", "203.0.113.9"),
+            adminEnv
+        );
+        assert.equal(withRightPassword.status, 429);
+
+        // A different visitor is unaffected.
+        const elsewhere = await worker.fetch(
+            makeListRequest("correct horse battery", "https://dystil.ai", "198.51.100.4"),
+            adminEnv
+        );
+        assert.equal(elsewhere.status, 200);
+    });
+});
