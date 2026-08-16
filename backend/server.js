@@ -1,6 +1,8 @@
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 const MAX_CV_SIZE = 4 * 1024 * 1024;
-const RATE_LIMIT_SECONDS = 60;
+const DUPLICATE_WINDOW_SECONDS = 60;
+const BURST_WINDOW_SECONDS = 600;
+const BURST_LIMIT = 10;
 
 const FORM_SCHEMAS = {
     "Student Enquiry": [
@@ -137,8 +139,9 @@ export default {
             return jsonResponse({ success: false, message: cvResult.error }, 400, corsHeaders);
         }
 
-        if (await isRateLimited(request)) {
-            return jsonResponse({ success: false, message: "Please wait a minute before sending another enquiry." }, 429, corsHeaders);
+        const rateLimit = await checkRateLimit(request, formType, values.email);
+        if (rateLimit.blocked) {
+            return jsonResponse({ success: false, message: rateLimit.message }, 429, corsHeaders);
         }
 
         const submissionId = crypto.randomUUID();
@@ -191,6 +194,8 @@ export default {
                 message: "We could not send your enquiry right now. Please email askus@dystil.ai directly."
             }, 502, corsHeaders);
         }
+
+        await recordSubmission(rateLimit);
 
         return jsonResponse({
             success: true,
@@ -284,22 +289,64 @@ function bytesToBase64(bytes) {
     return btoa(binary);
 }
 
-async function isRateLimited(request) {
-    if (typeof caches === "undefined" || !caches.default) return false;
+// A whole university or office can share one address, so limiting purely by
+// address makes visitors block each other. The short window instead catches the
+// same person sending the same form twice, and a per-address burst cap still
+// bounds automated flooding to the same 60 submissions an hour as before.
+async function checkRateLimit(request, formType, email) {
+    if (typeof caches === "undefined" || !caches.default) return { blocked: false, keys: [] };
 
-    const ipAddress = request.headers.get("CF-Connecting-IP") || "unknown";
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ipAddress));
+    const address = request.headers.get("CF-Connecting-IP") || "unknown";
+    const duplicateKey = await buildLimitKey("duplicate", address, formType, email.toLowerCase());
+
+    if (await caches.default.match(duplicateKey)) {
+        return {
+            blocked: true,
+            message: "You have just sent this form. Please wait a minute before sending it again."
+        };
+    }
+
+    const burstKey = await findFreeBurstKey(address);
+    if (!burstKey) {
+        return {
+            blocked: true,
+            message: "Too many enquiries have come from this network. Please try again shortly or email askus@dystil.ai."
+        };
+    }
+
+    return {
+        blocked: false,
+        keys: [
+            { key: duplicateKey, seconds: DUPLICATE_WINDOW_SECONDS },
+            { key: burstKey, seconds: BURST_WINDOW_SECONDS }
+        ]
+    };
+}
+
+async function findFreeBurstKey(address) {
+    for (let slot = 0; slot < BURST_LIMIT; slot += 1) {
+        const key = await buildLimitKey("burst", address, String(slot));
+        if (!(await caches.default.match(key))) return key;
+    }
+
+    return null;
+}
+
+async function buildLimitKey(...parts) {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts.join("|")));
     const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-    const cacheKey = new Request(`https://rate-limit.invalid/${hash}`);
-    const cached = await caches.default.match(cacheKey);
 
-    if (cached) return true;
+    return new Request(`https://rate-limit.invalid/${hash}`);
+}
 
-    await caches.default.put(cacheKey, new Response("1", {
-        headers: { "Cache-Control": `public, max-age=${RATE_LIMIT_SECONDS}` }
-    }));
+// Recorded only once the emails are away, so a provider failure never blocks
+// the retry the error message invites.
+async function recordSubmission(rateLimit) {
+    if (typeof caches === "undefined" || !caches.default) return;
 
-    return false;
+    await Promise.all(rateLimit.keys.map(({ key, seconds }) => caches.default.put(key, new Response("1", {
+        headers: { "Cache-Control": `public, max-age=${seconds}` }
+    }))));
 }
 
 async function sendEmail(apiKey, payload, idempotencyKey) {

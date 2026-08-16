@@ -120,5 +120,15 @@ npm.cmd test
 
 The endpoint accepts requests only from `https://dystil.ai` and
 `https://www.dystil.ai`, validates known form fields and attachments, escapes
-visitor content, uses a spam honeypot, and rate-limits repeated submissions from
-the same IP.
+visitor content, and uses a spam honeypot.
+
+Rate limiting has to allow for a university or office where every visitor shares
+one address, so it works on two levels:
+
+- the same person sending the same form twice is asked to wait 60 seconds; and
+- any single address is capped at 10 submissions per 10 minutes.
+
+That is the same 60 submissions an hour the earlier one-per-minute rule allowed,
+without visitors on a shared network blocking each other. Neither limit is spent
+until the emails are actually sent, so a provider failure never blocks the retry
+the error message invites.

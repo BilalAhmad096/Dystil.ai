@@ -9,16 +9,51 @@ const env = {
     FROM_EMAIL: "askus@dystil.ai"
 };
 
-function makeRequest(fields, origin = "https://dystil.ai") {
+function makeRequest(fields, origin = "https://dystil.ai", ipAddress = "") {
     const body = new FormData();
     Object.entries(fields).forEach(([key, value]) => body.set(key, value));
 
+    const headers = { Origin: origin };
+    if (ipAddress) headers["CF-Connecting-IP"] = ipAddress;
+
     return new Request("https://dystil-contact.example/api/enquiry", {
         method: "POST",
-        headers: { Origin: origin },
+        headers,
         body
     });
 }
+
+// The Worker only rate-limits where a cache is available, so these stand in for
+// the Cloudflare one. Expiry is not simulated; each test stays inside a window.
+async function withFakeCache(callback) {
+    const store = new Map();
+
+    globalThis.caches = {
+        default: {
+            async match(request) {
+                return store.get(request.url);
+            },
+            async put(request, response) {
+                store.set(request.url, response);
+            }
+        }
+    };
+
+    try {
+        await callback();
+    } finally {
+        delete globalThis.caches;
+    }
+}
+
+const studentEnquiry = {
+    formType: "Student Enquiry",
+    fullName: "Sam Student",
+    email: "sam@example.com",
+    phone: "07123 456789",
+    interest: "Foundation Bootcamp",
+    message: "Please send more details."
+};
 
 async function withMockedEmailApi(callback, responseStatus = 201) {
     const originalFetch = globalThis.fetch;
@@ -131,6 +166,94 @@ test("escapes visitor content in the HTML email", async function() {
         assert.doesNotMatch(calls[0].body.htmlContent, /<script>/);
         assert.doesNotMatch(calls[0].body.htmlContent, /<img src=x/);
         assert.match(calls[0].body.htmlContent, /&lt;script&gt;/);
+    });
+});
+
+test("lets two visitors sharing one address both send a form", async function() {
+    await withFakeCache(async function() {
+        await withMockedEmailApi(async function(calls) {
+            const first = await worker.fetch(makeRequest(studentEnquiry, "https://dystil.ai", "203.0.113.7"), env);
+            const second = await worker.fetch(
+                makeRequest({ ...studentEnquiry, email: "jo@example.com" }, "https://dystil.ai", "203.0.113.7"),
+                env
+            );
+
+            assert.equal(first.status, 200);
+            assert.equal(second.status, 200);
+            assert.equal(calls.length, 4);
+        });
+    });
+});
+
+test("blocks an immediate repeat of the same form by the same visitor", async function() {
+    await withFakeCache(async function() {
+        await withMockedEmailApi(async function(calls) {
+            const first = await worker.fetch(makeRequest(studentEnquiry, "https://dystil.ai", "203.0.113.8"), env);
+            const repeat = await worker.fetch(makeRequest(studentEnquiry, "https://dystil.ai", "203.0.113.8"), env);
+
+            assert.equal(first.status, 200);
+            assert.equal(repeat.status, 429);
+            assert.match((await repeat.json()).message, /wait a minute/i);
+            assert.equal(calls.length, 2);
+        });
+    });
+});
+
+test("lets the same visitor send a different form straight away", async function() {
+    await withFakeCache(async function() {
+        await withMockedEmailApi(async function(calls) {
+            const enquiry = await worker.fetch(makeRequest(studentEnquiry, "https://dystil.ai", "203.0.113.9"), env);
+            const taster = await worker.fetch(makeRequest({
+                formType: "Free Taster Registration",
+                fullName: "Sam Student",
+                email: "sam@example.com",
+                currentStatus: "Student",
+                areaOfInterest: "Cloud"
+            }, "https://dystil.ai", "203.0.113.9"), env);
+
+            assert.equal(enquiry.status, 200);
+            assert.equal(taster.status, 200);
+            assert.equal(calls.length, 4);
+        });
+    });
+});
+
+test("still caps a burst of submissions from one address", async function() {
+    await withFakeCache(async function() {
+        await withMockedEmailApi(async function() {
+            for (let attempt = 0; attempt < 10; attempt += 1) {
+                const response = await worker.fetch(
+                    makeRequest({ ...studentEnquiry, email: `visitor${attempt}@example.com` }, "https://dystil.ai", "203.0.113.10"),
+                    env
+                );
+
+                assert.equal(response.status, 200);
+            }
+
+            const blocked = await worker.fetch(
+                makeRequest({ ...studentEnquiry, email: "visitor10@example.com" }, "https://dystil.ai", "203.0.113.10"),
+                env
+            );
+
+            assert.equal(blocked.status, 429);
+            assert.match((await blocked.json()).message, /too many enquiries/i);
+        });
+    });
+});
+
+test("does not spend the limit when the email provider fails", async function() {
+    await withFakeCache(async function() {
+        await withMockedEmailApi(async function() {
+            const failed = await worker.fetch(makeRequest(studentEnquiry, "https://dystil.ai", "203.0.113.11"), env);
+            assert.equal(failed.status, 502);
+        }, 500);
+
+        await withMockedEmailApi(async function(calls) {
+            const retry = await worker.fetch(makeRequest(studentEnquiry, "https://dystil.ai", "203.0.113.11"), env);
+
+            assert.equal(retry.status, 200);
+            assert.equal(calls.length, 2);
+        });
     });
 });
 
