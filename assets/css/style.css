@@ -206,6 +206,7 @@ img {
 .student-cta {
     background: linear-gradient(135deg, #f2a84b, #e29355);
     box-shadow: 0 14px 34px rgba(242, 168, 75, 0.28);
+    color: var(--text);
 }
 
 .student-cta:hover {
