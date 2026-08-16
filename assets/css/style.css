@@ -18,6 +18,7 @@
     --primary-soft: rgba(88, 101, 242, 0.14);
 
     --accent: #f2a84b;
+    --accent-text: #96590a;
     --light-bg: #eef1ff;
     --white: #ffffff;
     --soft-card: #f7f8ff;
@@ -947,7 +948,7 @@ img {
 
 .process-grid span {
     display: inline-block;
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 32px;
     font-weight: 900;
     margin-bottom: 16px;
@@ -1109,7 +1110,7 @@ img {
 
 .sprint-grid span {
     display: inline-block;
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 32px;
     font-weight: 900;
     margin-bottom: 16px;
@@ -1256,7 +1257,7 @@ img {
 
 .advanced-tag {
     background-color: rgba(242, 168, 75, 0.16);
-    color: var(--accent);
+    color: var(--accent-text);
 }
 
 .bootcamp-choice h3 {
@@ -1288,7 +1289,7 @@ img {
 
 .detail-heading span {
     display: inline-block;
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 14px;
     font-weight: 900;
     letter-spacing: 2px;
@@ -1348,7 +1349,7 @@ img {
 }
 
 .sprint-timeline span {
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 32px;
     font-weight: 900;
 }
@@ -1504,7 +1505,7 @@ img {
 
 .edge-heading span {
     display: inline-block;
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 14px;
     font-weight: 900;
     letter-spacing: 2px;
@@ -1765,7 +1766,7 @@ img {
 }
 
 .match-step span {
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 34px;
     font-weight: 900;
 }
@@ -2012,7 +2013,7 @@ img {
 }
 
 .corporate-card span {
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 34px;
     font-weight: 900;
 }
@@ -5731,7 +5732,7 @@ ABOUT HERO
 
 .contact-label {
     display: inline-block;
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 14px;
     font-weight: 900;
     letter-spacing: 2px;
@@ -6119,7 +6120,7 @@ ABOUT HERO
 
 .opportunity-heading span {
     display: inline-block;
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 14px;
     font-weight: 900;
     letter-spacing: 2px;
@@ -6206,7 +6207,7 @@ ABOUT HERO
 
 .intake-tag {
     background-color: rgba(242, 168, 75, 0.16);
-    color: var(--accent);
+    color: var(--accent-text);
 }
 
 .opportunity-content h3 {
@@ -6384,7 +6385,7 @@ ABOUT HERO
 }
 
 .advanced-price span {
-    color: var(--accent);
+    color: var(--accent-text);
 }/* =========================================================
    MOBILE HEADER / HAMBURGER MENU
    Add this at the VERY BOTTOM of style.css
