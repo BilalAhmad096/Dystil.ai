@@ -246,13 +246,23 @@
                 <label for="taster-interest">Area of Interest</label>
                 <select id="taster-interest" name="areaOfInterest" required>
                     <option value="">Select your interest</option>
-                    <option>AI and Automation</option>
-                    <option>Data Science</option>
-                    <option>Cloud</option>
-                    <option>Cybersecurity</option>
-                    <option>Startup Builder</option>
-                    <option>Not sure yet</option>
+                    <option>Engineering</option>
+                    <option>Finance &amp; Accounting</option>
+                    <option>Logistics</option>
+                    <option>Business Management</option>
+                    <option>Technology (Data Science, AI, Cloud)</option>
+                    <option>Health Care, Medical &amp; Life Sciences</option>
+                    <option>Marketing &amp; Sales</option>
+                    <option>Manufacturing &amp; Construction</option>
+                    <option>HR, Legal &amp; Compliance</option>
+                    <option>Project Management</option>
+                    <option id="taster-interest-other-option" value="Other">Other</option>
                 </select>
+
+                <div id="taster-interest-other-field" hidden>
+                    <label for="taster-interest-other">Tell us your area of interest</label>
+                    <input id="taster-interest-other" type="text" placeholder="Type your area of interest" maxlength="120">
+                </div>
 
                 <label for="taster-message">Message</label>
                 <textarea id="taster-message" name="message" placeholder="Tell us what you would like to learn from the session" maxlength="4000"></textarea>
@@ -276,6 +286,36 @@
     <script src="/assets/js/script.js"></script>
     <script>
         loadStudentLayout();
+    </script>
+    <script>
+        /* "Other" area of interest: reveal a box and send whatever the visitor types */
+        (function() {
+            const select = document.getElementById("taster-interest");
+            const otherOption = document.getElementById("taster-interest-other-option");
+            const otherField = document.getElementById("taster-interest-other-field");
+            const otherInput = document.getElementById("taster-interest-other");
+
+            function syncOtherValue() {
+                otherOption.value = otherInput.value.trim() || "Other";
+            }
+
+            select.addEventListener("change", function() {
+                const isOther = select.selectedOptions[0] === otherOption;
+
+                otherField.hidden = !isOther;
+                otherInput.required = isOther;
+
+                if (isOther) {
+                    otherInput.focus();
+                    return;
+                }
+
+                otherInput.value = "";
+                syncOtherValue();
+            });
+
+            otherInput.addEventListener("input", syncOtherValue);
+        })();
     </script>
     <script src="/assets/js/mobile-menu.js"></script>
 </body>

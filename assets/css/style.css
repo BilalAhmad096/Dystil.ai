@@ -5810,7 +5810,7 @@ ABOUT HERO
     color: var(--dark);
 }
 
-.student-contact-form label:first-child {
+.student-contact-form > label:first-child {
     margin-top: 0;
 }
 
