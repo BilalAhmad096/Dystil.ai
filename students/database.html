@@ -160,7 +160,11 @@
         .status.sent { color: #8fe0b6; }
         .status.pending, .status.failed { color: #ffb4a8; }
 
-        .details { color: var(--light-text); font-size: 12.5px; max-width: 460px; white-space: pre-wrap; }
+        .details { color: var(--light-text); font-size: 12.5px; max-width: 460px; }
+        .details .field { margin-bottom: 3px; }
+        .details .field:last-child { margin-bottom: 0; }
+        .details .name { color: #d6dceb; font-weight: bold; }
+        .details .value { white-space: pre-wrap; }
 
         .empty { padding: 40px; text-align: center; color: var(--light-text); font-size: 14px; }
     </style>
@@ -208,7 +212,6 @@
                         <th>Email</th>
                         <th>Submitted</th>
                         <th>Details</th>
-                        <th>CV</th>
                         <th>Email sent</th>
                     </tr>
                 </thead>
@@ -221,6 +224,26 @@
     <script>
         const API = "https://dystil-contact.dystil-ai.workers.dev/api/submissions";
         const CODES = { "Free Taster Registration": "TAS", "Bootcamp Registration": "BOT", "Student Enquiry": "STU", "Corporate Enquiry": "COR" };
+
+        // The labels the forms and the notification emails use, so a record reads
+        // the same here as it does in the inbox.
+        const FIELD_LABELS = {
+            fullName: "Full name",
+            email: "Email",
+            phone: "Phone",
+            interest: "Area of interest",
+            company: "Company",
+            focusArea: "Primary focus area",
+            challenge: "Biggest challenge",
+            universityDegree: "University / degree",
+            careerGoal: "Career goal",
+            techSkills: "Previous tech skills",
+            experience: "Past experience",
+            package: "Package",
+            currentStatus: "Current status",
+            areaOfInterest: "Area of interest",
+            message: "Message"
+        };
 
         const lock = document.getElementById("lock");
         const lockForm = document.getElementById("lock-form");
@@ -354,8 +377,7 @@
                 tr.appendChild(cell(row.full_name));
                 tr.appendChild(mailCell(row.email));
                 tr.appendChild(cell(formatDate(row.submitted_at), "when"));
-                tr.appendChild(cell(row.details, "details"));
-                tr.appendChild(cell(row.cv_filename || "—"));
+                tr.appendChild(detailsCell(row.details));
                 tr.appendChild(statusCell(row.delivery_status));
                 rows.appendChild(tr);
             });
@@ -380,6 +402,70 @@
             const td = document.createElement("td");
             if (className) td.className = className;
             td.textContent = text == null ? "" : String(text);
+            return td;
+        }
+
+        // Every answer is stored as one JSON string. Reading that raw is the
+        // work of a decoder ring, so it is split back into labelled lines in the
+        // order the visitor filled the form in. Anything empty is left out.
+        function detailPairs(details) {
+            if (!details) return [];
+
+            let parsed;
+
+            try {
+                parsed = JSON.parse(details);
+            } catch {
+                return null;
+            }
+
+            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+
+            return Object.keys(parsed)
+                .map(function (field) { return [labelFor(field), String(parsed[field] == null ? "" : parsed[field]).trim()]; })
+                .filter(function (pair) { return pair[1] !== ""; });
+        }
+
+        // A field the forms gain later still reads as words rather than camelCase.
+        function labelFor(field) {
+            if (FIELD_LABELS[field]) return FIELD_LABELS[field];
+            const words = String(field).replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
+            return words.charAt(0).toUpperCase() + words.slice(1);
+        }
+
+        function detailsCell(details) {
+            const td = document.createElement("td");
+            td.className = "details";
+            const pairs = detailPairs(details);
+
+            // Not JSON at all: show exactly what was stored rather than nothing.
+            if (pairs === null) {
+                td.textContent = String(details);
+                return td;
+            }
+
+            if (!pairs.length) {
+                td.textContent = "—";
+                return td;
+            }
+
+            pairs.forEach(function (pair) {
+                const line = document.createElement("div");
+                line.className = "field";
+
+                const name = document.createElement("span");
+                name.className = "name";
+                name.textContent = pair[0] + ":";
+
+                const value = document.createElement("span");
+                value.className = "value";
+                value.textContent = " " + pair[1];
+
+                line.appendChild(name);
+                line.appendChild(value);
+                td.appendChild(line);
+            });
+
             return td;
         }
 
@@ -420,11 +506,20 @@
             });
         }
 
+        // The spreadsheet gets the same labelled lines, on one line per record so
+        // a column stays a column.
+        function detailsText(details) {
+            const pairs = detailPairs(details);
+            if (pairs === null) return String(details);
+
+            return pairs.map(function (pair) { return pair[0] + ": " + pair[1]; }).join("; ");
+        }
+
         document.getElementById("csv").addEventListener("click", function () {
             const list = visible();
-            const header = ["Reference", "Form", "Name", "Email", "Submitted", "Details", "CV", "Email sent"];
+            const header = ["Reference", "Form", "Name", "Email", "Submitted", "Details", "Email sent"];
             const lines = [header].concat(list.map(function (row) {
-                return [row.reference, row.form_type, row.full_name, row.email, row.submitted_at, row.details, row.cv_filename || "", row.delivery_status];
+                return [row.reference, row.form_type, row.full_name, row.email, row.submitted_at, detailsText(row.details), row.delivery_status];
             }));
 
             const csv = lines.map(function (line) {
