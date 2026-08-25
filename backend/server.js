@@ -748,6 +748,24 @@ const CAMPAIGNS = {
         sender: { email: "frank@dystil.ai", name: "Frank M" },
         replyTo: { email: "frank@dystil.ai", name: "Frank M" },
         testRecipients: TASTER_TEST_TEAM
+    },
+    "taster-2026-08-29-joining-link-askus": {
+        formType: "Free Taster Registration",
+        subject: "Your Saturday session details and joining link",
+        buildHtml: buildTasterPlainHtml,
+        buildText: buildTasterJoiningText,
+        sender: { email: "askus@dystil.ai", name: "Dystil" },
+        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
+        testRecipients: TASTER_TEST_TEAM
+    },
+    "taster-2026-08-29-joining-link-minimal": {
+        formType: "Free Taster Registration",
+        subject: "Your Saturday session details and joining link",
+        buildHtml: buildTasterMinimalHtml,
+        buildText: buildTasterJoiningText,
+        sender: { email: "askus@dystil.ai", name: "Dystil" },
+        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
+        testRecipients: TASTER_TEST_TEAM
     }
 };
 
@@ -1144,6 +1162,67 @@ function buildTasterPlainHtml(firstName) {
             <a href="mailto:askus@dystil.ai">askus@dystil.ai</a><br>
             <a href="mailto:frank@dystil.ai">frank@dystil.ai</a><br>
             <a href="https://www.dystil.ai">www.dystil.ai</a>
+        </p>
+    </div>
+</body></html>`;
+}
+
+// Variant D. The confirmation emails that reach Primary carry no http links at
+// all, only a mailto, so Brevo has nothing to rewrite. This keeps every word
+// but prints the share and social addresses as text instead of links, leaving
+// the meeting the only thing Brevo can wrap.
+function buildTasterMinimalHtml(firstName) {
+    const greeting = firstName ? `Hey ${escapeHtml(firstName)}!` : "Hey!";
+
+    const agenda = TASTER_AGENDA.map(([icon, title, detail]) =>
+        `<div style="margin:0 0 6px;">${icon} ${escapeHtml(title)} — ${escapeHtml(detail)}</div>`
+    ).join("");
+
+    const socials = TASTER_SOCIALS.map(([icon, name, href]) =>
+        `<div style="margin:0 0 4px;">${icon} ${escapeHtml(name)}: ${escapeHtml(href)}</div>`
+    ).join("");
+
+    return `<!doctype html>
+<html><body style="margin:0;padding:0;background:#ffffff;">
+    <div style="max-width:600px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.6;color:#222222;padding:16px;">
+        <p style="margin:0 0 14px;">${greeting}<br>You registered. Smart move.</p>
+
+        <p style="margin:0 0 14px;">Now mark the calendar, set the alarm, and show up — because this Saturday is going to be worth every minute.</p>
+
+        <p style="margin:0 0 14px;">We're kicking off Dystil's very first Free Taster Session for the Career Accelerator Program, and you're one of the 100s who grabbed a spot.</p>
+
+        <div style="margin:0 0 14px;">
+            <div style="margin:0 0 4px;">\u{1F4C5} Saturday, 29th August 2026</div>
+            <div style="margin:0 0 4px;">⏰ 11:00 AM – 1:00 PM UK Time</div>
+            <div>\u{1F4BB} Online – Live Session, <a href="${escapeHtml(TASTER_MEETING_URL)}">Meeting Link here</a>, calendar invite to follow.</div>
+        </div>
+
+        <p style="margin:0 0 14px;">You'll get a real look at what the Career Accelerator Program is all about — the skills, the projects, the confidence, and the career edge. Not a sales pitch. An actual session built to give you something useful from minute one.</p>
+
+        <p style="margin:0 0 8px;">Here's what's coming your way:</p>
+        <div style="margin:0 0 14px;">${agenda}</div>
+
+        <p style="margin:0 0 14px;">This is our first session ever — and we're building something genuinely exciting. You're part of that from day one.</p>
+
+        <p style="margin:0 0 4px;">Know someone who'd benefit? Share it.</p>
+        <p style="margin:0 0 14px;">If you have a friend, classmate, or colleague who's thinking about their career — send them this link and invite them to register before Friday night:<br>
+        \u{1F449} dystil.ai/students/taster</p>
+
+        <p style="margin:0 0 8px;">Follow us for updates before Saturday:</p>
+        <div style="margin:0 0 14px;">${socials}</div>
+
+        <p style="margin:0 0 14px;">We'll see you Saturday at 11:00 AM sharp.</p>
+
+        <p style="margin:0 0 14px;">Don't be the one who had a spot and didn't show up. \u{1F609}</p>
+
+        <p style="margin:0 0 14px;">The Dystil Team</p>
+
+        <p style="margin:0;">
+            Frank M<br>
+            Executive Partner<br>
+            <a href="mailto:askus@dystil.ai">askus@dystil.ai</a><br>
+            <a href="mailto:frank@dystil.ai">frank@dystil.ai</a><br>
+            www.dystil.ai
         </p>
     </div>
 </body></html>`;

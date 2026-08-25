@@ -181,6 +181,9 @@
         .cast > p { font-size: 13px; color: var(--light-text); margin-bottom: 14px; }
         .cast .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
         .cast .testers { font-size: 12.5px; color: var(--light-text); margin-top: 12px; }
+        .cast .variants { display: flex; flex-wrap: wrap; gap: 8px; }
+        .cast .variants button { background: transparent; border: 1px solid var(--line); color: var(--light-text); }
+        .cast .variants button:hover:enabled { color: var(--white); border-color: var(--primary); }
         .cast button { padding: 10px 18px; font-size: 13px; }
         .cast button:disabled { opacity: 0.5; cursor: not-allowed; }
         .cast .danger { background: #b4472f; }
@@ -223,13 +226,12 @@
 
         <div class="cast" id="cast">
             <h2>Free Taster — joining email</h2>
-            <p>Sends the Saturday joining link to everyone who registered. Each address is mailed once; anyone already sent is skipped automatically.</p>
+            <p>Sends the Saturday joining link to everyone who registered. Each address is mailed once; anyone already sent is skipped automatically. The lettered buttons mail the team only, one variable apart, so the Gmail tab each one lands in says which variable matters.</p>
 
             <div class="tally" id="cast-tally">Loading the recipient list…</div>
 
             <div class="row">
-                <button class="ghost" id="cast-send-test" type="button">Test A — designed</button>
-                <button class="ghost" id="cast-send-test-plain" type="button">Test B — plain</button>
+                <span id="cast-variants" class="variants"></span>
                 <button class="danger" id="cast-send-all" type="button">Send to everyone remaining</button>
             </div>
 
@@ -380,6 +382,7 @@
             castLog.textContent = "";
             castLog.hidden = true;
             castTesters.textContent = "";
+            castVariants.innerHTML = "";
             board.hidden = true;
             lock.hidden = false;
         });
@@ -598,8 +601,7 @@
         const castTally = document.getElementById("cast-tally");
         const castLog = document.getElementById("cast-log");
         const castTesters = document.getElementById("cast-testers");
-        const castSendTest = document.getElementById("cast-send-test");
-        const castSendTestPlain = document.getElementById("cast-send-test-plain");
+        const castVariants = document.getElementById("cast-variants");
         const castSendAll = document.getElementById("cast-send-all");
 
         let castRoster = { recipients: [], alreadySent: [] };
@@ -634,6 +636,8 @@
                     + "<strong>" + castRoster.alreadySent.length + "</strong> already emailed, "
                     + "<strong>" + remaining + "</strong> still to go)";
 
+                castBuildVariantButtons();
+
                 const testers = castRoster.testRecipients || [];
                 castTesters.textContent = testers.length
                     ? "Test goes to " + testers.length + ": " + testers.map(function (p) { return p.fullName; }).join(", ")
@@ -661,41 +665,57 @@
             });
         }
 
-        // A test never touches the applicant list, so both variants can be sent
-        // as often as needed. Which tab each one lands in is the whole point:
-        // it tells us whether the packaging or the sending route is the problem.
+        // Each variant is one variable away from its neighbour: A to B changes
+        // the packaging, B to C changes only the sender address, C to D drops
+        // the links Brevo would rewrite. Whichever one reaches Primary names
+        // the cause, so tests are never recorded and can be repeated freely.
+        const CAST_VARIANTS = [
+            { suffix: "", label: "A — designed, from Frank" },
+            { suffix: "-plain", label: "B — plain, from Frank" },
+            { suffix: "-askus", label: "C — plain, from askus" },
+            { suffix: "-minimal", label: "D — plain, from askus, no links" }
+        ];
+
+        function castBuildVariantButtons() {
+            castVariants.innerHTML = "";
+
+            CAST_VARIANTS.forEach(function (variant) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.textContent = variant.label;
+                button.addEventListener("click", function () {
+                    castTest(CAST_CAMPAIGN + variant.suffix, variant.label, button);
+                });
+                castVariants.appendChild(button);
+            });
+        }
+
+        function castVariantButtons() {
+            return [].slice.call(castVariants.querySelectorAll("button"));
+        }
+
         async function castTest(campaign, label, button) {
             const testers = castRoster.testRecipients || [];
             if (!testers.length) return;
 
             const names = testers.map(function (p) { return p.fullName; }).join(", ");
-            if (!confirm("Send the " + label + " test to " + testers.length + " people?\n\n" + names)) return;
+            if (!confirm("Send variant " + label + " to " + testers.length + " people?\n\n" + names)) return;
 
             const original = button.textContent;
-            castSendTest.disabled = true;
-            castSendTestPlain.disabled = true;
+            castVariantButtons().forEach(function (b) { b.disabled = true; });
             button.textContent = "Sending…";
 
             try {
                 const body = await castCall({ action: "test" }, campaign);
-                castWrite(label + " test:");
+                castWrite("Variant " + label + ":");
                 castReport(body.results);
             } catch (error) {
-                castWrite(label + " test failed: " + error.message);
+                castWrite("Variant " + label + " failed: " + error.message);
             } finally {
-                castSendTest.disabled = false;
-                castSendTestPlain.disabled = false;
+                castVariantButtons().forEach(function (b) { b.disabled = false; });
                 button.textContent = original;
             }
         }
-
-        castSendTest.addEventListener("click", function () {
-            castTest(CAST_CAMPAIGN, "A \u2014 designed", castSendTest);
-        });
-
-        castSendTestPlain.addEventListener("click", function () {
-            castTest(CAST_CAMPAIGN_PLAIN, "B \u2014 plain", castSendTestPlain);
-        });
 
         castSendAll.addEventListener("click", async function () {
             const remaining = castRemaining();
@@ -705,7 +725,7 @@
             if (!confirm("Last check — " + remaining.length + " real emails go out now. Continue?")) return;
 
             castSendAll.disabled = true;
-            castSendTest.disabled = true;
+            castVariantButtons().forEach(function (b) { b.disabled = true; });
             castWrite("Sending to " + remaining.length + " people…");
 
             let done = 0;
@@ -725,7 +745,7 @@
                 castWrite("Stopped: " + error.message);
                 castWrite("Nobody already sent will be mailed again — press the button to carry on.");
             } finally {
-                castSendTest.disabled = false;
+                castVariantButtons().forEach(function (b) { b.disabled = false; });
                 await castRefresh();
             }
         });
