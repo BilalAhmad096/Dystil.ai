@@ -724,7 +724,8 @@ const TASTER_TEST_TEAM = [
     // sorts the email with no history to go on. mailboxforbilal has had
     // confirmations land in Primary, and reads as the opposite case.
     { email: "bilal.ahmad096@gmail.com", fullName: "Bilal Ahmad" },
-    { email: "bilalphdbath@gmail.com", fullName: "Bilal Ahmad" }
+    { email: "bilalphdbath@gmail.com", fullName: "Bilal Ahmad" },
+    { email: "billuahmad786@gmail.com", fullName: "Bilal Ahmad" }
 ];
 
 const CAMPAIGNS = {
