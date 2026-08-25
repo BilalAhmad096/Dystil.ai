@@ -735,8 +735,8 @@ const CAMPAIGNS = {
         subject: "🔥 Dystil: You’re In. This Saturday is Going to Be Different — Here’s What to Expect",
         buildHtml: buildTasterJoiningHtml,
         buildText: buildTasterJoiningText,
-        sender: { email: "askus@dystil.ai", name: "Dystil" },
-        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
+        sender: { email: "frank@dystil.ai", name: "Frank M" },
+        replyTo: { email: "frank@dystil.ai", name: "Frank M" },
         testRecipients: TASTER_TEST_TEAM
     },
     // Same email, plain packaging and a subject with no emoji or hype, so the
@@ -746,8 +746,8 @@ const CAMPAIGNS = {
         subject: "Your joining link — Dystil Free Taster Session, Saturday 11am",
         buildHtml: buildTasterJoiningHtml,
         buildText: buildTasterJoiningText,
-        sender: { email: "askus@dystil.ai", name: "Dystil" },
-        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
+        sender: { email: "frank@dystil.ai", name: "Frank M" },
+        replyTo: { email: "frank@dystil.ai", name: "Frank M" },
         testRecipients: TASTER_TEST_TEAM
     },
     "taster-2026-08-29-joining-link-plain": {
