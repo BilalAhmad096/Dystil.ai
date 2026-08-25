@@ -758,6 +758,15 @@ const CAMPAIGNS = {
         replyTo: { email: "askus@dystil.ai", name: "Dystil" },
         testRecipients: TASTER_TEST_TEAM
     },
+    "taster-2026-08-29-joining-link-sober": {
+        formType: "Free Taster Registration",
+        subject: "Your Dystil taster session on Saturday 29 August",
+        buildHtml: buildTasterSoberHtml,
+        buildText: buildTasterSoberText,
+        sender: { email: "askus@dystil.ai", name: "Dystil" },
+        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
+        testRecipients: TASTER_TEST_TEAM
+    },
     "taster-2026-08-29-joining-link-minimal": {
         formType: "Free Taster Registration",
         subject: "Your Saturday session details and joining link",
@@ -917,7 +926,7 @@ async function sendBroadcastTest(env, campaign, corsHeaders) {
             sender: campaign.sender || { email: env.FROM_EMAIL, name: "Dystil" },
             to: [{ email: person.email, name: person.fullName }],
             replyTo: campaign.replyTo || { email: env.ADMIN_EMAIL, name: "Dystil" },
-            subject: `[TEST] ${campaign.subject}`,
+            subject: campaign.subject,
             htmlContent: campaign.buildHtml(firstNameOf(person.fullName)),
             textContent: campaign.buildText(firstNameOf(person.fullName))
         };
@@ -1226,4 +1235,63 @@ function buildTasterMinimalHtml(firstName) {
         </p>
     </div>
 </body></html>`;
+}
+
+// Variant E. The one variable the other four never moved: the words. This says
+// the same practical things — you registered, here is when, here is the link,
+// here is what happens — in the register the confirmation emails use, which are
+// the ones that reach Primary. No emoji, no pitch, no share or follow section.
+// It is a diagnostic, not a redraft: if it lands in Primary, the copy is what
+// Gmail is reacting to, and that is a decision about the email, not the code.
+function buildTasterSoberHtml(firstName) {
+    const greeting = firstName ? `Hi ${escapeHtml(firstName)},` : "Hi,";
+
+    return `<!doctype html>
+<html><body style="margin:0;padding:0;background:#ffffff;">
+    <div style="max-width:600px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.6;color:#222222;padding:16px;">
+        <p style="margin:0 0 14px;">${greeting}</p>
+
+        <p style="margin:0 0 14px;">You registered for the Dystil free taster session. Here are your joining details.</p>
+
+        <p style="margin:0 0 14px;">
+            Date: Saturday 29 August 2026<br>
+            Time: 11:00 to 13:00 UK time<br>
+            Join: <a href="${escapeHtml(TASTER_MEETING_URL)}">Microsoft Teams</a>
+        </p>
+
+        <p style="margin:0 0 14px;">The session runs for two hours and covers the future of work in your industry, a live demonstration of AI applied to real job roles, a look at the kind of projects you would build, and a question and answer session at the end.</p>
+
+        <p style="margin:0 0 14px;">A calendar invitation will follow separately.</p>
+
+        <p style="margin:0 0 14px;">If you can no longer attend, please reply to this email and let us know.</p>
+
+        <p style="margin:0;">
+            Frank M<br>
+            Executive Partner, Dystil<br>
+            <a href="mailto:askus@dystil.ai">askus@dystil.ai</a>
+        </p>
+    </div>
+</body></html>`;
+}
+
+function buildTasterSoberText(firstName) {
+    return [
+        firstName ? `Hi ${firstName},` : "Hi,",
+        "",
+        "You registered for the Dystil free taster session. Here are your joining details.",
+        "",
+        "Date: Saturday 29 August 2026",
+        "Time: 11:00 to 13:00 UK time",
+        "Join: " + TASTER_MEETING_URL,
+        "",
+        "The session runs for two hours and covers the future of work in your industry, a live demonstration of AI applied to real job roles, a look at the kind of projects you would build, and a question and answer session at the end.",
+        "",
+        "A calendar invitation will follow separately.",
+        "",
+        "If you can no longer attend, please reply to this email and let us know.",
+        "",
+        "Frank M",
+        "Executive Partner, Dystil",
+        "askus@dystil.ai"
+    ].join("\n");
 }
