@@ -228,7 +228,8 @@
             <div class="tally" id="cast-tally">Loading the recipient list…</div>
 
             <div class="row">
-                <button class="ghost" id="cast-send-test" type="button">Send test to the team</button>
+                <button class="ghost" id="cast-send-test" type="button">Test A — designed</button>
+                <button class="ghost" id="cast-send-test-plain" type="button">Test B — plain</button>
                 <button class="danger" id="cast-send-all" type="button">Send to everyone remaining</button>
             </div>
 
@@ -591,21 +592,23 @@
         // Worker can only make so many outbound calls in one request.
         const CAST_API = "https://dystil-contact.dystil-ai.workers.dev/api/broadcast";
         const CAST_CAMPAIGN = "taster-2026-08-29-joining-link";
+        const CAST_CAMPAIGN_PLAIN = CAST_CAMPAIGN + "-plain";
         const CAST_BATCH = 20;
 
         const castTally = document.getElementById("cast-tally");
         const castLog = document.getElementById("cast-log");
         const castTesters = document.getElementById("cast-testers");
         const castSendTest = document.getElementById("cast-send-test");
+        const castSendTestPlain = document.getElementById("cast-send-test-plain");
         const castSendAll = document.getElementById("cast-send-all");
 
         let castRoster = { recipients: [], alreadySent: [] };
 
-        async function castCall(payload) {
+        async function castCall(payload, campaign) {
             const response = await fetch(CAST_API, {
                 method: "POST",
                 headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
-                body: JSON.stringify({ campaign: CAST_CAMPAIGN, ...payload })
+                body: JSON.stringify({ campaign: campaign || CAST_CAMPAIGN, ...payload })
             });
 
             const body = await response.json().catch(function () { return {}; });
@@ -658,28 +661,40 @@
             });
         }
 
-        // A test never touches the applicant list, so it can be repeated after
-        // every edit without any risk of mailing a registrant early.
-        castSendTest.addEventListener("click", async function () {
+        // A test never touches the applicant list, so both variants can be sent
+        // as often as needed. Which tab each one lands in is the whole point:
+        // it tells us whether the packaging or the sending route is the problem.
+        async function castTest(campaign, label, button) {
             const testers = castRoster.testRecipients || [];
             if (!testers.length) return;
 
             const names = testers.map(function (p) { return p.fullName; }).join(", ");
-            if (!confirm("Send the test email to " + testers.length + " people?\n\n" + names)) return;
+            if (!confirm("Send the " + label + " test to " + testers.length + " people?\n\n" + names)) return;
 
+            const original = button.textContent;
             castSendTest.disabled = true;
-            castSendTest.textContent = "Sending…";
+            castSendTestPlain.disabled = true;
+            button.textContent = "Sending…";
 
             try {
-                const body = await castCall({ action: "test" });
-                castWrite("Test send:");
+                const body = await castCall({ action: "test" }, campaign);
+                castWrite(label + " test:");
                 castReport(body.results);
             } catch (error) {
-                castWrite("Test failed: " + error.message);
+                castWrite(label + " test failed: " + error.message);
             } finally {
                 castSendTest.disabled = false;
-                castSendTest.textContent = "Send test to the team";
+                castSendTestPlain.disabled = false;
+                button.textContent = original;
             }
+        }
+
+        castSendTest.addEventListener("click", function () {
+            castTest(CAST_CAMPAIGN, "A \u2014 designed", castSendTest);
+        });
+
+        castSendTestPlain.addEventListener("click", function () {
+            castTest(CAST_CAMPAIGN_PLAIN, "B \u2014 plain", castSendTestPlain);
         });
 
         castSendAll.addEventListener("click", async function () {
