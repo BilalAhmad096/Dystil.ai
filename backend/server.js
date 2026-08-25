@@ -718,9 +718,6 @@ function formatFileSize(bytes) {
 const BROADCAST_BATCH_LIMIT = 20;
 
 const TASTER_TEST_TEAM = [
-    { email: "fayazkhadir78@gmail.com", fullName: "Fayyaz Khadir" },
-    { email: "aman.kaleeur@gmail.com", fullName: "Aman Kaleeur" },
-    { email: "muaaz.sheergar@gmail.com", fullName: "Muaz Sheergar" },
     { email: "makki.arsalan07@gmail.com", fullName: "Arsalan Makki" },
     { email: "mailboxforbilal@gmail.com", fullName: "Bilal Ahmad" },
     // No dystil.ai mail has ever reached this address, so it shows how Gmail
