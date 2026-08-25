@@ -748,6 +748,15 @@ const CAMPAIGNS = {
         replyTo: { email: "frank@dystil.ai", name: "Frank M" },
         testRecipients: TASTER_TEST_TEAM
     },
+    "taster-2026-08-29-joining-link-screenshot": {
+        formType: "Free Taster Registration",
+        subject: "Your joining link — Dystil Free Taster Session, Saturday 11am",
+        buildHtml: buildTasterJoiningHtml,
+        buildText: buildTasterJoiningText,
+        sender: { email: "askus@dystil.ai", name: "Dystil" },
+        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
+        testRecipients: TASTER_TEST_TEAM
+    },
     "taster-2026-08-29-joining-link-plain": {
         formType: "Free Taster Registration",
         subject: "Your Saturday session details and joining link",
