@@ -122,6 +122,14 @@ export default {
             return listSubmissions(request, env, corsHeaders);
         }
 
+        if (request.method === "POST" && url.pathname === "/api/broadcast") {
+            if (!allowedOrigins.has(origin)) {
+                return jsonResponse({ success: false, message: "Origin not allowed." }, 403);
+            }
+
+            return handleBroadcast(request, env, corsHeaders);
+        }
+
         if (request.method !== "POST" || !["/api/enquiry", "/api/submit-form"].includes(url.pathname)) {
             return respond({ success: false, message: "Not found." }, 404);
         }
@@ -694,4 +702,374 @@ function formatFileSize(bytes) {
     if (!Number.isFinite(bytes)) return "unknown size";
     if (bytes < 1024) return `${bytes} B`;
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+/* ---------------------------------------------------------------------------
+   Broadcasts
+   ---------------------------------------------------------------------------
+   Emailing people who have already registered is a separate job from replying
+   to a new enquiry, so it gets its own endpoint behind the same password as the
+   submissions view. Two rules keep it safe to run: a recipient must already be
+   in the submissions table, so a stolen password cannot turn this into an open
+   relay, and every accepted send is written to broadcast_sends, so re-running
+   the job skips anyone who has already been mailed.
+--------------------------------------------------------------------------- */
+
+const BROADCAST_BATCH_LIMIT = 20;
+
+const CAMPAIGNS = {
+    "taster-2026-08-29-joining-link": {
+        formType: "Free Taster Registration",
+        subject: "Your joining link — Dystil Free Taster Session, Saturday 11am",
+        buildHtml: buildTasterJoiningHtml,
+        buildText: buildTasterJoiningText,
+        // The team check the wording before it goes to applicants. They are not
+        // registrants, so they are named here rather than looked up, and a test
+        // is never written to broadcast_sends: the same people need to be able
+        // to see the email again after every round of edits.
+        testRecipients: [
+            { email: "fayazkhadir78@gmail.com", fullName: "Fayyaz Khadir" },
+            { email: "aman.kaleeur@gmail.com", fullName: "Aman Kaleeur" },
+            { email: "muaaz.sheergar@gmail.com", fullName: "Muaz Sheergar" },
+            { email: "makki.arsalan07@gmail.com", fullName: "Arsalan Makki" },
+            { email: "mailboxforbilal@gmail.com", fullName: "Bilal Ahmad" }
+        ]
+    }
+};
+
+const BROADCAST_ROSTER_SQL = `
+    SELECT lower(trim(email)) AS email, full_name, MAX(reference) AS reference
+    FROM submissions
+    WHERE form_type = ?
+    GROUP BY lower(trim(email))
+    ORDER BY reference`;
+
+const BROADCAST_SENT_SQL = "SELECT email FROM broadcast_sends WHERE campaign = ?";
+
+const RECORD_BROADCAST_SQL = `
+    INSERT INTO broadcast_sends (campaign, email, sent_at) VALUES (?, ?, ?)
+    ON CONFLICT (campaign, email) DO NOTHING`;
+
+async function handleBroadcast(request, env, corsHeaders) {
+    if (!env.ADMIN_KEY) {
+        console.error("ADMIN_KEY is not configured.");
+        return jsonResponse({ success: false, message: "Broadcasts are not configured yet." }, 503, corsHeaders);
+    }
+
+    const address = request.headers.get("CF-Connecting-IP") || "unknown";
+
+    if (await adminAttemptsExhausted(address)) {
+        return jsonResponse({
+            success: false,
+            message: "Too many incorrect passwords. Please wait fifteen minutes and try again."
+        }, 429, corsHeaders);
+    }
+
+    if (!(await secretsMatch(request.headers.get("X-Admin-Key"), env.ADMIN_KEY))) {
+        await recordFailedAdminAttempt(address);
+        return jsonResponse({ success: false, message: "That password was not recognised." }, 401, corsHeaders);
+    }
+
+    if (!env.DB) {
+        return jsonResponse({ success: false, message: "No database is connected." }, 503, corsHeaders);
+    }
+
+    let body = {};
+    try {
+        body = await request.json();
+    } catch {
+        return jsonResponse({ success: false, message: "Could not read the request." }, 400, corsHeaders);
+    }
+
+    const campaign = CAMPAIGNS[body.campaign];
+    if (!campaign) {
+        return jsonResponse({ success: false, message: "Unknown campaign." }, 400, corsHeaders);
+    }
+
+    const roster = await loadBroadcastRoster(env.DB, body.campaign, campaign.formType);
+
+    if (body.action === "list") {
+        return jsonResponse({
+            success: true,
+            ...roster,
+            testRecipients: (campaign.testRecipients || []).map((person) => ({
+                email: person.email,
+                fullName: person.fullName
+            }))
+        }, 200, corsHeaders);
+    }
+
+    if (body.action !== "send" && body.action !== "test") {
+        return jsonResponse({ success: false, message: "Unknown action." }, 400, corsHeaders);
+    }
+
+    if (!env.BREVO_API_KEY) {
+        console.error("BREVO_API_KEY is not configured.");
+        return jsonResponse({ success: false, message: "The email service is not configured yet." }, 503, corsHeaders);
+    }
+
+    if (body.action === "test") {
+        return sendBroadcastTest(env, campaign, corsHeaders);
+    }
+
+    const requested = Array.isArray(body.emails) ? body.emails : [];
+    if (!requested.length) {
+        return jsonResponse({ success: false, message: "No recipients were given." }, 400, corsHeaders);
+    }
+
+    if (requested.length > BROADCAST_BATCH_LIMIT) {
+        return jsonResponse({
+            success: false,
+            message: `Send at most ${BROADCAST_BATCH_LIMIT} recipients per request.`
+        }, 400, corsHeaders);
+    }
+
+    const known = new Map(roster.recipients.map((person) => [person.email, person]));
+    const results = [];
+
+    for (const raw of requested) {
+        const email = String(raw || "").trim().toLowerCase();
+        const person = known.get(email);
+
+        if (!person) {
+            results.push({ email, status: "skipped", reason: "Not a registered applicant." });
+            continue;
+        }
+
+        if (roster.alreadySent.includes(email)) {
+            results.push({ email, status: "skipped", reason: "Already sent." });
+            continue;
+        }
+
+        const payload = {
+            sender: { email: env.FROM_EMAIL, name: "Dystil" },
+            to: [{ email: person.email, name: person.fullName }],
+            replyTo: { email: env.ADMIN_EMAIL, name: "Dystil" },
+            subject: campaign.subject,
+            htmlContent: campaign.buildHtml(person.firstName),
+            textContent: campaign.buildText(person.firstName)
+        };
+
+        const sent = await sendEmail(env.BREVO_API_KEY, payload, await buildLimitKey("broadcast", body.campaign, email));
+
+        if (!sent.ok) {
+            results.push({ email, status: "failed", reason: `Email provider returned ${sent.status}.` });
+            continue;
+        }
+
+        try {
+            await env.DB.prepare(RECORD_BROADCAST_SQL).bind(body.campaign, email, new Date().toISOString()).run();
+        } catch (error) {
+            console.error("Sent but could not record the broadcast.", email, error instanceof Error ? error.message : "Unknown error");
+        }
+
+        results.push({ email, status: "sent" });
+    }
+
+    return jsonResponse({ success: true, results }, 200, corsHeaders);
+}
+
+// A test goes to the named team list and nowhere else. The caller does not
+// choose the addresses, so a stolen password still cannot mail a stranger.
+async function sendBroadcastTest(env, campaign, corsHeaders) {
+    const recipients = campaign.testRecipients || [];
+
+    if (!recipients.length) {
+        return jsonResponse({ success: false, message: "This campaign has no test list." }, 400, corsHeaders);
+    }
+
+    const results = [];
+
+    for (const person of recipients) {
+        const payload = {
+            sender: { email: env.FROM_EMAIL, name: "Dystil" },
+            to: [{ email: person.email, name: person.fullName }],
+            replyTo: { email: env.ADMIN_EMAIL, name: "Dystil" },
+            subject: `[TEST] ${campaign.subject}`,
+            htmlContent: campaign.buildHtml(firstNameOf(person.fullName)),
+            textContent: campaign.buildText(firstNameOf(person.fullName))
+        };
+
+        const sent = await sendEmail(env.BREVO_API_KEY, payload, crypto.randomUUID());
+
+        results.push(sent.ok
+            ? { email: person.email, status: "sent" }
+            : { email: person.email, status: "failed", reason: `Email provider returned ${sent.status}.` });
+    }
+
+    return jsonResponse({ success: true, results }, 200, corsHeaders);
+}
+
+async function loadBroadcastRoster(db, campaignName, formType) {
+    const [people, sent] = await Promise.all([
+        db.prepare(BROADCAST_ROSTER_SQL).bind(formType).all(),
+        db.prepare(BROADCAST_SENT_SQL).bind(campaignName).all()
+    ]);
+
+    return {
+        recipients: (people.results || []).map((row) => ({
+            email: row.email,
+            fullName: row.full_name,
+            firstName: firstNameOf(row.full_name),
+            reference: row.reference
+        })),
+        alreadySent: (sent.results || []).map((row) => row.email)
+    };
+}
+
+// "Bilal Ahmad (website test)" greets as "Bilal". Anything that does not look
+// like a name at all is dropped so nobody is greeted "Hey ?!".
+function firstNameOf(fullName) {
+    const first = String(fullName || "").trim().split(/\s+/)[0] || "";
+    const cleaned = first.replace(/[^\p{L}'-]/gu, "");
+
+    return cleaned.length > 1 ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : "";
+}
+
+const TASTER_MEETING_URL = "https://teams.microsoft.com/dl/launcher/launcher.html?url=%2F_%23%2Fmeet%2F229072838157592%3Fp%3DcAIRVOIkArp5srCvN5%26anon%3Dtrue&type=meet&deeplinkId=b1481443-9b4f-424f-b23b-02e70811caf7&directDl=true&msLaunch=true&enableMobilePage=true&suppressPrompt=true";
+
+const TASTER_AGENDA = [
+    ["\u{1F680}", "01 · Future of Work", "what's really happening in your industry right now"],
+    ["\u{1F916}", "02 · AI Role Impact Demo", "AI applied to real roles, live"],
+    ["\u{1F4C1}", "03 · Profile Preview", "the kind of work that makes employers take notice"],
+    ["\u{1F3AF}", "04 · Why Dystil? Pathways & Q&A", "where you could go next, and your questions answered"]
+];
+
+const TASTER_SOCIALS = [
+    ["\u{1F4D8}", "Facebook", "https://www.facebook.com/profile.php?id=61593583825137"],
+    ["\u{1F4F8}", "Instagram", "https://www.instagram.com/dystil.ai"],
+    ["\u{1F3B5}", "TikTok", "https://www.tiktok.com/@dystil.ai"]
+];
+
+function buildTasterJoiningHtml(firstName) {
+    const greeting = firstName ? `Hey ${escapeHtml(firstName)}!` : "Hey!";
+
+    const agenda = TASTER_AGENDA.map(([icon, title, detail]) => `
+        <tr>
+            <td style="padding:8px 0;vertical-align:top;width:34px;font-size:18px;">${icon}</td>
+            <td style="padding:8px 0;line-height:1.5;">
+                <strong style="color:#123f31;">${escapeHtml(title)}</strong>
+                <span style="color:#4c5a54;"> — ${escapeHtml(detail)}</span>
+            </td>
+        </tr>`).join("");
+
+    const socials = TASTER_SOCIALS.map(([icon, name, href]) =>
+        `<p style="margin:4px 0;">${icon} ${escapeHtml(name)}: <a href="${escapeHtml(href)}" style="color:#147a59;">${escapeHtml(href)}</a></p>`
+    ).join("");
+
+    return `<!doctype html>
+<html><body style="margin:0;background:#f4f7f6;font-family:Arial,Helvetica,sans-serif;color:#16221d;">
+    <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
+        <div style="background:#123f31;color:#ffffff;padding:28px 24px;border-radius:12px 12px 0 0;">
+            <p style="margin:0 0 6px;font-size:12px;letter-spacing:1.6px;color:#8fd3b8;">FREE TASTER SESSION</p>
+            <h1 style="font-size:26px;margin:0;">${greeting}</h1>
+            <p style="margin:8px 0 0;font-size:16px;color:#d8ede5;">You registered. Smart move.</p>
+        </div>
+
+        <div style="background:#ffffff;padding:24px;line-height:1.6;">
+            <p style="margin-top:0;">Now mark the calendar, set the alarm, and show up — because this Saturday is going to be worth every minute.</p>
+
+            <p>We're kicking off Dystil's very first Free Taster Session for the Career Accelerator Program, and you're one of the 100s who grabbed a spot.</p>
+
+            <table role="presentation" style="width:100%;border-collapse:collapse;background:#f4f7f6;border-left:4px solid #147a59;margin:20px 0;">
+                <tr><td style="padding:14px 16px 4px;">\u{1F4C5} <strong>Saturday, 29th August 2026</strong></td></tr>
+                <tr><td style="padding:4px 16px;">⏰ <strong>11:00 AM – 1:00 PM UK Time</strong></td></tr>
+                <tr><td style="padding:4px 16px 14px;">\u{1F4BB} <strong>Online – Live Session, <a href="${escapeHtml(TASTER_MEETING_URL)}" style="color:#147a59;">Meeting Link here</a>, calendar invite to follow.</strong></td></tr>
+            </table>
+
+            <p style="text-align:center;margin:24px 0;">
+                <a href="${escapeHtml(TASTER_MEETING_URL)}" style="display:inline-block;background:#147a59;color:#ffffff;text-decoration:none;font-weight:bold;font-size:16px;padding:14px 32px;border-radius:999px;">Join the session on Teams</a>
+            </p>
+
+            <p>You'll get a real look at what the Career Accelerator Program is all about — the skills, the projects, the confidence, and the career edge. Not a sales pitch. An actual session built to give you something useful from minute one.</p>
+
+            <p style="margin-bottom:4px;"><strong>Here's what's coming your way:</strong></p>
+            <table role="presentation" style="width:100%;border-collapse:collapse;margin-bottom:20px;">${agenda}
+            </table>
+
+            <p>This is our first session ever — and we're building something genuinely exciting. You're part of that from day one.</p>
+
+            <hr style="border:none;border-top:1px solid #e2e9e6;margin:24px 0;">
+
+            <p style="margin-bottom:4px;"><strong>Know someone who'd benefit? Share it.</strong></p>
+            <p style="margin-top:0;">If you have a friend, classmate, or colleague who's thinking about their career — send them this link and invite them to register before Friday night:</p>
+            <p style="font-size:17px;">\u{1F449} <a href="https://dystil.ai/students/taster" style="color:#147a59;font-weight:bold;">dystil.ai/students/taster</a></p>
+
+            <p style="margin-bottom:4px;"><strong>Follow us for updates before Saturday:</strong></p>
+            ${socials}
+
+            <hr style="border:none;border-top:1px solid #e2e9e6;margin:24px 0;">
+
+            <p>We'll see you Saturday at 11:00 AM sharp.</p>
+            <p style="margin-bottom:0;">Don't be the one who had a spot and didn't show up. \u{1F609}</p>
+        </div>
+
+        <div style="background:#ffffff;padding:20px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;">
+            <p style="margin:0 0 12px;"><strong>The Dystil Team</strong></p>
+            <p style="margin:0;font-size:14px;color:#4c5a54;">
+                <strong style="color:#16221d;">Frank M</strong><br>
+                Executive Partner<br>
+                <a href="mailto:askus@dystil.ai" style="color:#147a59;">askus@dystil.ai</a><br>
+                <a href="mailto:frank@dystil.ai" style="color:#147a59;">frank@dystil.ai</a><br>
+                <a href="https://www.dystil.ai" style="color:#147a59;">www.dystil.ai</a>
+            </p>
+        </div>
+
+        <p style="text-align:center;font-size:12px;color:#7c8a84;padding:16px 8px 0;">
+            You're getting this because you registered for the Dystil Free Taster Session.
+        </p>
+    </div>
+</body></html>`;
+}
+
+function buildTasterJoiningText(firstName) {
+    const agenda = TASTER_AGENDA.map(([icon, title, detail]) => `${icon} ${title} — ${detail}`);
+    const socials = TASTER_SOCIALS.map(([icon, name, href]) => `${icon} ${name}: ${href}`);
+
+    return [
+        firstName ? `Hey ${firstName}!` : "Hey!",
+        "You registered. Smart move.",
+        "",
+        "Now mark the calendar, set the alarm, and show up — because this Saturday is going to be worth every minute.",
+        "",
+        "We're kicking off Dystil's very first Free Taster Session for the Career Accelerator Program, and you're one of the 100s who grabbed a spot.",
+        "",
+        "\u{1F4C5} Saturday, 29th August 2026",
+        "⏰ 11:00 AM – 1:00 PM UK Time",
+        "\u{1F4BB} Online – Live Session, Meeting Link here, calendar invite to follow.",
+        "",
+        "Join the session on Teams:",
+        TASTER_MEETING_URL,
+        "",
+        "You'll get a real look at what the Career Accelerator Program is all about — the skills, the projects, the confidence, and the career edge. Not a sales pitch. An actual session built to give you something useful from minute one.",
+        "",
+        "Here's what's coming your way:",
+        ...agenda,
+        "",
+        "This is our first session ever — and we're building something genuinely exciting. You're part of that from day one.",
+        "",
+        "---",
+        "",
+        "Know someone who'd benefit? Share it.",
+        "If you have a friend, classmate, or colleague who's thinking about their career — send them this link and invite them to register before Friday night:",
+        "\u{1F449} https://dystil.ai/students/taster",
+        "",
+        "Follow us for updates before Saturday:",
+        ...socials,
+        "",
+        "---",
+        "",
+        "We'll see you Saturday at 11:00 AM sharp.",
+        "Don't be the one who had a spot and didn't show up. \u{1F609}",
+        "",
+        "The Dystil Team",
+        "",
+        "Frank M",
+        "Executive Partner",
+        "askus@dystil.ai",
+        "frank@dystil.ai",
+        "www.dystil.ai",
+        "",
+        "You're getting this because you registered for the Dystil Free Taster Session."
+    ].join("\n");
 }

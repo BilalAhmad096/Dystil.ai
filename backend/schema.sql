@@ -26,3 +26,13 @@ CREATE TABLE IF NOT EXISTS reference_counters (
     next_number INTEGER NOT NULL,
     PRIMARY KEY (form_type, year)
 );
+
+-- One row per person per broadcast, written only after Brevo accepts the send.
+-- The primary key is what stops a second run, a double click or a retry from
+-- mailing the same person twice.
+CREATE TABLE IF NOT EXISTS broadcast_sends (
+    campaign TEXT NOT NULL,
+    email TEXT NOT NULL,
+    sent_at TEXT NOT NULL,
+    PRIMARY KEY (campaign, email)
+);

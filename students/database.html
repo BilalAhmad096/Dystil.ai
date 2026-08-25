@@ -167,6 +167,30 @@
         .details .value { white-space: pre-wrap; }
 
         .empty { padding: 40px; text-align: center; color: var(--light-text); font-size: 14px; }
+
+        /* ---------- BROADCAST ---------- */
+        .cast {
+            background: var(--dark);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 18px 20px;
+            margin-bottom: 20px;
+        }
+
+        .cast h2 { font-size: 15px; margin-bottom: 4px; }
+        .cast > p { font-size: 13px; color: var(--light-text); margin-bottom: 14px; }
+        .cast .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        .cast .testers { font-size: 12.5px; color: var(--light-text); margin-top: 12px; }
+        .cast button { padding: 10px 18px; font-size: 13px; }
+        .cast button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .cast .danger { background: #b4472f; }
+        .cast .danger:hover:enabled { background: #9c3c27; }
+        .cast .tally { font-size: 13px; color: var(--light-text); margin-bottom: 14px; }
+        .cast .tally strong { color: var(--white); }
+        .cast .log {
+            margin-top: 14px; font-size: 12.5px; line-height: 1.7; max-height: 190px;
+            overflow-y: auto; color: var(--light-text); white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
@@ -196,6 +220,22 @@
         </div>
 
         <div class="counts" id="counts"></div>
+
+        <div class="cast" id="cast">
+            <h2>Free Taster — joining email</h2>
+            <p>Sends the Saturday joining link to everyone who registered. Each address is mailed once; anyone already sent is skipped automatically.</p>
+
+            <div class="tally" id="cast-tally">Loading the recipient list…</div>
+
+            <div class="row">
+                <button class="ghost" id="cast-send-test" type="button">Send test to the team</button>
+                <button class="danger" id="cast-send-all" type="button">Send to everyone remaining</button>
+            </div>
+
+            <p class="testers" id="cast-testers"></p>
+
+            <div class="log" id="cast-log" hidden></div>
+        </div>
 
         <div class="tools">
             <input id="search" type="search" placeholder="Search name, email, reference or details">
@@ -278,6 +318,7 @@
                 lock.hidden = true;
                 board.hidden = false;
                 render();
+                castRefresh();
             } catch (error) {
                 lockError.textContent = error.message;
                 lockError.hidden = false;
@@ -313,6 +354,7 @@
             try {
                 all = await load(key);
                 render();
+                castRefresh();
             } catch (error) {
                 alert(error.message);
             } finally {
@@ -332,6 +374,11 @@
             meta.textContent = "";
             search.value = "";
             document.getElementById("key").value = "";
+            castRoster = { recipients: [], alreadySent: [] };
+            castTally.textContent = "Loading the recipient list…";
+            castLog.textContent = "";
+            castLog.hidden = true;
+            castTesters.textContent = "";
             board.hidden = true;
             lock.hidden = false;
         });
@@ -535,6 +582,137 @@
             link.download = "dystil-submissions-" + new Date().toISOString().slice(0, 10) + ".csv";
             link.click();
             URL.revokeObjectURL(url);
+        });
+
+        /* ---------- BROADCAST ---------- */
+        // The worker holds the sending list and refuses anyone who is not a
+        // registered applicant, so this panel only ever asks it to work through
+        // people it already knows about. Sends go twenty at a time because a
+        // Worker can only make so many outbound calls in one request.
+        const CAST_API = "https://dystil-contact.dystil-ai.workers.dev/api/broadcast";
+        const CAST_CAMPAIGN = "taster-2026-08-29-joining-link";
+        const CAST_BATCH = 20;
+
+        const castTally = document.getElementById("cast-tally");
+        const castLog = document.getElementById("cast-log");
+        const castTesters = document.getElementById("cast-testers");
+        const castSendTest = document.getElementById("cast-send-test");
+        const castSendAll = document.getElementById("cast-send-all");
+
+        let castRoster = { recipients: [], alreadySent: [] };
+
+        async function castCall(payload) {
+            const response = await fetch(CAST_API, {
+                method: "POST",
+                headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
+                body: JSON.stringify({ campaign: CAST_CAMPAIGN, ...payload })
+            });
+
+            const body = await response.json().catch(function () { return {}; });
+
+            if (!response.ok || !body.success) {
+                throw new Error(body.message || "The request failed.");
+            }
+
+            return body;
+        }
+
+        function castRemaining() {
+            const sent = new Set(castRoster.alreadySent);
+            return castRoster.recipients.filter(function (person) { return !sent.has(person.email); });
+        }
+
+        async function castRefresh() {
+            try {
+                castRoster = await castCall({ action: "list" });
+                const remaining = castRemaining().length;
+
+                castTally.innerHTML = "<strong>" + castRoster.recipients.length + "</strong> registered ("
+                    + "<strong>" + castRoster.alreadySent.length + "</strong> already emailed, "
+                    + "<strong>" + remaining + "</strong> still to go)";
+
+                const testers = castRoster.testRecipients || [];
+                castTesters.textContent = testers.length
+                    ? "Test goes to " + testers.length + ": " + testers.map(function (p) { return p.fullName; }).join(", ")
+                    : "";
+
+                castSendAll.disabled = remaining === 0;
+                castSendAll.textContent = remaining === 0
+                    ? "Everyone has been emailed"
+                    : "Send to everyone remaining (" + remaining + ")";
+            } catch (error) {
+                castTally.textContent = "Could not load the recipient list: " + error.message;
+            }
+        }
+
+        function castWrite(line) {
+            castLog.hidden = false;
+            castLog.textContent += line + "\n";
+            castLog.scrollTop = castLog.scrollHeight;
+        }
+
+        function castReport(results) {
+            results.forEach(function (result) {
+                const note = result.status === "sent" ? "sent" : result.status + " — " + result.reason;
+                castWrite(result.email + ": " + note);
+            });
+        }
+
+        // A test never touches the applicant list, so it can be repeated after
+        // every edit without any risk of mailing a registrant early.
+        castSendTest.addEventListener("click", async function () {
+            const testers = castRoster.testRecipients || [];
+            if (!testers.length) return;
+
+            const names = testers.map(function (p) { return p.fullName; }).join(", ");
+            if (!confirm("Send the test email to " + testers.length + " people?\n\n" + names)) return;
+
+            castSendTest.disabled = true;
+            castSendTest.textContent = "Sending…";
+
+            try {
+                const body = await castCall({ action: "test" });
+                castWrite("Test send:");
+                castReport(body.results);
+            } catch (error) {
+                castWrite("Test failed: " + error.message);
+            } finally {
+                castSendTest.disabled = false;
+                castSendTest.textContent = "Send test to the team";
+            }
+        });
+
+        castSendAll.addEventListener("click", async function () {
+            const remaining = castRemaining();
+            if (!remaining.length) return;
+
+            if (!confirm("Send the joining email to " + remaining.length + " people?\n\nThis cannot be taken back.")) return;
+            if (!confirm("Last check — " + remaining.length + " real emails go out now. Continue?")) return;
+
+            castSendAll.disabled = true;
+            castSendTest.disabled = true;
+            castWrite("Sending to " + remaining.length + " people…");
+
+            let done = 0;
+
+            try {
+                for (let start = 0; start < remaining.length; start += CAST_BATCH) {
+                    const batch = remaining.slice(start, start + CAST_BATCH);
+                    const body = await castCall({ action: "send", emails: batch.map(function (p) { return p.email; }) });
+
+                    castReport(body.results);
+                    done += body.results.filter(function (r) { return r.status === "sent"; }).length;
+                    castSendAll.textContent = "Sent " + done + " of " + remaining.length + "…";
+                }
+
+                castWrite("Finished. " + done + " emails sent.");
+            } catch (error) {
+                castWrite("Stopped: " + error.message);
+                castWrite("Nobody already sent will be mailed again — press the button to carry on.");
+            } finally {
+                castSendTest.disabled = false;
+                await castRefresh();
+            }
         });
     </script>
 
