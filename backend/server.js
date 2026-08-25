@@ -722,7 +722,11 @@ const TASTER_TEST_TEAM = [
     { email: "aman.kaleeur@gmail.com", fullName: "Aman Kaleeur" },
     { email: "muaaz.sheergar@gmail.com", fullName: "Muaz Sheergar" },
     { email: "makki.arsalan07@gmail.com", fullName: "Arsalan Makki" },
-    { email: "mailboxforbilal@gmail.com", fullName: "Bilal Ahmad" }
+    { email: "mailboxforbilal@gmail.com", fullName: "Bilal Ahmad" },
+    // No dystil.ai mail has ever reached this address, so it shows how Gmail
+    // sorts the email with no history to go on. mailboxforbilal has had
+    // confirmations land in Primary, and reads as the opposite case.
+    { email: "bilal.ahmad096@gmail.com", fullName: "Bilal Ahmad" }
 ];
 
 const CAMPAIGNS = {
