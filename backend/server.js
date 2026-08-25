@@ -725,7 +725,8 @@ const TASTER_TEST_TEAM = [
     // confirmations land in Primary, and reads as the opposite case.
     { email: "bilal.ahmad096@gmail.com", fullName: "Bilal Ahmad" },
     { email: "bilalphdbath@gmail.com", fullName: "Bilal Ahmad" },
-    { email: "billuahmad786@gmail.com", fullName: "Bilal Ahmad" }
+    { email: "billuahmad786@gmail.com", fullName: "Bilal Ahmad" },
+    { email: "reliancevodafone9528@gmail.com", fullName: "Bilal Ahmad" }
 ];
 
 const CAMPAIGNS = {
