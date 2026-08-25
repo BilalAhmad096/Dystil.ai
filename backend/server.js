@@ -720,9 +720,14 @@ const BROADCAST_BATCH_LIMIT = 20;
 const CAMPAIGNS = {
     "taster-2026-08-29-joining-link": {
         formType: "Free Taster Registration",
-        subject: "Your joining link — Dystil Free Taster Session, Saturday 11am",
+        subject: "🔥 Dystil: You’re In. This Saturday is Going to Be Different — Here’s What to Expect",
         buildHtml: buildTasterJoiningHtml,
         buildText: buildTasterJoiningText,
+        // A note from the person who signs it reads as mail rather than as a
+        // mailout, and Reply-To matches so a reply goes where it looks like it
+        // is going. Enquiry confirmations still come from the team address.
+        sender: { email: "frank@dystil.ai", name: "Frank M" },
+        replyTo: { email: "frank@dystil.ai", name: "Frank M" },
         // The team check the wording before it goes to applicants. They are not
         // registrants, so they are named here rather than looked up, and a test
         // is never written to broadcast_sends: the same people need to be able
@@ -842,9 +847,9 @@ async function handleBroadcast(request, env, corsHeaders) {
         }
 
         const payload = {
-            sender: { email: env.FROM_EMAIL, name: "Dystil" },
+            sender: campaign.sender || { email: env.FROM_EMAIL, name: "Dystil" },
             to: [{ email: person.email, name: person.fullName }],
-            replyTo: { email: env.ADMIN_EMAIL, name: "Dystil" },
+            replyTo: campaign.replyTo || { email: env.ADMIN_EMAIL, name: "Dystil" },
             subject: campaign.subject,
             htmlContent: campaign.buildHtml(person.firstName),
             textContent: campaign.buildText(person.firstName)
@@ -882,9 +887,9 @@ async function sendBroadcastTest(env, campaign, corsHeaders) {
 
     for (const person of recipients) {
         const payload = {
-            sender: { email: env.FROM_EMAIL, name: "Dystil" },
+            sender: campaign.sender || { email: env.FROM_EMAIL, name: "Dystil" },
             to: [{ email: person.email, name: person.fullName }],
-            replyTo: { email: env.ADMIN_EMAIL, name: "Dystil" },
+            replyTo: campaign.replyTo || { email: env.ADMIN_EMAIL, name: "Dystil" },
             subject: `[TEST] ${campaign.subject}`,
             htmlContent: campaign.buildHtml(firstNameOf(person.fullName)),
             textContent: campaign.buildText(firstNameOf(person.fullName))
