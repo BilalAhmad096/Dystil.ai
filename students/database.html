@@ -181,6 +181,12 @@
         .cast > p { font-size: 13px; color: var(--light-text); margin-bottom: 14px; }
         .cast .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
         .cast .testers { font-size: 12.5px; color: var(--light-text); margin-top: 12px; }
+        .cast .send-row { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+        .cast .send-label { margin: 0; align-self: center; }
+        .cast select {
+            padding: 10px 13px; font-size: 14px; font-family: inherit; color: var(--white);
+            background: var(--dark-soft); border: 1px solid var(--line); border-radius: 10px;
+        }
         .cast .variants { display: flex; flex-wrap: wrap; gap: 8px; }
         .cast .variants button { background: transparent; border: 1px solid var(--line); color: var(--light-text); }
         .cast .variants button:hover:enabled { color: var(--white); border-color: var(--primary); }
@@ -232,6 +238,11 @@
 
             <div class="row">
                 <span id="cast-variants" class="variants"></span>
+            </div>
+
+            <div class="row send-row">
+                <label class="send-label" for="cast-target">SEND TO APPLICANTS</label>
+                <select id="cast-target"></select>
                 <button class="danger" id="cast-send-all" type="button">Send to everyone remaining</button>
             </div>
 
@@ -602,6 +613,7 @@
         const castLog = document.getElementById("cast-log");
         const castTesters = document.getElementById("cast-testers");
         const castVariants = document.getElementById("cast-variants");
+        const castTarget = document.getElementById("cast-target");
         const castSendAll = document.getElementById("cast-send-all");
 
         let castRoster = { recipients: [], alreadySent: [] };
@@ -627,9 +639,13 @@
             return castRoster.recipients.filter(function (person) { return !sent.has(person.email); });
         }
 
+        function castTargetCampaign() {
+            return castTarget.value || CAST_CAMPAIGN;
+        }
+
         async function castRefresh() {
             try {
-                castRoster = await castCall({ action: "list" });
+                castRoster = await castCall({ action: "list" }, castTargetCampaign());
                 const remaining = castRemaining().length;
 
                 castTally.innerHTML = "<strong>" + castRoster.recipients.length + "</strong> registered ("
@@ -637,6 +653,20 @@
                     + "<strong>" + remaining + "</strong> still to go)";
 
                 castBuildVariantButtons();
+
+                if (!castTarget.options.length) {
+                    CAST_VARIANTS.forEach(function (variant) {
+                        const option = document.createElement("option");
+                        option.value = CAST_CAMPAIGN + variant.suffix;
+                        option.textContent = variant.label;
+                        castTarget.appendChild(option);
+                    });
+
+                    // Whichever variant is showing is the one the red button
+                    // sends, so it opens on the one that reaches the inbox
+                    // rather than on whichever happens to be first.
+                    castTarget.value = CAST_CAMPAIGN + CAST_SEND_DEFAULT;
+                }
 
                 const testers = castRoster.testRecipients || [];
                 castTesters.textContent = testers.length
@@ -676,6 +706,8 @@
             { suffix: "-minimal", label: "D — plain, from askus, no links" },
             { suffix: "-sober", label: "E — plain words, from askus" }
         ];
+
+        const CAST_SEND_DEFAULT = "-sober";
 
         function castBuildVariantButtons() {
             castVariants.innerHTML = "";
@@ -718,23 +750,28 @@
             }
         }
 
+        castTarget.addEventListener("change", castRefresh);
+
         castSendAll.addEventListener("click", async function () {
             const remaining = castRemaining();
             if (!remaining.length) return;
+
+            const campaign = castTargetCampaign();
+            const chosen = castTarget.options[castTarget.selectedIndex].textContent;
 
             if (!confirm("Send the joining email to " + remaining.length + " people?\n\nThis cannot be taken back.")) return;
             if (!confirm("Last check — " + remaining.length + " real emails go out now. Continue?")) return;
 
             castSendAll.disabled = true;
             castVariantButtons().forEach(function (b) { b.disabled = true; });
-            castWrite("Sending to " + remaining.length + " people…");
+            castWrite("Sending " + chosen + " to " + remaining.length + " people…");
 
             let done = 0;
 
             try {
                 for (let start = 0; start < remaining.length; start += CAST_BATCH) {
                     const batch = remaining.slice(start, start + CAST_BATCH);
-                    const body = await castCall({ action: "send", emails: batch.map(function (p) { return p.email; }) });
+                    const body = await castCall({ action: "send", emails: batch.map(function (p) { return p.email; }) }, campaign);
 
                     castReport(body.results);
                     done += body.results.filter(function (r) { return r.status === "sent"; }).length;
