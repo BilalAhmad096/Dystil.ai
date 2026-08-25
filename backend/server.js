@@ -735,15 +735,21 @@ const CAMPAIGNS = {
         subject: "🔥 Dystil: You’re In. This Saturday is Going to Be Different — Here’s What to Expect",
         buildHtml: buildTasterJoiningHtml,
         buildText: buildTasterJoiningText,
-        // A note from the person who signs it reads as mail rather than as a
-        // mailout, and Reply-To matches so a reply goes where it looks like it
-        // is going. Enquiry confirmations still come from the team address.
-        sender: { email: "frank@dystil.ai", name: "Frank M" },
-        replyTo: { email: "frank@dystil.ai", name: "Frank M" },
+        sender: { email: "askus@dystil.ai", name: "Dystil" },
+        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
         testRecipients: TASTER_TEST_TEAM
     },
     // Same email, plain packaging and a subject with no emoji or hype, so the
     // two can be sent side by side and the tab they land in compared.
+    "taster-2026-08-29-joining-link-original": {
+        formType: "Free Taster Registration",
+        subject: "Your joining link — Dystil Free Taster Session, Saturday 11am",
+        buildHtml: buildTasterJoiningHtml,
+        buildText: buildTasterJoiningText,
+        sender: { email: "askus@dystil.ai", name: "Dystil" },
+        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
+        testRecipients: TASTER_TEST_TEAM
+    },
     "taster-2026-08-29-joining-link-plain": {
         formType: "Free Taster Registration",
         subject: "Your Saturday session details and joining link",
