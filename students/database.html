@@ -183,6 +183,10 @@
         .cast .testers { font-size: 12.5px; color: var(--light-text); margin-top: 12px; }
         .cast .send-row { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
         .cast .send-label { margin: 0; align-self: center; }
+        .cast .paced {
+            display: flex; align-items: center; gap: 7px; align-self: center;
+            font-size: 12.5px; color: var(--light-text); letter-spacing: 0; font-weight: normal;
+        }
         .cast select {
             padding: 10px 13px; font-size: 14px; font-family: inherit; color: var(--white);
             background: var(--dark-soft); border: 1px solid var(--line); border-radius: 10px;
@@ -244,6 +248,7 @@
             <div class="row send-row">
                 <label class="send-label" for="cast-target">SEND TO APPLICANTS</label>
                 <select id="cast-target"></select>
+                <label class="paced"><input type="checkbox" id="cast-paced" checked> one at a time</label>
                 <button class="danger" id="cast-send-all" type="button">Send to everyone remaining</button>
             </div>
 
@@ -616,11 +621,16 @@
         const CAST_CAMPAIGN_PLAIN = CAST_CAMPAIGN + "-plain";
         let castBatch = 20;
 
+        // Long enough that 85 messages do not read as one burst, short enough
+        // that the whole run still finishes inside a quarter of an hour.
+        const CAST_PACE_MS = 8000;
+
         const castTally = document.getElementById("cast-tally");
         const castLog = document.getElementById("cast-log");
         const castTesters = document.getElementById("cast-testers");
         const castVariants = document.getElementById("cast-variants");
         const castOne = document.getElementById("cast-one");
+        const castPaced = document.getElementById("cast-paced");
         const castTarget = document.getElementById("cast-target");
         const castSendAll = document.getElementById("cast-send-all");
 
@@ -798,13 +808,21 @@
 
             castSendAll.disabled = true;
             castVariantButtons().forEach(function (b) { b.disabled = true; });
-            castWrite("Sending " + chosen + " to " + remaining.length + " people…");
+            castWrite("Sending " + chosen + " to " + remaining.length + " people"
+                + (castPaced.checked ? ", one at a time — about " + Math.ceil(remaining.length * CAST_PACE_MS / 60000) + " minutes" : "") + "…");
 
             let done = 0;
 
             try {
-                for (let start = 0; start < remaining.length; start += castBatch) {
-                    const batch = remaining.slice(start, start + castBatch);
+                const paced = castPaced.checked;
+                const step = paced ? 1 : castBatch;
+
+                for (let start = 0; start < remaining.length; start += step) {
+                    if (paced && start > 0) {
+                        await new Promise(function (done) { window.setTimeout(done, CAST_PACE_MS); });
+                    }
+
+                    const batch = remaining.slice(start, start + step);
                     const body = await castCall({ action: "send", emails: batch.map(function (p) { return p.email; }) }, campaign);
 
                     castReport(body.results);
