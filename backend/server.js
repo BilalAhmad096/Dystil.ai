@@ -726,7 +726,8 @@ const TASTER_TEST_TEAM = [
     { email: "bilal.ahmad096@gmail.com", fullName: "Bilal Ahmad" },
     { email: "bilalphdbath@gmail.com", fullName: "Bilal Ahmad" },
     { email: "billuahmad786@gmail.com", fullName: "Bilal Ahmad" },
-    { email: "reliancevodafone9528@gmail.com", fullName: "Bilal Ahmad" }
+    { email: "reliancevodafone9528@gmail.com", fullName: "Bilal Ahmad" },
+    { email: "b_ahmad@ee.iitr.ac.in", fullName: "Bilal Ahmad" }
 ];
 
 const CAMPAIGNS = {
