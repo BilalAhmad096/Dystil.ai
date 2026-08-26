@@ -731,7 +731,8 @@ const TASTER_TEST_TEAM = [
     { email: "talha36292@gmail.com", fullName: "Talha" },
     { email: "mariyamafeefa1@gmail.com", fullName: "Mariyam" },
     { email: "mailbox.makki@gmail.com", fullName: "Arsalan Makki" },
-    { email: "danishzia2016@gmail.com", fullName: "Danish" }
+    { email: "danishzia2016@gmail.com", fullName: "Danish" },
+    { email: "muaaz.daily@gmail.com", fullName: "Muaz" }
 ];
 
 const CAMPAIGNS = {
@@ -753,6 +754,15 @@ const CAMPAIGNS = {
         buildText: buildTasterJoiningText,
         sender: { email: "frank@dystil.ai", name: "Frank M" },
         replyTo: { email: "frank@dystil.ai", name: "Frank M" },
+        testRecipients: TASTER_TEST_TEAM
+    },
+    "taster-2026-08-29-joining-link-confirmstyle": {
+        formType: "Free Taster Registration",
+        subject: "Your joining details | Free Taster Session, Saturday 29 August",
+        buildHtml: buildTasterConfirmStyleHtml,
+        buildText: buildTasterConfirmStyleText,
+        sender: { email: "askus@dystil.ai", name: "Dystil" },
+        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
         testRecipients: TASTER_TEST_TEAM
     },
     "taster-2026-08-29-joining-link-outlook": {
@@ -1607,4 +1617,51 @@ function buildGraphMessage(campaign, person, firstName) {
 
 function graphIsConfigured(env) {
     return Boolean(env.MS_TENANT_ID && env.MS_CLIENT_ID && env.MS_CLIENT_SECRET);
+}
+
+// Variant K, built to the shape of the one email that has never missed: the
+// registration confirmation, which has reached Primary eighty-nine times out of
+// eighty-nine. Same dark header, same panel, same plain register, and the
+// meeting is the only link in the message. What it does not carry is what the
+// confirmation does not carry — emoji, a pitch, a referral ask, social accounts.
+function buildTasterConfirmStyleHtml(firstName) {
+    const greeting = firstName ? `You’re registered, ${escapeHtml(firstName)}.` : "You’re registered.";
+
+    return `<!doctype html>
+        <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
+            <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
+                <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
+                    <h1 style="font-size:24px;margin:0;">${greeting}</h1>
+                </div>
+                <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
+                    <p style="margin-top:0;">Your place at the Dystil free taster session is confirmed. Here are the joining details.</p>
+                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>Saturday 29 August 2026</strong><br>11:00 to 13:00 UK time<br>Online, on <a href="${escapeHtml(TASTER_MEETING_URL)}" style="color:#147a59;">Microsoft Teams</a>.</p>
+                    <p>The session covers the future of work in your industry, a live demonstration of AI applied to real job roles, a look at the kind of projects you would build, and a question and answer session at the end.</p>
+                    <p>A calendar invitation will follow separately.</p>
+                    <p>If you can no longer attend, reply to this email and let us know.</p>
+                    <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
+                </div>
+            </div>
+        </body></html>`;
+}
+
+function buildTasterConfirmStyleText(firstName) {
+    return [
+        firstName ? `You’re registered, ${firstName}.` : "You’re registered.",
+        "",
+        "Your place at the Dystil free taster session is confirmed. Here are the joining details.",
+        "",
+        "Saturday 29 August 2026",
+        "11:00 to 13:00 UK time",
+        "Online, on Microsoft Teams: " + TASTER_MEETING_URL,
+        "",
+        "The session covers the future of work in your industry, a live demonstration of AI applied to real job roles, a look at the kind of projects you would build, and a question and answer session at the end.",
+        "",
+        "A calendar invitation will follow separately.",
+        "",
+        "If you can no longer attend, reply to this email and let us know.",
+        "",
+        "Kind regards,",
+        "The Dystil Team"
+    ].join("\n");
 }
