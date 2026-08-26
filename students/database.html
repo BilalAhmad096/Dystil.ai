@@ -168,43 +168,6 @@
 
         .empty { padding: 40px; text-align: center; color: var(--light-text); font-size: 14px; }
 
-        /* ---------- BROADCAST ---------- */
-        .cast {
-            background: var(--dark);
-            border: 1px solid var(--line);
-            border-radius: 14px;
-            padding: 18px 20px;
-            margin-bottom: 20px;
-        }
-
-        .cast h2 { font-size: 15px; margin-bottom: 4px; }
-        .cast > p { font-size: 13px; color: var(--light-text); margin-bottom: 14px; }
-        .cast .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-        .cast .testers { font-size: 12.5px; color: var(--light-text); margin-top: 12px; }
-        .cast .send-row { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
-        .cast .send-label { margin: 0; align-self: center; }
-        .cast .paced {
-            display: flex; align-items: center; gap: 7px; align-self: center;
-            font-size: 12.5px; color: var(--light-text); letter-spacing: 0; font-weight: normal;
-        }
-        .cast select {
-            padding: 10px 13px; font-size: 14px; font-family: inherit; color: var(--white);
-            background: var(--dark-soft); border: 1px solid var(--line); border-radius: 10px;
-        }
-        .cast .variants { display: flex; flex-wrap: wrap; gap: 8px; }
-        .cast .variants button { background: transparent; border: 1px solid var(--line); color: var(--light-text); }
-        .cast .variants button:first-child { border-color: var(--accent); color: var(--accent); font-weight: bold; }
-        .cast .variants button:hover:enabled { color: var(--white); border-color: var(--primary); }
-        .cast button { padding: 10px 18px; font-size: 13px; }
-        .cast button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .cast .danger { background: #b4472f; }
-        .cast .danger:hover:enabled { background: #9c3c27; }
-        .cast .tally { font-size: 13px; color: var(--light-text); margin-bottom: 14px; }
-        .cast .tally strong { color: var(--white); }
-        .cast .log {
-            margin-top: 14px; font-size: 12.5px; line-height: 1.7; max-height: 190px;
-            overflow-y: auto; color: var(--light-text); white-space: pre-wrap;
-        }
     </style>
 </head>
 <body>
@@ -234,33 +197,6 @@
         </div>
 
         <div class="counts" id="counts"></div>
-
-        <div class="cast" id="cast">
-            <h2>Free Taster — joining email</h2>
-            <p>Sends the Saturday joining link to everyone who registered. Each address is mailed once; anyone already sent is skipped automatically. The lettered buttons mail the team only, one variable apart, so the Gmail tab each one lands in says which variable matters.</p>
-
-            <div class="tally" id="cast-tally">Loading the recipient list…</div>
-
-            <div class="row">
-                <span id="cast-variants" class="variants"></span>
-            </div>
-
-            <div class="row send-row">
-                <label class="send-label" for="cast-target">SEND TO APPLICANTS</label>
-                <select id="cast-target"></select>
-                <label class="paced"><input type="checkbox" id="cast-paced" checked> one at a time</label>
-                <button class="danger" id="cast-send-all" type="button">Send to everyone remaining</button>
-            </div>
-
-            <div class="row" style="margin-top:12px;">
-                <label class="send-label" for="cast-one">TEST GOES TO</label>
-                <select id="cast-one"></select>
-            </div>
-
-            <p class="testers" id="cast-testers"></p>
-
-            <div class="log" id="cast-log" hidden></div>
-        </div>
 
         <div class="tools">
             <input id="search" type="search" placeholder="Search name, email, reference or details">
@@ -343,7 +279,6 @@
                 lock.hidden = true;
                 board.hidden = false;
                 render();
-                castRefresh();
             } catch (error) {
                 lockError.textContent = error.message;
                 lockError.hidden = false;
@@ -379,7 +314,6 @@
             try {
                 all = await load(key);
                 render();
-                castRefresh();
             } catch (error) {
                 alert(error.message);
             } finally {
@@ -399,13 +333,6 @@
             meta.textContent = "";
             search.value = "";
             document.getElementById("key").value = "";
-            castRoster = { recipients: [], alreadySent: [] };
-            castTally.textContent = "Loading the recipient list…";
-            castLog.textContent = "";
-            castLog.hidden = true;
-            castTesters.textContent = "";
-            castVariants.innerHTML = "";
-            castOne.innerHTML = "";
             board.hidden = true;
             lock.hidden = false;
         });
@@ -611,235 +538,6 @@
             URL.revokeObjectURL(url);
         });
 
-        /* ---------- BROADCAST ---------- */
-        // The worker holds the sending list and refuses anyone who is not a
-        // registered applicant, so this panel only ever asks it to work through
-        // people it already knows about. Sends go twenty at a time because a
-        // Worker can only make so many outbound calls in one request.
-        const CAST_API = "https://dystil-contact.dystil-ai.workers.dev/api/broadcast";
-        const CAST_CAMPAIGN = "taster-2026-08-29-joining-link";
-        const CAST_CAMPAIGN_PLAIN = CAST_CAMPAIGN + "-plain";
-        let castBatch = 20;
-
-        // Long enough that 85 messages do not read as one burst, short enough
-        // that the whole run still finishes inside a quarter of an hour.
-        const CAST_PACE_MS = 8000;
-
-        const castTally = document.getElementById("cast-tally");
-        const castLog = document.getElementById("cast-log");
-        const castTesters = document.getElementById("cast-testers");
-        const castVariants = document.getElementById("cast-variants");
-        const castOne = document.getElementById("cast-one");
-        const castPaced = document.getElementById("cast-paced");
-        const castTarget = document.getElementById("cast-target");
-        const castSendAll = document.getElementById("cast-send-all");
-
-        let castRoster = { recipients: [], alreadySent: [] };
-
-        async function castCall(payload, campaign) {
-            const response = await fetch(CAST_API, {
-                method: "POST",
-                headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
-                body: JSON.stringify({ campaign: campaign || CAST_CAMPAIGN, ...payload })
-            });
-
-            const body = await response.json().catch(function () { return {}; });
-
-            if (!response.ok || !body.success) {
-                throw new Error(body.message || "The request failed.");
-            }
-
-            return body;
-        }
-
-        function castRemaining() {
-            const sent = new Set(castRoster.alreadySent);
-            return castRoster.recipients.filter(function (person) { return !sent.has(person.email); });
-        }
-
-        function castTargetCampaign() {
-            return castTarget.value || CAST_CAMPAIGN;
-        }
-
-        async function castRefresh() {
-            try {
-                castRoster = await castCall({ action: "list" }, castTargetCampaign());
-                const remaining = castRemaining().length;
-
-                castTally.innerHTML = "<strong>" + castRoster.recipients.length + "</strong> registered ("
-                    + "<strong>" + castRoster.alreadySent.length + "</strong> already emailed, "
-                    + "<strong>" + remaining + "</strong> still to go)";
-
-                castBatch = castRoster.batchLimit || 20;
-
-                castBuildVariantButtons();
-
-                if (!castTarget.options.length) {
-                    CAST_VARIANTS.forEach(function (variant) {
-                        const option = document.createElement("option");
-                        option.value = CAST_CAMPAIGN + variant.suffix;
-                        option.textContent = variant.label;
-                        castTarget.appendChild(option);
-                    });
-
-                    // Whichever variant is showing is the one the red button
-                    // sends, so it opens on the one that reaches the inbox
-                    // rather than on whichever happens to be first.
-                    castTarget.value = CAST_CAMPAIGN + CAST_SEND_DEFAULT;
-                }
-
-                const testers = castRoster.testRecipients || [];
-
-                if (!castOne.options.length) {
-                    const all = document.createElement("option");
-                    all.value = "";
-                    all.textContent = "Everyone on the test list";
-                    castOne.appendChild(all);
-
-                    testers.forEach(function (person) {
-                        const option = document.createElement("option");
-                        option.value = person.email;
-                        option.textContent = person.fullName + "  <" + person.email + ">";
-                        castOne.appendChild(option);
-                    });
-                }
-
-                castTesters.textContent = testers.length
-                    ? "Test goes to " + testers.length + ": " + testers.map(function (p) { return p.fullName; }).join(", ")
-                    : "";
-
-                castSendAll.disabled = remaining === 0;
-                castSendAll.textContent = remaining === 0
-                    ? "Everyone has been emailed"
-                    : "Send to everyone remaining (" + remaining + ")";
-            } catch (error) {
-                castTally.textContent = "Could not load the recipient list: " + error.message;
-            }
-        }
-
-        function castWrite(line) {
-            castLog.hidden = false;
-            castLog.textContent += line + "\n";
-            castLog.scrollTop = castLog.scrollHeight;
-        }
-
-        function castReport(results) {
-            results.forEach(function (result) {
-                const note = result.status === "sent" ? "sent" : result.status + " — " + result.reason;
-                castWrite(result.email + ": " + note);
-            });
-        }
-
-        // Each variant is one variable away from its neighbour: A to B changes
-        // the packaging, B to C changes only the sender address, C to D drops
-        // the links Brevo would rewrite. Whichever one reaches Primary names
-        // the cause, so tests are never recorded and can be repeated freely.
-        const CAST_VARIANTS = [
-            { suffix: "-confirmstyle", label: "K — confirmation style, one link" },
-            { suffix: "-outlook", label: "★ OUTLOOK — your email, via Microsoft 365" },
-            { suffix: "", label: "A — designed, Frank, your subject" },
-            { suffix: "-original", label: "F — designed, Frank, original subject" },
-            { suffix: "-focused", label: "I — designed, no share/follow, plain subject" },
-            { suffix: "-focused-emoji", label: "J — designed, no share/follow, your subject" },
-            { suffix: "-askus-branded", label: "H — designed, askus, your subject" },
-            { suffix: "-screenshot", label: "G — designed, askus, original subject" },
-            { suffix: "-plain", label: "B — plain, from Frank" },
-            { suffix: "-askus", label: "C — plain, from askus" },
-            { suffix: "-minimal", label: "D — plain, from askus, no links" },
-            { suffix: "-sober", label: "E — plain words, from askus" }
-        ];
-
-        const CAST_SEND_DEFAULT = "-sober";
-
-        function castBuildVariantButtons() {
-            castVariants.innerHTML = "";
-            castOne.innerHTML = "";
-
-            CAST_VARIANTS.forEach(function (variant) {
-                const button = document.createElement("button");
-                button.type = "button";
-                button.textContent = variant.label;
-                button.addEventListener("click", function () {
-                    castTest(CAST_CAMPAIGN + variant.suffix, variant.label, button);
-                });
-                castVariants.appendChild(button);
-            });
-        }
-
-        function castVariantButtons() {
-            return [].slice.call(castVariants.querySelectorAll("button"));
-        }
-
-        async function castTest(campaign, label, button) {
-            const testers = castRoster.testRecipients || [];
-            if (!testers.length) return;
-
-            const target = castOne.value;
-            const names = target || testers.map(function (p) { return p.fullName; }).join(", ");
-            const count = target ? 1 : testers.length;
-            if (!confirm("Send variant " + label + " to " + count + " people?\n\n" + names)) return;
-
-            const original = button.textContent;
-            castVariantButtons().forEach(function (b) { b.disabled = true; });
-            button.textContent = "Sending…";
-
-            try {
-                const body = await castCall({ action: "test", email: castOne.value }, campaign);
-                castWrite("Variant " + label + ":");
-                castReport(body.results);
-            } catch (error) {
-                castWrite("Variant " + label + " failed: " + error.message);
-            } finally {
-                castVariantButtons().forEach(function (b) { b.disabled = false; });
-                button.textContent = original;
-            }
-        }
-
-        castTarget.addEventListener("change", castRefresh);
-
-        castSendAll.addEventListener("click", async function () {
-            const remaining = castRemaining();
-            if (!remaining.length) return;
-
-            const campaign = castTargetCampaign();
-            const chosen = castTarget.options[castTarget.selectedIndex].textContent;
-
-            if (!confirm("Send the joining email to " + remaining.length + " people?\n\nThis cannot be taken back.")) return;
-            if (!confirm("Last check — " + remaining.length + " real emails go out now. Continue?")) return;
-
-            castSendAll.disabled = true;
-            castVariantButtons().forEach(function (b) { b.disabled = true; });
-            castWrite("Sending " + chosen + " to " + remaining.length + " people"
-                + (castPaced.checked ? ", one at a time — about " + Math.ceil(remaining.length * CAST_PACE_MS / 60000) + " minutes" : "") + "…");
-
-            let done = 0;
-
-            try {
-                const paced = castPaced.checked;
-                const step = paced ? 1 : castBatch;
-
-                for (let start = 0; start < remaining.length; start += step) {
-                    if (paced && start > 0) {
-                        await new Promise(function (done) { window.setTimeout(done, CAST_PACE_MS); });
-                    }
-
-                    const batch = remaining.slice(start, start + step);
-                    const body = await castCall({ action: "send", emails: batch.map(function (p) { return p.email; }) }, campaign);
-
-                    castReport(body.results);
-                    done += body.results.filter(function (r) { return r.status === "sent"; }).length;
-                    castSendAll.textContent = "Sent " + done + " of " + remaining.length + "…";
-                }
-
-                castWrite("Finished. " + done + " emails sent.");
-            } catch (error) {
-                castWrite("Stopped: " + error.message);
-                castWrite("Nobody already sent will be mailed again — press the button to carry on.");
-            } finally {
-                castVariantButtons().forEach(function (b) { b.disabled = false; });
-                await castRefresh();
-            }
-        });
     </script>
 
 </body>
