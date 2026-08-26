@@ -725,7 +725,7 @@ const TASTER_REMINDERS = [
         opening: "Your Dystil free taster session is on Saturday 29 August.",
         when: "Saturday 29 August 2026",
         closing: [
-            "It runs for two hours and covers the future of work in your industry, a live demonstration of AI applied to real job roles, a look at the kind of projects you would build, and a question and answer session at the end.",
+            "Please add it to your calendar now, so the time is held.",
             "If you can no longer attend, reply to this email and let us know, so we can offer your place to someone else."
         ]
     },
