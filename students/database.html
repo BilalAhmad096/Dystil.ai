@@ -168,6 +168,35 @@
 
         .empty { padding: 40px; text-align: center; color: var(--light-text); font-size: 14px; }
 
+        /* ---------- TESTING ---------- */
+        .testing {
+            background: var(--dark);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 18px 20px;
+            margin-bottom: 20px;
+        }
+
+        .testing h2 { font-size: 15px; margin-bottom: 4px; }
+        .testing > p { font-size: 13px; color: var(--light-text); margin-bottom: 14px; }
+        .testing .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+        .testing .send-label { margin: 0; align-self: center; }
+        .testing select {
+            padding: 10px 13px; font-size: 14px; font-family: inherit; color: var(--white);
+            background: var(--dark-soft); border: 1px solid var(--line); border-radius: 10px;
+        }
+        .testing .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+        .testing .buttons button {
+            padding: 8px 15px; font-size: 12.5px; background: transparent;
+            border: 1px solid var(--line); color: var(--light-text);
+        }
+        .testing .buttons button:hover:enabled { color: var(--white); border-color: var(--accent); }
+        .testing .buttons button:disabled { opacity: 0.45; cursor: not-allowed; }
+        .testing .log {
+            margin-top: 14px; font-size: 12.5px; line-height: 1.7; max-height: 160px;
+            overflow-y: auto; color: var(--light-text); white-space: pre-wrap;
+        }
+
         /* ---------- REMINDERS ---------- */
         .reminders {
             background: var(--dark);
@@ -247,6 +276,23 @@
         </div>
 
         <div class="counts" id="counts"></div>
+
+        <div class="testing" id="testing" hidden>
+            <h2>Test an email</h2>
+            <p>
+                Sends one copy to one person on the team. Tests are never recorded, so the same email can
+                be checked as often as you like and nobody on the real list loses their place.
+            </p>
+
+            <div class="row">
+                <label class="send-label" for="test-who">SEND TEST TO</label>
+                <select id="test-who"><option value="">Choose a person…</option></select>
+            </div>
+
+            <div class="buttons" id="test-buttons"></div>
+
+            <div class="log" id="test-log" hidden></div>
+        </div>
 
         <div class="reminders" id="reminders" hidden>
             <h2>Reminders</h2>
@@ -362,6 +408,7 @@
                 render();
                 pendingRefresh();
                 reminderRefresh();
+                testRefresh();
             } catch (error) {
                 lockError.textContent = error.message;
                 lockError.hidden = false;
@@ -399,6 +446,7 @@
                 render();
                 pendingRefresh();
                 reminderRefresh();
+                testRefresh();
             } catch (error) {
                 alert(error.message);
             } finally {
@@ -427,6 +475,11 @@
             reminderRows.innerHTML = "";
             reminderLog.textContent = "";
             reminderLog.hidden = true;
+            testPanel.hidden = true;
+            testButtons.innerHTML = "";
+            testWho.innerHTML = "<option value=\"\">Choose a person…</option>";
+            testLog.textContent = "";
+            testLog.hidden = true;
             board.hidden = true;
             lock.hidden = false;
         });
@@ -892,6 +945,90 @@
                 } catch (error) {
                     status.textContent = "could not check: " + error.message;
                 }
+            }
+        }
+
+        /* ---------- TEST AN EMAIL ---------- */
+        // A test goes to one person off the team list and is never written to
+        // the ledger, so the same email can be checked as often as needed and
+        // nobody on the real list loses their place because of it. The address
+        // still has to be one the worker already knows, so this sends fewer
+        // emails rather than opening the endpoint up.
+        const TESTABLE = [
+            { campaign: "taster-2026-08-29-joining-link-confirmstyle", label: "Joining email" },
+            { campaign: "taster-2026-08-29-reminder-2-days-frank", label: "2 days · Frank" },
+            { campaign: "taster-2026-08-29-reminder-2-days-askus", label: "2 days · Dystil" },
+            { campaign: "taster-2026-08-29-reminder-1-day-frank", label: "1 day · Frank" },
+            { campaign: "taster-2026-08-29-reminder-1-day-askus", label: "1 day · Dystil" },
+            { campaign: "taster-2026-08-29-reminder-hours-frank", label: "Few hours · Frank" },
+            { campaign: "taster-2026-08-29-reminder-hours-askus", label: "Few hours · Dystil" }
+        ];
+
+        const testPanel = document.getElementById("testing");
+        const testWho = document.getElementById("test-who");
+        const testButtons = document.getElementById("test-buttons");
+        const testLog = document.getElementById("test-log");
+
+        function testWrite(line) {
+            testLog.hidden = false;
+            testLog.textContent += line + "\n";
+            testLog.scrollTop = testLog.scrollHeight;
+        }
+
+        async function testSend(entry, button) {
+            const address = testWho.value;
+
+            if (!address) {
+                alert("Choose who the test should go to.");
+                return;
+            }
+
+            const person = testWho.options[testWho.selectedIndex].textContent;
+            if (!confirm("Send “" + entry.label + "” to " + person + "?")) return;
+
+            const original = button.textContent;
+            [].slice.call(testButtons.querySelectorAll("button")).forEach(function (b) { b.disabled = true; });
+            button.textContent = "Sending…";
+
+            try {
+                const body = await reminderCall(entry.campaign, { action: "test", email: address });
+
+                body.results.forEach(function (r) {
+                    testWrite(entry.label + " → " + r.email + ": "
+                        + (r.status === "sent" ? "sent" : r.status + " — " + r.reason));
+                });
+            } catch (error) {
+                testWrite(entry.label + " failed: " + error.message);
+            } finally {
+                [].slice.call(testButtons.querySelectorAll("button")).forEach(function (b) { b.disabled = false; });
+                button.textContent = original;
+            }
+        }
+
+        async function testRefresh() {
+            testPanel.hidden = false;
+
+            if (testButtons.children.length) return;
+
+            try {
+                const roster = await reminderCall(TESTABLE[0].campaign, { action: "list" });
+
+                (roster.testRecipients || []).forEach(function (person) {
+                    const option = document.createElement("option");
+                    option.value = person.email;
+                    option.textContent = person.fullName + "  <" + person.email + ">";
+                    testWho.appendChild(option);
+                });
+
+                TESTABLE.forEach(function (entry) {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.textContent = entry.label;
+                    button.addEventListener("click", function () { testSend(entry, button); });
+                    testButtons.appendChild(button);
+                });
+            } catch (error) {
+                testWrite("Could not load the team list: " + error.message);
             }
         }
     </script>
