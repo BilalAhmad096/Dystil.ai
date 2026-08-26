@@ -720,9 +720,9 @@ const BROADCAST_BATCH_LIMIT = 20;
 const TASTER_REMINDERS = [
     {
         key: "2-days",
-        subject: "This Saturday | Dystil Free Taster Session, 11am",
-        heading: "This Saturday",
-        opening: "Your Dystil free taster session is this Saturday.",
+        subject: "Saturday 29 August | Dystil Free Taster Session, 11am",
+        heading: "Saturday 29 August",
+        opening: "Your Dystil free taster session is on Saturday 29 August.",
         when: "Saturday 29 August 2026",
         closing: [
             "It runs for two hours and covers the future of work in your industry, a live demonstration of AI applied to real job roles, a look at the kind of projects you would build, and a question and answer session at the end.",
