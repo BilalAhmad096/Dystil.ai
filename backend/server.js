@@ -750,6 +750,24 @@ const CAMPAIGNS = {
         replyTo: { email: "frank@dystil.ai", name: "Frank M" },
         testRecipients: TASTER_TEST_TEAM
     },
+    "taster-2026-08-29-joining-link-focused": {
+        formType: "Free Taster Registration",
+        subject: "Your joining link — Dystil Free Taster Session, Saturday 11am",
+        buildHtml: buildTasterFocusedHtml,
+        buildText: buildTasterFocusedText,
+        sender: { email: "askus@dystil.ai", name: "Dystil" },
+        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
+        testRecipients: TASTER_TEST_TEAM
+    },
+    "taster-2026-08-29-joining-link-focused-emoji": {
+        formType: "Free Taster Registration",
+        subject: "🔥 Dystil: You’re In. This Saturday is Going to Be Different — Here’s What to Expect",
+        buildHtml: buildTasterFocusedHtml,
+        buildText: buildTasterFocusedText,
+        sender: { email: "askus@dystil.ai", name: "Dystil" },
+        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
+        testRecipients: TASTER_TEST_TEAM
+    },
     "taster-2026-08-29-joining-link-askus-branded": {
         formType: "Free Taster Registration",
         subject: "🔥 Dystil: You’re In. This Saturday is Going to Be Different — Here’s What to Expect",
@@ -1321,5 +1339,106 @@ function buildTasterSoberText(firstName) {
         "Frank M",
         "Executive Partner, Dystil",
         "askus@dystil.ai"
+    ].join("\n");
+}
+
+// The designed email with the two sections the measurement implicates taken
+// out: the referral ask and the follow-us block. The confirmation that reaches
+// Primary every time carries the same dark header and the same colour blocks,
+// so the template stays; what it does not carry is a request to share and a
+// list of social accounts. The pill button goes too, since it was never in the
+// copy and it is one more tracked link.
+function buildTasterFocusedHtml(firstName) {
+    const greeting = firstName ? `Hey ${escapeHtml(firstName)}!` : "Hey!";
+
+    const agenda = TASTER_AGENDA.map(([icon, title, detail]) => `
+        <tr>
+            <td style="padding:8px 0;vertical-align:top;width:34px;font-size:18px;">${icon}</td>
+            <td style="padding:8px 0;line-height:1.5;">
+                <strong style="color:#123f31;">${escapeHtml(title)}</strong>
+                <span style="color:#4c5a54;"> — ${escapeHtml(detail)}</span>
+            </td>
+        </tr>`).join("");
+
+    return `<!doctype html>
+<html><body style="margin:0;background:#f4f7f6;font-family:Arial,Helvetica,sans-serif;color:#16221d;">
+    <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
+        <div style="background:#123f31;color:#ffffff;padding:28px 24px;border-radius:12px 12px 0 0;">
+            <p style="margin:0 0 6px;font-size:12px;letter-spacing:1.6px;color:#8fd3b8;">FREE TASTER SESSION</p>
+            <h1 style="font-size:26px;margin:0;">${greeting}</h1>
+            <p style="margin:8px 0 0;font-size:16px;color:#d8ede5;">You registered. Smart move.</p>
+        </div>
+
+        <div style="background:#ffffff;padding:24px;line-height:1.6;">
+            <p style="margin-top:0;">Now mark the calendar, set the alarm, and show up — because this Saturday is going to be worth every minute.</p>
+
+            <p>We're kicking off Dystil's very first Free Taster Session for the Career Accelerator Program, and you're one of the 100s who grabbed a spot.</p>
+
+            <table role="presentation" style="width:100%;border-collapse:collapse;background:#f4f7f6;border-left:4px solid #147a59;margin:20px 0;">
+                <tr><td style="padding:14px 16px 4px;">\u{1F4C5} <strong>Saturday, 29th August 2026</strong></td></tr>
+                <tr><td style="padding:4px 16px;">⏰ <strong>11:00 AM – 1:00 PM UK Time</strong></td></tr>
+                <tr><td style="padding:4px 16px 14px;">\u{1F4BB} <strong>Online – Live Session, <a href="${escapeHtml(TASTER_MEETING_URL)}" style="color:#147a59;">Meeting Link here</a>, calendar invite to follow.</strong></td></tr>
+            </table>
+
+            <p>You'll get a real look at what the Career Accelerator Program is all about — the skills, the projects, the confidence, and the career edge. Not a sales pitch. An actual session built to give you something useful from minute one.</p>
+
+            <p style="margin-bottom:4px;"><strong>Here's what's coming your way:</strong></p>
+            <table role="presentation" style="width:100%;border-collapse:collapse;margin-bottom:20px;">${agenda}
+            </table>
+
+            <p>This is our first session ever — and we're building something genuinely exciting. You're part of that from day one.</p>
+
+            <p>We'll see you Saturday at 11:00 AM sharp.</p>
+
+            <p style="margin-bottom:0;">Don't be the one who had a spot and didn't show up. \u{1F609}</p>
+        </div>
+
+        <div style="background:#ffffff;padding:20px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;">
+            <p style="margin:0 0 12px;"><strong>The Dystil Team</strong></p>
+            <p style="margin:0;font-size:14px;color:#4c5a54;">
+                <strong style="color:#16221d;">Frank M</strong><br>
+                Executive Partner<br>
+                <a href="mailto:askus@dystil.ai" style="color:#147a59;">askus@dystil.ai</a><br>
+                <a href="mailto:frank@dystil.ai" style="color:#147a59;">frank@dystil.ai</a><br>
+                www.dystil.ai
+            </p>
+        </div>
+    </div>
+</body></html>`;
+}
+
+function buildTasterFocusedText(firstName) {
+    return [
+        firstName ? `Hey ${firstName}!` : "Hey!",
+        "You registered. Smart move.",
+        "",
+        "Now mark the calendar, set the alarm, and show up — because this Saturday is going to be worth every minute.",
+        "",
+        "We're kicking off Dystil's very first Free Taster Session for the Career Accelerator Program, and you're one of the 100s who grabbed a spot.",
+        "",
+        "\u{1F4C5} Saturday, 29th August 2026",
+        "⏰ 11:00 AM – 1:00 PM UK Time",
+        "\u{1F4BB} Online – Live Session, Meeting Link here, calendar invite to follow.",
+        "",
+        TASTER_MEETING_URL,
+        "",
+        "You'll get a real look at what the Career Accelerator Program is all about — the skills, the projects, the confidence, and the career edge. Not a sales pitch. An actual session built to give you something useful from minute one.",
+        "",
+        "Here's what's coming your way:",
+        ...TASTER_AGENDA.map(([icon, title, detail]) => `${icon} ${title} — ${detail}`),
+        "",
+        "This is our first session ever — and we're building something genuinely exciting. You're part of that from day one.",
+        "",
+        "We'll see you Saturday at 11:00 AM sharp.",
+        "",
+        "Don't be the one who had a spot and didn't show up. \u{1F609}",
+        "",
+        "The Dystil Team",
+        "",
+        "Frank M",
+        "Executive Partner",
+        "askus@dystil.ai",
+        "frank@dystil.ai",
+        "www.dystil.ai"
     ].join("\n");
 }
