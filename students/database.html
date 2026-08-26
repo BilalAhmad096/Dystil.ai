@@ -797,19 +797,40 @@
         // one ledger, so picking Frank and then picking Dystil skips everyone
         // rather than sending the same reminder twice. Sends are paced for the
         // same reason the joining email is: a burst is sorted differently.
+        // Each row is one message that goes to everyone once. Where a row has
+        // two buttons they are the same message under different names, and both
+        // write to one ledger, so choosing one leaves the other with nobody.
         const REMINDERS = [
-            { key: "2-days", label: "2 days to go" },
-            { key: "1-day", label: "1 day to go" },
-            { key: "hours", label: "Few hours to go" }
+            {
+                label: "Calendar invitation",
+                buttons: [["taster-2026-08-29-calendar-invite", "send to everyone"]]
+            },
+            {
+                label: "This Saturday",
+                buttons: [
+                    ["taster-2026-08-29-reminder-2-days-frank", "from Frank"],
+                    ["taster-2026-08-29-reminder-2-days-askus", "from Dystil"]
+                ]
+            },
+            {
+                label: "Tomorrow",
+                buttons: [
+                    ["taster-2026-08-29-reminder-1-day-frank", "from Frank"],
+                    ["taster-2026-08-29-reminder-1-day-askus", "from Dystil"]
+                ]
+            },
+            {
+                label: "Few hours to go",
+                buttons: [
+                    ["taster-2026-08-29-reminder-hours-frank", "from Frank"],
+                    ["taster-2026-08-29-reminder-hours-askus", "from Dystil"]
+                ]
+            }
         ];
 
         const remindersPanel = document.getElementById("reminders");
         const reminderRows = document.getElementById("reminder-rows");
         const reminderLog = document.getElementById("reminder-log");
-
-        function reminderCampaign(key, who) {
-            return "taster-2026-08-29-reminder-" + key + "-" + who;
-        }
 
         async function reminderCall(campaign, payload) {
             const response = await fetch(PENDING_API, {
@@ -835,9 +856,7 @@
             return [].slice.call(reminderRows.querySelectorAll("button"));
         }
 
-        async function reminderSend(reminder, who, button) {
-            const campaign = reminderCampaign(reminder.key, who);
-            const from = who === "frank" ? "Frank M" : "Dystil";
+        async function reminderSend(reminder, campaign, from, button) {
 
             let waiting;
 
@@ -863,7 +882,7 @@
                 + " minutes and cannot be taken back.")) return;
 
             reminderButtons().forEach(function (b) { b.disabled = true; });
-            reminderWrite(reminder.label + " from " + from + ": sending to " + waiting.length + ", about " + minutes + " minutes…");
+            reminderWrite(reminder.label + " (" + from + "): sending to " + waiting.length + ", about " + minutes + " minutes…");
 
             let sent = 0;
 
@@ -905,19 +924,19 @@
                 name.textContent = reminder.label;
                 row.appendChild(name);
 
-                [["frank", "from Frank"], ["askus", "from Dystil"]].forEach(function (pair) {
+                reminder.buttons.forEach(function (pair) {
                     const button = document.createElement("button");
                     button.type = "button";
                     button.textContent = pair[1];
                     button.addEventListener("click", function () {
-                        reminderSend(reminder, pair[0], button);
+                        reminderSend(reminder, pair[0], pair[1], button);
                     });
                     row.appendChild(button);
                 });
 
                 const status = document.createElement("span");
                 status.className = "reminder-status";
-                status.id = "reminder-status-" + reminder.key;
+                status.id = "reminder-status-" + reminder.buttons[0][0];
                 row.appendChild(status);
 
                 reminderRows.appendChild(row);
@@ -930,10 +949,10 @@
             if (!reminderRows.children.length) reminderBuildRows();
 
             for (const reminder of REMINDERS) {
-                const status = document.getElementById("reminder-status-" + reminder.key);
+                const status = document.getElementById("reminder-status-" + reminder.buttons[0][0]);
 
                 try {
-                    const roster = await reminderCall(reminderCampaign(reminder.key, "frank"), { action: "list" });
+                    const roster = await reminderCall(reminder.buttons[0][0], { action: "list" });
                     const done = new Set(roster.alreadySent);
                     const waiting = (roster.recipients || []).filter(function (p) { return !done.has(p.email); });
 
@@ -956,6 +975,7 @@
         // emails rather than opening the endpoint up.
         const TESTABLE = [
             { campaign: "taster-2026-08-29-joining-link-confirmstyle", label: "Joining email" },
+            { campaign: "taster-2026-08-29-calendar-invite", label: "Calendar invite" },
             { campaign: "taster-2026-08-29-reminder-2-days-frank", label: "2 days · Frank" },
             { campaign: "taster-2026-08-29-reminder-2-days-askus", label: "2 days · Dystil" },
             { campaign: "taster-2026-08-29-reminder-1-day-frank", label: "1 day · Frank" },

@@ -797,6 +797,18 @@ const CAMPAIGNS = {
         replyTo: { email: "frank@dystil.ai", name: "Frank M" },
         testRecipients: TASTER_TEST_TEAM
     },
+    "taster-2026-08-29-calendar-invite": {
+        formType: "Free Taster Registration",
+        subject: "Calendar invitation | Dystil Free Taster Session, Saturday 29 August",
+        buildHtml: buildInviteHtml,
+        buildText: buildInviteText,
+        sender: { email: "askus@dystil.ai", name: "Dystil" },
+        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
+        // The invitation names the person it is for, so it is built per
+        // recipient rather than once for the whole run.
+        attachInvite: true,
+        testRecipients: TASTER_TEST_TEAM
+    },
     "taster-2026-08-29-joining-link-confirmstyle": {
         formType: "Free Taster Registration",
         subject: "Your joining details | Free Taster Session, Saturday 29 August",
@@ -1028,6 +1040,10 @@ async function handleBroadcast(request, env, corsHeaders) {
             textContent: campaign.buildText(person.firstName)
         };
 
+        if (campaign.attachInvite) {
+            payload.attachment = [buildInviteAttachment(person, campaign.sender)];
+        }
+
         const sent = campaign.route === "graph"
             ? await sendViaGraph(graphToken, campaign.sender.email, buildGraphMessage(campaign, person, person.firstName))
             : await sendEmail(env.BREVO_API_KEY, payload, await buildLimitKey("broadcast", ledger, email));
@@ -1104,6 +1120,10 @@ async function sendBroadcastTest(env, campaign, corsHeaders, onlyEmail) {
             htmlContent: campaign.buildHtml(firstNameOf(person.fullName)),
             textContent: campaign.buildText(firstNameOf(person.fullName))
         };
+
+        if (campaign.attachInvite) {
+            payload.attachment = [buildInviteAttachment(person, campaign.sender)];
+        }
 
         const sent = campaign.route === "graph"
             ? await sendViaGraph(graphToken, campaign.sender.email, buildGraphMessage(campaign, person, firstNameOf(person.fullName)))
@@ -1784,4 +1804,140 @@ function buildReminderCampaigns() {
     }
 
     return campaigns;
+}
+
+/* ---------------------------------------------------------------------------
+   Calendar invitation
+   ---------------------------------------------------------------------------
+   The joining email promised one, and an invitation does the job the email
+   cannot: it puts the session in the calendar with a reminder attached, so
+   nobody has to find the right email on Saturday morning.
+
+   Sent as a real iCalendar REQUEST rather than a link, so the mailbox treats it
+   as a meeting. Every recipient gets the same UID, so this is one event that
+   can be updated later rather than a new event per person; bumping SEQUENCE is
+   what tells a calendar an update has arrived.
+--------------------------------------------------------------------------- */
+
+const INVITE_UID = "dystil-taster-2026-08-29@dystil.ai";
+const INVITE_SEQUENCE = 0;
+// 11:00 to 13:00 UK time on 29 August 2026. Britain is on BST that day, an
+// hour ahead of UTC, so the times are written here as 10:00 and 12:00 UTC.
+const INVITE_START_UTC = "20260829T100000Z";
+const INVITE_END_UTC = "20260829T120000Z";
+
+// A property must not exceed 75 octets on a line; longer ones continue on the
+// next line behind a single space. The meeting URL is far past that on its own.
+function foldIcsLine(line) {
+    if (line.length <= 74) return line;
+
+    const parts = [line.slice(0, 74)];
+    let rest = line.slice(74);
+
+    while (rest.length > 73) {
+        parts.push(" " + rest.slice(0, 73));
+        rest = rest.slice(73);
+    }
+
+    if (rest.length) parts.push(" " + rest);
+
+    return parts.join("\r\n");
+}
+
+function escapeIcsText(value) {
+    return String(value === null || value === undefined ? "" : value)
+        .replace(/\\/g, "\\\\")
+        .replace(/;/g, "\\;")
+        .replace(/,/g, "\\,")
+        .replace(/\r?\n/g, "\\n");
+}
+
+function buildTasterInvite(person, organiser, stamp) {
+    const lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Dystil//Free Taster Session//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:REQUEST",
+        "BEGIN:VEVENT",
+        `UID:${INVITE_UID}`,
+        `SEQUENCE:${INVITE_SEQUENCE}`,
+        `DTSTAMP:${stamp}`,
+        `DTSTART:${INVITE_START_UTC}`,
+        `DTEND:${INVITE_END_UTC}`,
+        "SUMMARY:" + escapeIcsText("Dystil Free Taster Session"),
+        "DESCRIPTION:" + escapeIcsText(
+            "Your Dystil free taster session.\n\n"
+            + "Join on Microsoft Teams:\n" + TASTER_MEETING_URL + "\n\n"
+            + "The session runs for two hours and covers the future of work in your industry, "
+            + "a live demonstration of AI applied to real job roles, a look at the kind of projects "
+            + "you would build, and a question and answer session at the end."
+        ),
+        "LOCATION:" + escapeIcsText("Online, on Microsoft Teams"),
+        "URL:" + TASTER_MEETING_URL,
+        `ORGANIZER;CN=${escapeIcsText(organiser.name)}:mailto:${organiser.email}`,
+        `ATTENDEE;CN=${escapeIcsText(person.fullName)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${person.email}`,
+        "STATUS:CONFIRMED",
+        "TRANSP:OPAQUE",
+        "BEGIN:VALARM",
+        "TRIGGER:-PT30M",
+        "ACTION:DISPLAY",
+        "DESCRIPTION:" + escapeIcsText("Dystil Free Taster Session starts in 30 minutes"),
+        "END:VALARM",
+        "END:VEVENT",
+        "END:VCALENDAR"
+    ];
+
+    return lines.map(foldIcsLine).join("\r\n") + "\r\n";
+}
+
+function buildInviteAttachment(person, organiser) {
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const ics = buildTasterInvite(person, organiser, stamp);
+
+    return {
+        name: "dystil-taster-session.ics",
+        content: bytesToBase64(new TextEncoder().encode(ics))
+    };
+}
+
+function buildInviteHtml(firstName) {
+    const heading = firstName
+        ? `Your calendar invitation, ${escapeHtml(firstName)}.`
+        : "Your calendar invitation.";
+
+    return `<!doctype html>
+        <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
+            <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
+                <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
+                    <h1 style="font-size:24px;margin:0;">${heading}</h1>
+                </div>
+                <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
+                    <p style="margin-top:0;">Here is the calendar invitation for your Dystil free taster session, as promised. Accepting it puts the session in your calendar with the joining link and a reminder half an hour before.</p>
+                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>Saturday 29 August 2026</strong><br>11:00 to 13:00 UK time<br>Online, on <a href="${escapeHtml(TASTER_MEETING_URL)}" style="color:#147a59;">Microsoft Teams</a>.</p>
+                    <p>If your email does not add it for you, open the attached file and your calendar will pick it up.</p>
+                    <p>If you can no longer attend, decline the invitation or reply to this email, so we can offer your place to someone else.</p>
+                    <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
+                </div>
+            </div>
+        </body></html>`;
+}
+
+function buildInviteText(firstName) {
+    return [
+        firstName ? `Your calendar invitation, ${firstName}.` : "Your calendar invitation.",
+        "",
+        "Here is the calendar invitation for your Dystil free taster session, as promised. Accepting it puts the session in your calendar with the joining link and a reminder half an hour before.",
+        "",
+        "Saturday 29 August 2026",
+        "11:00 to 13:00 UK time",
+        "Online, on Microsoft Teams: " + TASTER_MEETING_URL,
+        "",
+        "If your email does not add it for you, open the attached file and your calendar will pick it up.",
+        "",
+        "If you can no longer attend, decline the invitation or reply to this email, so we can offer your place to someone else.",
+        "",
+        "Kind regards,",
+        "The Dystil Team"
+    ].join("\n");
 }
