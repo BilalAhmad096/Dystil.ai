@@ -729,7 +729,6 @@ const TASTER_TEST_TEAM = [
     { email: "reliancevodafone9528@gmail.com", fullName: "Bilal Ahmad" },
     { email: "b_ahmad@ee.iitr.ac.in", fullName: "Bilal Ahmad" },
     { email: "talha36292@gmail.com", fullName: "Talha" },
-    { email: "mariyamafeefa1@gmail.com", fullName: "Mariyam" },
     { email: "mailbox.makki@gmail.com", fullName: "Arsalan Makki" },
     { email: "danishzia2016@gmail.com", fullName: "Danish" },
     { email: "muaaz.daily@gmail.com", fullName: "Muaz" },
