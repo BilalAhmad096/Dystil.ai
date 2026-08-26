@@ -247,6 +247,11 @@
                 <button class="danger" id="cast-send-all" type="button">Send to everyone remaining</button>
             </div>
 
+            <div class="row" style="margin-top:12px;">
+                <label class="send-label" for="cast-one">TEST GOES TO</label>
+                <select id="cast-one"></select>
+            </div>
+
             <p class="testers" id="cast-testers"></p>
 
             <div class="log" id="cast-log" hidden></div>
@@ -395,6 +400,7 @@
             castLog.hidden = true;
             castTesters.textContent = "";
             castVariants.innerHTML = "";
+            castOne.innerHTML = "";
             board.hidden = true;
             lock.hidden = false;
         });
@@ -614,6 +620,7 @@
         const castLog = document.getElementById("cast-log");
         const castTesters = document.getElementById("cast-testers");
         const castVariants = document.getElementById("cast-variants");
+        const castOne = document.getElementById("cast-one");
         const castTarget = document.getElementById("cast-target");
         const castSendAll = document.getElementById("cast-send-all");
 
@@ -672,6 +679,21 @@
                 }
 
                 const testers = castRoster.testRecipients || [];
+
+                if (!castOne.options.length) {
+                    const all = document.createElement("option");
+                    all.value = "";
+                    all.textContent = "Everyone on the test list";
+                    castOne.appendChild(all);
+
+                    testers.forEach(function (person) {
+                        const option = document.createElement("option");
+                        option.value = person.email;
+                        option.textContent = person.fullName + "  <" + person.email + ">";
+                        castOne.appendChild(option);
+                    });
+                }
+
                 castTesters.textContent = testers.length
                     ? "Test goes to " + testers.length + ": " + testers.map(function (p) { return p.fullName; }).join(", ")
                     : "";
@@ -720,6 +742,7 @@
 
         function castBuildVariantButtons() {
             castVariants.innerHTML = "";
+            castOne.innerHTML = "";
 
             CAST_VARIANTS.forEach(function (variant) {
                 const button = document.createElement("button");
@@ -740,15 +763,17 @@
             const testers = castRoster.testRecipients || [];
             if (!testers.length) return;
 
-            const names = testers.map(function (p) { return p.fullName; }).join(", ");
-            if (!confirm("Send variant " + label + " to " + testers.length + " people?\n\n" + names)) return;
+            const target = castOne.value;
+            const names = target || testers.map(function (p) { return p.fullName; }).join(", ");
+            const count = target ? 1 : testers.length;
+            if (!confirm("Send variant " + label + " to " + count + " people?\n\n" + names)) return;
 
             const original = button.textContent;
             castVariantButtons().forEach(function (b) { b.disabled = true; });
             button.textContent = "Sending…";
 
             try {
-                const body = await castCall({ action: "test" }, campaign);
+                const body = await castCall({ action: "test", email: castOne.value }, campaign);
                 castWrite("Variant " + label + ":");
                 castReport(body.results);
             } catch (error) {

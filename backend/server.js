@@ -929,7 +929,7 @@ async function handleBroadcast(request, env, corsHeaders) {
     }
 
     if (body.action === "test") {
-        return sendBroadcastTest(env, campaign, corsHeaders);
+        return sendBroadcastTest(env, campaign, corsHeaders, cleanText(body.email, 254));
     }
 
     const requested = Array.isArray(body.emails) ? body.emails : [];
@@ -995,11 +995,26 @@ async function handleBroadcast(request, env, corsHeaders) {
 
 // A test goes to the named team list and nowhere else. The caller does not
 // choose the addresses, so a stolen password still cannot mail a stranger.
-async function sendBroadcastTest(env, campaign, corsHeaders) {
-    const recipients = campaign.testRecipients || [];
+async function sendBroadcastTest(env, campaign, corsHeaders, onlyEmail) {
+    const everyone = campaign.testRecipients || [];
+
+    if (!everyone.length) {
+        return jsonResponse({ success: false, message: "This campaign has no test list." }, 400, corsHeaders);
+    }
+
+    // Naming one address still only picks from the list, so the endpoint cannot
+    // be pointed at a stranger. Sending to one on its own also sends it on its
+    // own: every test so far went out as a burst of five to nine at once, which
+    // is a difference from a single message that has never been separated out.
+    const recipients = onlyEmail
+        ? everyone.filter((person) => person.email === onlyEmail.trim().toLowerCase())
+        : everyone;
 
     if (!recipients.length) {
-        return jsonResponse({ success: false, message: "This campaign has no test list." }, 400, corsHeaders);
+        return jsonResponse({
+            success: false,
+            message: "That address is not on the test list."
+        }, 400, corsHeaders);
     }
 
     let graphToken = null;
