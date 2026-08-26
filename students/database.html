@@ -168,6 +168,32 @@
 
         .empty { padding: 40px; text-align: center; color: var(--light-text); font-size: 14px; }
 
+        /* ---------- REMINDERS ---------- */
+        .reminders {
+            background: var(--dark);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 18px 20px;
+            margin-bottom: 20px;
+        }
+
+        .reminders h2 { font-size: 15px; margin-bottom: 4px; }
+        .reminders > p { font-size: 13px; color: var(--light-text); margin-bottom: 14px; }
+        .reminder-row {
+            display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+            padding: 10px 0; border-top: 1px solid var(--line);
+        }
+        .reminder-row:first-child { border-top: none; }
+        .reminder-name { font-size: 13.5px; font-weight: bold; min-width: 132px; }
+        .reminders button { padding: 8px 16px; font-size: 12.5px; background: var(--primary); }
+        .reminders button:hover:enabled { background: var(--primary-dark); }
+        .reminders button:disabled { opacity: 0.45; cursor: not-allowed; }
+        .reminder-status { font-size: 12.5px; color: var(--light-text); }
+        .reminders .log {
+            margin-top: 14px; font-size: 12.5px; line-height: 1.7; max-height: 190px;
+            overflow-y: auto; color: var(--light-text); white-space: pre-wrap;
+        }
+
         /* ---------- LATE REGISTRATIONS ---------- */
         .pending {
             background: var(--dark);
@@ -221,6 +247,19 @@
         </div>
 
         <div class="counts" id="counts"></div>
+
+        <div class="reminders" id="reminders" hidden>
+            <h2>Reminders</h2>
+            <p>
+                Each reminder goes to everyone who has registered, once. Both names write to the same
+                record, so sending “2 days to go” from Frank means the Dystil button skips those people
+                rather than mailing them again. Sends go one at a time, so allow around twelve minutes.
+            </p>
+
+            <div id="reminder-rows"></div>
+
+            <div class="log" id="reminder-log" hidden></div>
+        </div>
 
         <div class="pending" id="pending" hidden>
             <h2>Joining email for new registrations</h2>
@@ -322,6 +361,7 @@
                 board.hidden = false;
                 render();
                 pendingRefresh();
+                reminderRefresh();
             } catch (error) {
                 lockError.textContent = error.message;
                 lockError.hidden = false;
@@ -358,6 +398,7 @@
                 all = await load(key);
                 render();
                 pendingRefresh();
+                reminderRefresh();
             } catch (error) {
                 alert(error.message);
             } finally {
@@ -382,6 +423,10 @@
             pendingLog.textContent = "";
             pendingLog.hidden = true;
             pendingPanel.hidden = true;
+            remindersPanel.hidden = true;
+            reminderRows.innerHTML = "";
+            reminderLog.textContent = "";
+            reminderLog.hidden = true;
             board.hidden = true;
             lock.hidden = false;
         });
@@ -693,6 +738,162 @@
                 await pendingRefresh();
             }
         });
+
+        /* ---------- REMINDERS ---------- */
+        // Each reminder can go out under either name, but both names write to
+        // one ledger, so picking Frank and then picking Dystil skips everyone
+        // rather than sending the same reminder twice. Sends are paced for the
+        // same reason the joining email is: a burst is sorted differently.
+        const REMINDERS = [
+            { key: "2-days", label: "2 days to go" },
+            { key: "1-day", label: "1 day to go" },
+            { key: "hours", label: "Few hours to go" }
+        ];
+
+        const remindersPanel = document.getElementById("reminders");
+        const reminderRows = document.getElementById("reminder-rows");
+        const reminderLog = document.getElementById("reminder-log");
+
+        function reminderCampaign(key, who) {
+            return "taster-2026-08-29-reminder-" + key + "-" + who;
+        }
+
+        async function reminderCall(campaign, payload) {
+            const response = await fetch(PENDING_API, {
+                method: "POST",
+                headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
+                body: JSON.stringify({ campaign: campaign, ...payload })
+            });
+
+            const body = await response.json().catch(function () { return {}; });
+
+            if (!response.ok || !body.success) throw new Error(body.message || "The request failed.");
+
+            return body;
+        }
+
+        function reminderWrite(line) {
+            reminderLog.hidden = false;
+            reminderLog.textContent += line + "\n";
+            reminderLog.scrollTop = reminderLog.scrollHeight;
+        }
+
+        function reminderButtons() {
+            return [].slice.call(reminderRows.querySelectorAll("button"));
+        }
+
+        async function reminderSend(reminder, who, button) {
+            const campaign = reminderCampaign(reminder.key, who);
+            const from = who === "frank" ? "Frank M" : "Dystil";
+
+            let waiting;
+
+            try {
+                const roster = await reminderCall(campaign, { action: "list" });
+                const done = new Set(roster.alreadySent);
+                waiting = (roster.recipients || []).filter(function (p) { return !done.has(p.email); });
+            } catch (error) {
+                reminderWrite("Could not check who is waiting: " + error.message);
+                return;
+            }
+
+            if (!waiting.length) {
+                reminderWrite(reminder.label + ": everyone has already had this one.");
+                await reminderRefresh();
+                return;
+            }
+
+            const minutes = Math.ceil(waiting.length * PENDING_PACE_MS / 60000);
+
+            if (!confirm("Send the “" + reminder.label + "” reminder from " + from
+                + " to " + waiting.length + " people?\n\nThis takes about " + minutes
+                + " minutes and cannot be taken back.")) return;
+
+            reminderButtons().forEach(function (b) { b.disabled = true; });
+            reminderWrite(reminder.label + " from " + from + ": sending to " + waiting.length + ", about " + minutes + " minutes…");
+
+            let sent = 0;
+
+            try {
+                for (let i = 0; i < waiting.length; i++) {
+                    if (i > 0) {
+                        await new Promise(function (done) { window.setTimeout(done, PENDING_PACE_MS); });
+                    }
+
+                    button.textContent = "Sending " + (i + 1) + " of " + waiting.length + "…";
+
+                    const body = await reminderCall(campaign, { action: "send", emails: [waiting[i].email] });
+
+                    body.results.forEach(function (r) {
+                        if (r.status === "sent") sent++;
+                        else reminderWrite("  " + r.email + ": " + r.status + " — " + r.reason);
+                    });
+                }
+
+                reminderWrite(reminder.label + ": finished, " + sent + " sent.");
+            } catch (error) {
+                reminderWrite("Stopped: " + error.message);
+                reminderWrite("Anyone already sent is recorded — press again to carry on.");
+            } finally {
+                reminderButtons().forEach(function (b) { b.disabled = false; });
+                await reminderRefresh();
+            }
+        }
+
+        function reminderBuildRows() {
+            reminderRows.innerHTML = "";
+
+            REMINDERS.forEach(function (reminder) {
+                const row = document.createElement("div");
+                row.className = "reminder-row";
+
+                const name = document.createElement("span");
+                name.className = "reminder-name";
+                name.textContent = reminder.label;
+                row.appendChild(name);
+
+                [["frank", "from Frank"], ["askus", "from Dystil"]].forEach(function (pair) {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.textContent = pair[1];
+                    button.addEventListener("click", function () {
+                        reminderSend(reminder, pair[0], button);
+                    });
+                    row.appendChild(button);
+                });
+
+                const status = document.createElement("span");
+                status.className = "reminder-status";
+                status.id = "reminder-status-" + reminder.key;
+                row.appendChild(status);
+
+                reminderRows.appendChild(row);
+            });
+        }
+
+        async function reminderRefresh() {
+            remindersPanel.hidden = false;
+
+            if (!reminderRows.children.length) reminderBuildRows();
+
+            for (const reminder of REMINDERS) {
+                const status = document.getElementById("reminder-status-" + reminder.key);
+
+                try {
+                    const roster = await reminderCall(reminderCampaign(reminder.key, "frank"), { action: "list" });
+                    const done = new Set(roster.alreadySent);
+                    const waiting = (roster.recipients || []).filter(function (p) { return !done.has(p.email); });
+
+                    status.textContent = waiting.length
+                        ? waiting.length + " still to receive it"
+                        : "everyone has had this one";
+                    reminderRows.querySelectorAll(".reminder-row")[REMINDERS.indexOf(reminder)]
+                        .querySelectorAll("button").forEach(function (b) { b.disabled = !waiting.length; });
+                } catch (error) {
+                    status.textContent = "could not check: " + error.message;
+                }
+            }
+        }
     </script>
 
 </body>

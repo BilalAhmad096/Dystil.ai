@@ -717,6 +717,47 @@ function formatFileSize(bytes) {
 
 const BROADCAST_BATCH_LIMIT = 20;
 
+const TASTER_REMINDERS = [
+    {
+        key: "2-days",
+        subject: "Two days to go | Dystil Free Taster Session, Saturday 29 August",
+        heading: "Two days to go",
+        opening: "Your place at the Dystil free taster session is confirmed, and the session is this Saturday.",
+        when: "Saturday 29 August 2026",
+        closing: [
+            "It runs for two hours and covers the future of work in your industry, a live demonstration of AI applied to real job roles, a look at the kind of projects you would build, and a question and answer session at the end.",
+            "If you can no longer attend, reply to this email and let us know, so we can offer your place to someone else."
+        ]
+    },
+    {
+        key: "1-day",
+        subject: "Tomorrow | Dystil Free Taster Session, Saturday 11am",
+        heading: "Tomorrow",
+        opening: "Your Dystil free taster session is tomorrow morning.",
+        when: "Tomorrow, Saturday 29 August 2026",
+        closing: [
+            "It is worth saving this email now, so you are not searching for the link on Saturday morning.",
+            "If you can no longer attend, reply to this email and let us know, so we can offer your place to someone else."
+        ]
+    },
+    {
+        key: "hours",
+        subject: "Starting at 11:00 today | Dystil Free Taster Session",
+        heading: "This morning",
+        opening: "Your Dystil free taster session starts at 11:00 this morning.",
+        when: "Today, Saturday 29 August 2026",
+        closing: [
+            "Please join a few minutes early so we can start on time. The link opens in your browser, so there is nothing to install.",
+            "See you shortly."
+        ]
+    }
+];
+
+const TASTER_SENDERS = {
+    frank: { email: "frank@dystil.ai", name: "Frank M" },
+    askus: { email: "askus@dystil.ai", name: "Dystil" }
+};
+
 const TASTER_TEST_TEAM = [
     { email: "makki.arsalan07@gmail.com", fullName: "Arsalan Makki" },
     { email: "mailboxforbilal@gmail.com", fullName: "Bilal Ahmad" },
@@ -846,7 +887,8 @@ const CAMPAIGNS = {
         sender: { email: "askus@dystil.ai", name: "Dystil" },
         replyTo: { email: "askus@dystil.ai", name: "Dystil" },
         testRecipients: TASTER_TEST_TEAM
-    }
+    },
+    ...buildReminderCampaigns()
 };
 
 const BROADCAST_ROSTER_SQL = `
@@ -898,7 +940,9 @@ async function handleBroadcast(request, env, corsHeaders) {
         return jsonResponse({ success: false, message: "Unknown campaign." }, 400, corsHeaders);
     }
 
-    const roster = await loadBroadcastRoster(env.DB, body.campaign, campaign.formType);
+    // Which ledger records this send. Reminders share one across both senders.
+    const ledger = campaign.dedupeKey || body.campaign;
+    const roster = await loadBroadcastRoster(env.DB, ledger, campaign.formType);
 
     if (body.action === "list") {
         return jsonResponse({
@@ -986,7 +1030,7 @@ async function handleBroadcast(request, env, corsHeaders) {
 
         const sent = campaign.route === "graph"
             ? await sendViaGraph(graphToken, campaign.sender.email, buildGraphMessage(campaign, person, person.firstName))
-            : await sendEmail(env.BREVO_API_KEY, payload, await buildLimitKey("broadcast", body.campaign, email));
+            : await sendEmail(env.BREVO_API_KEY, payload, await buildLimitKey("broadcast", ledger, email));
 
         if (!sent.ok) {
             results.push({ email, status: "failed", reason: `Email provider returned ${sent.status}.` });
@@ -994,7 +1038,7 @@ async function handleBroadcast(request, env, corsHeaders) {
         }
 
         try {
-            await env.DB.prepare(RECORD_BROADCAST_SQL).bind(body.campaign, email, new Date().toISOString()).run();
+            await env.DB.prepare(RECORD_BROADCAST_SQL).bind(ledger, email, new Date().toISOString()).run();
         } catch (error) {
             console.error("Sent but could not record the broadcast.", email, error instanceof Error ? error.message : "Unknown error");
         }
@@ -1664,4 +1708,80 @@ function buildTasterConfirmStyleText(firstName) {
         "Kind regards,",
         "The Dystil Team"
     ].join("\n");
+}
+
+/* ---------------------------------------------------------------------------
+   Reminders
+   ---------------------------------------------------------------------------
+   Built to the same shape as the joining email, which is the shape of the
+   registration confirmation: dark header, one panel, plain wording, and the
+   meeting as the only link. Each reminder can go out under either name, and
+   both share one ledger entry, so choosing Frank and then choosing Dystil
+   cannot mail the same person the same reminder twice.
+--------------------------------------------------------------------------- */
+
+function buildReminderHtml(reminder, firstName) {
+    const heading = firstName
+        ? `${reminder.heading}, ${escapeHtml(firstName)}.`
+        : `${reminder.heading}.`;
+
+    const closing = reminder.closing
+        .map((line) => `<p>${escapeHtml(line)}</p>`)
+        .join("\n                    ");
+
+    return `<!doctype html>
+        <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
+            <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
+                <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
+                    <h1 style="font-size:24px;margin:0;">${heading}</h1>
+                </div>
+                <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
+                    <p style="margin-top:0;">${escapeHtml(reminder.opening)}</p>
+                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>${escapeHtml(reminder.when)}</strong><br>11:00 to 13:00 UK time<br>Online, on <a href="${escapeHtml(TASTER_MEETING_URL)}" style="color:#147a59;">Microsoft Teams</a>.</p>
+                    ${closing}
+                    <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
+                </div>
+            </div>
+        </body></html>`;
+}
+
+function buildReminderText(reminder, firstName) {
+    return [
+        firstName ? `${reminder.heading}, ${firstName}.` : `${reminder.heading}.`,
+        "",
+        reminder.opening,
+        "",
+        reminder.when,
+        "11:00 to 13:00 UK time",
+        "Online, on Microsoft Teams: " + TASTER_MEETING_URL,
+        "",
+        ...reminder.closing.flatMap((line) => [line, ""]),
+        "Kind regards,",
+        "The Dystil Team"
+    ].join("\n");
+}
+
+// Three reminders under two names is six campaigns, and writing them out by
+// hand would be six chances to change one and forget the other.
+function buildReminderCampaigns() {
+    const campaigns = {};
+
+    for (const reminder of TASTER_REMINDERS) {
+        for (const [who, sender] of Object.entries(TASTER_SENDERS)) {
+            campaigns[`taster-2026-08-29-reminder-${reminder.key}-${who}`] = {
+                formType: "Free Taster Registration",
+                subject: reminder.subject,
+                buildHtml: (firstName) => buildReminderHtml(reminder, firstName),
+                buildText: (firstName) => buildReminderText(reminder, firstName),
+                sender,
+                replyTo: sender,
+                // Both names share one ledger, so a reminder sent as Frank is
+                // not sent again as Dystil.
+                dedupeKey: `taster-2026-08-29-reminder-${reminder.key}`,
+                testRecipients: TASTER_TEST_TEAM
+            };
+        }
+    }
+
+    return campaigns;
 }
