@@ -189,6 +189,7 @@
         }
         .cast .variants { display: flex; flex-wrap: wrap; gap: 8px; }
         .cast .variants button { background: transparent; border: 1px solid var(--line); color: var(--light-text); }
+        .cast .variants button:first-child { border-color: var(--accent); color: var(--accent); font-weight: bold; }
         .cast .variants button:hover:enabled { color: var(--white); border-color: var(--primary); }
         .cast button { padding: 10px 18px; font-size: 13px; }
         .cast button:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -607,7 +608,7 @@
         const CAST_API = "https://dystil-contact.dystil-ai.workers.dev/api/broadcast";
         const CAST_CAMPAIGN = "taster-2026-08-29-joining-link";
         const CAST_CAMPAIGN_PLAIN = CAST_CAMPAIGN + "-plain";
-        const CAST_BATCH = 20;
+        let castBatch = 20;
 
         const castTally = document.getElementById("cast-tally");
         const castLog = document.getElementById("cast-log");
@@ -651,6 +652,8 @@
                 castTally.innerHTML = "<strong>" + castRoster.recipients.length + "</strong> registered ("
                     + "<strong>" + castRoster.alreadySent.length + "</strong> already emailed, "
                     + "<strong>" + remaining + "</strong> still to go)";
+
+                castBatch = castRoster.batchLimit || 20;
 
                 castBuildVariantButtons();
 
@@ -700,6 +703,7 @@
         // the links Brevo would rewrite. Whichever one reaches Primary names
         // the cause, so tests are never recorded and can be repeated freely.
         const CAST_VARIANTS = [
+            { suffix: "-outlook", label: "★ OUTLOOK — your email, via Microsoft 365" },
             { suffix: "", label: "A — designed, Frank, your subject" },
             { suffix: "-original", label: "F — designed, Frank, original subject" },
             { suffix: "-focused", label: "I — designed, no share/follow, plain subject" },
@@ -774,8 +778,8 @@
             let done = 0;
 
             try {
-                for (let start = 0; start < remaining.length; start += CAST_BATCH) {
-                    const batch = remaining.slice(start, start + CAST_BATCH);
+                for (let start = 0; start < remaining.length; start += castBatch) {
+                    const batch = remaining.slice(start, start + castBatch);
                     const body = await castCall({ action: "send", emails: batch.map(function (p) { return p.email; }) }, campaign);
 
                     castReport(body.results);

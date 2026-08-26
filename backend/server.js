@@ -753,6 +753,16 @@ const CAMPAIGNS = {
         replyTo: { email: "frank@dystil.ai", name: "Frank M" },
         testRecipients: TASTER_TEST_TEAM
     },
+    "taster-2026-08-29-joining-link-outlook": {
+        formType: "Free Taster Registration",
+        subject: "🔥 Dystil: You’re In. This Saturday is Going to Be Different — Here’s What to Expect",
+        buildHtml: buildTasterJoiningHtml,
+        buildText: buildTasterJoiningText,
+        sender: { email: "frank@dystil.ai", name: "Frank M" },
+        replyTo: { email: "frank@dystil.ai", name: "Frank M" },
+        route: "graph",
+        testRecipients: TASTER_TEST_TEAM
+    },
     "taster-2026-08-29-joining-link-focused": {
         formType: "Free Taster Registration",
         subject: "Your joining link — Dystil Free Taster Session, Saturday 11am",
@@ -881,6 +891,8 @@ async function handleBroadcast(request, env, corsHeaders) {
     if (body.action === "list") {
         return jsonResponse({
             success: true,
+            batchLimit: campaign.route === "graph" ? GRAPH_BATCH_LIMIT : BROADCAST_BATCH_LIMIT,
+            route: campaign.route || "brevo",
             ...roster,
             testRecipients: (campaign.testRecipients || []).map((person) => ({
                 email: person.email,
@@ -893,7 +905,25 @@ async function handleBroadcast(request, env, corsHeaders) {
         return jsonResponse({ success: false, message: "Unknown action." }, 400, corsHeaders);
     }
 
-    if (!env.BREVO_API_KEY) {
+    let graphToken = null;
+
+    if (campaign.route === "graph") {
+        if (!graphIsConfigured(env)) {
+            return jsonResponse({
+                success: false,
+                message: "Microsoft 365 sending is not configured yet. Set MS_TENANT_ID, MS_CLIENT_ID and MS_CLIENT_SECRET."
+            }, 503, corsHeaders);
+        }
+
+        graphToken = await getGraphToken(env);
+
+        if (!graphToken) {
+            return jsonResponse({
+                success: false,
+                message: "Microsoft 365 refused the sign-in. Check the tenant, client id and secret."
+            }, 502, corsHeaders);
+        }
+    } else if (!env.BREVO_API_KEY) {
         console.error("BREVO_API_KEY is not configured.");
         return jsonResponse({ success: false, message: "The email service is not configured yet." }, 503, corsHeaders);
     }
@@ -907,10 +937,12 @@ async function handleBroadcast(request, env, corsHeaders) {
         return jsonResponse({ success: false, message: "No recipients were given." }, 400, corsHeaders);
     }
 
-    if (requested.length > BROADCAST_BATCH_LIMIT) {
+    const batchLimit = campaign.route === "graph" ? GRAPH_BATCH_LIMIT : BROADCAST_BATCH_LIMIT;
+
+    if (requested.length > batchLimit) {
         return jsonResponse({
             success: false,
-            message: `Send at most ${BROADCAST_BATCH_LIMIT} recipients per request.`
+            message: `Send at most ${batchLimit} recipients per request.`
         }, 400, corsHeaders);
     }
 
@@ -940,7 +972,9 @@ async function handleBroadcast(request, env, corsHeaders) {
             textContent: campaign.buildText(person.firstName)
         };
 
-        const sent = await sendEmail(env.BREVO_API_KEY, payload, await buildLimitKey("broadcast", body.campaign, email));
+        const sent = campaign.route === "graph"
+            ? await sendViaGraph(graphToken, campaign.sender.email, buildGraphMessage(campaign, person, person.firstName))
+            : await sendEmail(env.BREVO_API_KEY, payload, await buildLimitKey("broadcast", body.campaign, email));
 
         if (!sent.ok) {
             results.push({ email, status: "failed", reason: `Email provider returned ${sent.status}.` });
@@ -968,6 +1002,26 @@ async function sendBroadcastTest(env, campaign, corsHeaders) {
         return jsonResponse({ success: false, message: "This campaign has no test list." }, 400, corsHeaders);
     }
 
+    let graphToken = null;
+
+    if (campaign.route === "graph") {
+        if (!graphIsConfigured(env)) {
+            return jsonResponse({
+                success: false,
+                message: "Microsoft 365 sending is not configured yet. Set MS_TENANT_ID, MS_CLIENT_ID and MS_CLIENT_SECRET."
+            }, 503, corsHeaders);
+        }
+
+        graphToken = await getGraphToken(env);
+
+        if (!graphToken) {
+            return jsonResponse({
+                success: false,
+                message: "Microsoft 365 refused the sign-in. Check the tenant, client id and secret."
+            }, 502, corsHeaders);
+        }
+    }
+
     const results = [];
 
     for (const person of recipients) {
@@ -980,7 +1034,9 @@ async function sendBroadcastTest(env, campaign, corsHeaders) {
             textContent: campaign.buildText(firstNameOf(person.fullName))
         };
 
-        const sent = await sendEmail(env.BREVO_API_KEY, payload, crypto.randomUUID());
+        const sent = campaign.route === "graph"
+            ? await sendViaGraph(graphToken, campaign.sender.email, buildGraphMessage(campaign, person, firstNameOf(person.fullName)))
+            : await sendEmail(env.BREVO_API_KEY, payload, crypto.randomUUID());
 
         results.push(sent.ok
             ? { email: person.email, status: "sent" }
@@ -1444,4 +1500,94 @@ function buildTasterFocusedText(firstName) {
         "frank@dystil.ai",
         "www.dystil.ai"
     ].join("\n");
+}
+
+/* ---------------------------------------------------------------------------
+   Microsoft Graph
+   ---------------------------------------------------------------------------
+   Brevo staples a tracking pixel and a rewritten link onto everything it sends
+   and offers no way to stop it on transactional mail. Paired with copy that
+   markets a programme, that is enough for Gmail to file the email under
+   Promotions, which eleven sends across nine mailboxes have now shown. The same
+   copy sent by hand from the same tenant reached Primary, because none of those
+   bulk markers were on it.
+
+   So the branded email goes out through Microsoft 365 instead: real links, no
+   pixel, and the tenant's own reputation. Brevo still carries the enquiry
+   confirmations, which reach Primary already and have no reason to move.
+--------------------------------------------------------------------------- */
+
+const GRAPH_SEND_URL = "https://graph.microsoft.com/v1.0/users";
+const GRAPH_SCOPE = "https://graph.microsoft.com/.default";
+
+// Exchange Online throttles at roughly thirty messages a minute, so the batch
+// is smaller here than the Brevo one and the page works through more of them.
+const GRAPH_BATCH_LIMIT = 10;
+
+async function getGraphToken(env) {
+    const body = new URLSearchParams({
+        client_id: env.MS_CLIENT_ID,
+        client_secret: env.MS_CLIENT_SECRET,
+        scope: GRAPH_SCOPE,
+        grant_type: "client_credentials"
+    });
+
+    const response = await fetch(`https://login.microsoftonline.com/${env.MS_TENANT_ID}/oauth2/v2.0/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString()
+    });
+
+    if (!response.ok) {
+        const detail = await response.text();
+        console.error("Could not get a Graph token.", response.status, detail.slice(0, 300));
+        return null;
+    }
+
+    const token = await response.json();
+    return token.access_token || null;
+}
+
+async function sendViaGraph(token, sender, message) {
+    try {
+        const response = await fetch(`${GRAPH_SEND_URL}/${encodeURIComponent(sender)}/sendMail`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(message)
+        });
+
+        if (!response.ok) {
+            const detail = await response.text();
+            console.error("Graph refused the message.", response.status, detail.slice(0, 300));
+            return { ok: false, status: response.status };
+        }
+
+        return { ok: true, status: response.status };
+    } catch (error) {
+        console.error("Could not reach Graph.", error instanceof Error ? error.message : "Unknown error");
+        return { ok: false, status: 0 };
+    }
+}
+
+function buildGraphMessage(campaign, person, firstName) {
+    return {
+        message: {
+            subject: campaign.subject,
+            body: { contentType: "HTML", content: campaign.buildHtml(firstName) },
+            toRecipients: [{
+                emailAddress: { address: person.email, name: person.fullName }
+            }],
+            replyTo: [{
+                emailAddress: { address: campaign.replyTo.email, name: campaign.replyTo.name }
+            }]
+        },
+        saveToSentItems: true
+    };
+}
+
+function graphIsConfigured(env) {
+    return Boolean(env.MS_TENANT_ID && env.MS_CLIENT_ID && env.MS_CLIENT_SECRET);
 }
