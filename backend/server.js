@@ -730,7 +730,8 @@ const TASTER_TEST_TEAM = [
     { email: "b_ahmad@ee.iitr.ac.in", fullName: "Bilal Ahmad" },
     { email: "talha36292@gmail.com", fullName: "Talha" },
     { email: "mariyamafeefa1@gmail.com", fullName: "Mariyam" },
-    { email: "mailbox.makki@gmail.com", fullName: "Arsalan Makki" }
+    { email: "mailbox.makki@gmail.com", fullName: "Arsalan Makki" },
+    { email: "danishzia2016@gmail.com", fullName: "Danish" }
 ];
 
 const CAMPAIGNS = {
