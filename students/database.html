@@ -168,6 +168,30 @@
 
         .empty { padding: 40px; text-align: center; color: var(--light-text); font-size: 14px; }
 
+        /* ---------- LATE REGISTRATIONS ---------- */
+        .pending {
+            background: var(--dark);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 18px 20px;
+            margin-bottom: 20px;
+        }
+
+        .pending h2 { font-size: 15px; margin-bottom: 4px; }
+        .pending > p { font-size: 13px; color: var(--light-text); margin-bottom: 14px; }
+        .pending .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+        .pending button { padding: 10px 18px; font-size: 13px; background: #b4472f; }
+        .pending button:hover:enabled { background: #9c3c27; }
+        .pending button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .pending .note { font-size: 12.5px; color: var(--light-text); }
+        .pending .who { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+        .pending .who .person { font-size: 12.5px; color: #d6dceb; }
+        .pending .log {
+            margin-top: 14px; font-size: 12.5px; line-height: 1.7; max-height: 190px;
+            overflow-y: auto; color: var(--light-text); white-space: pre-wrap;
+        }
+
+
     </style>
 </head>
 <body>
@@ -197,6 +221,24 @@
         </div>
 
         <div class="counts" id="counts"></div>
+
+        <div class="pending" id="pending" hidden>
+            <h2>Joining email for new registrations</h2>
+            <p>
+                The 85 who registered up to <strong>DYS-TAS-26-0088</strong> were emailed by hand and are
+                recorded as done. Anyone who has registered since is listed here, and gets the same
+                joining email. Each address is sent once, so pressing this twice is safe.
+            </p>
+
+            <p class="who" id="pending-who"></p>
+
+            <div class="row">
+                <button id="pending-send" type="button">Send joining email</button>
+                <span class="note" id="pending-note"></span>
+            </div>
+
+            <div class="log" id="pending-log" hidden></div>
+        </div>
 
         <div class="tools">
             <input id="search" type="search" placeholder="Search name, email, reference or details">
@@ -279,6 +321,7 @@
                 lock.hidden = true;
                 board.hidden = false;
                 render();
+                pendingRefresh();
             } catch (error) {
                 lockError.textContent = error.message;
                 lockError.hidden = false;
@@ -314,6 +357,7 @@
             try {
                 all = await load(key);
                 render();
+                pendingRefresh();
             } catch (error) {
                 alert(error.message);
             } finally {
@@ -333,6 +377,11 @@
             meta.textContent = "";
             search.value = "";
             document.getElementById("key").value = "";
+            pendingPeople = [];
+            pendingWho.textContent = "";
+            pendingLog.textContent = "";
+            pendingLog.hidden = true;
+            pendingPanel.hidden = true;
             board.hidden = true;
             lock.hidden = false;
         });
@@ -538,6 +587,112 @@
             URL.revokeObjectURL(url);
         });
 
+
+        /* ---------- JOINING EMAIL FOR LATE REGISTRATIONS ---------- */
+        // Everyone up to DYS-TAS-26-0088 was emailed by hand and is written into
+        // broadcast_sends, so "who still needs it" is simply whoever the worker
+        // reports as remaining. Sends go one at a time with a gap between them,
+        // because the same email sent in a burst is sorted differently from the
+        // same email sent on its own.
+        const PENDING_API = "https://dystil-contact.dystil-ai.workers.dev/api/broadcast";
+        const PENDING_CAMPAIGN = "taster-2026-08-29-joining-link-confirmstyle";
+        const PENDING_PACE_MS = 8000;
+
+        const pendingPanel = document.getElementById("pending");
+        const pendingWho = document.getElementById("pending-who");
+        const pendingNote = document.getElementById("pending-note");
+        const pendingSend = document.getElementById("pending-send");
+        const pendingLog = document.getElementById("pending-log");
+
+        let pendingPeople = [];
+
+        async function pendingCall(payload) {
+            const response = await fetch(PENDING_API, {
+                method: "POST",
+                headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
+                body: JSON.stringify({ campaign: PENDING_CAMPAIGN, ...payload })
+            });
+
+            const body = await response.json().catch(function () { return {}; });
+
+            if (!response.ok || !body.success) throw new Error(body.message || "The request failed.");
+
+            return body;
+        }
+
+        async function pendingRefresh() {
+            pendingPanel.hidden = false;
+
+            try {
+                const roster = await pendingCall({ action: "list" });
+                const done = new Set(roster.alreadySent);
+                pendingPeople = (roster.recipients || []).filter(function (p) { return !done.has(p.email); });
+
+                if (!pendingPeople.length) {
+                    pendingWho.textContent = "Everyone who has registered has been sent the joining email.";
+                    pendingSend.disabled = true;
+                    pendingSend.textContent = "Nobody waiting";
+                    return;
+                }
+
+                pendingWho.innerHTML = "";
+                pendingPeople.forEach(function (person) {
+                    const line = document.createElement("span");
+                    line.className = "person";
+                    line.textContent = person.fullName + "  <" + person.email + ">  " + person.reference;
+                    pendingWho.appendChild(line);
+                });
+
+                pendingSend.disabled = false;
+                pendingSend.textContent = "Send joining email to " + pendingPeople.length;
+            } catch (error) {
+                pendingWho.textContent = "Could not check who is waiting: " + error.message;
+                pendingSend.disabled = true;
+            }
+        }
+
+        function pendingWrite(line) {
+            pendingLog.hidden = false;
+            pendingLog.textContent += line + "\n";
+            pendingLog.scrollTop = pendingLog.scrollHeight;
+        }
+
+        pendingSend.addEventListener("click", async function () {
+            if (!pendingPeople.length) return;
+
+            const names = pendingPeople.map(function (p) { return p.fullName + " <" + p.email + ">"; }).join("\n");
+            if (!confirm("Send the joining email to " + pendingPeople.length + "?\n\n" + names)) return;
+
+            pendingSend.disabled = true;
+            const waiting = pendingPeople.slice();
+            let sent = 0;
+
+            pendingWrite("Sending to " + waiting.length + ", one at a time…");
+
+            try {
+                for (let i = 0; i < waiting.length; i++) {
+                    if (i > 0) {
+                        await new Promise(function (done) { window.setTimeout(done, PENDING_PACE_MS); });
+                    }
+
+                    pendingSend.textContent = "Sending " + (i + 1) + " of " + waiting.length + "…";
+
+                    const body = await pendingCall({ action: "send", emails: [waiting[i].email] });
+
+                    body.results.forEach(function (r) {
+                        pendingWrite(r.email + ": " + (r.status === "sent" ? "sent" : r.status + " — " + r.reason));
+                        if (r.status === "sent") sent++;
+                    });
+                }
+
+                pendingWrite("Finished. " + sent + " sent.");
+            } catch (error) {
+                pendingWrite("Stopped: " + error.message);
+                pendingWrite("Anyone already sent is recorded — press again to carry on from where it stopped.");
+            } finally {
+                await pendingRefresh();
+            }
+        });
     </script>
 
 </body>
