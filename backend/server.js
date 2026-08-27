@@ -2008,22 +2008,16 @@ async function readSendingQuota(env, corsHeaders) {
         }, 502, corsHeaders);
     }
 
-    // Brevo describes a plan as a list of entries, and only one of them carries
-    // a send limit. Which key holds it has moved around over the years, so the
-    // whole plan is passed back rather than trusting one name for it.
     const plans = (account.ok && Array.isArray(account.body.plan)) ? account.body.plan : [];
-    const sendLimit = plans.find((p) => p.creditsType === "sendLimit" || typeof p.credits === "number");
-
-    const sentToday = stats.ok ? (stats.body.requests ?? null) : null;
-    const allowance = sendLimit ? (sendLimit.credits ?? null) : null;
+    const sending = plans.find((p) => p.creditsType === "sendLimit")
+        || plans.find((p) => typeof p.credits === "number");
 
     return jsonResponse({
         success: true,
         date: today,
-        sentToday,
-        allowance,
-        remaining: (allowance !== null && sentToday !== null) ? Math.max(0, allowance - sentToday) : null,
-        planType: sendLimit ? (sendLimit.type || null) : null,
+        sentToday: stats.ok ? (stats.body.requests ?? null) : null,
+        remaining: sending && typeof sending.credits === "number" ? sending.credits : null,
+        planType: sending ? (sending.type || null) : null,
         plan: plans,
         statsError: stats.ok ? null : `${stats.status} ${stats.detail || ""}`.trim(),
         accountError: account.ok ? null : `${account.status} ${account.detail || ""}`.trim()

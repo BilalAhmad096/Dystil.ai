@@ -954,23 +954,37 @@
 
         // Brevo counts test sends too, and those are deliberately not recorded
         // here, so the ledger cannot tell you what is left of the day. Brevo can.
+        // Its two figures mean different things — one is what has gone, the
+        // other is what is left — so they are shown, not subtracted.
         async function quotaRefresh() {
             const box = document.getElementById("quota");
 
             try {
                 const q = await reminderCall(TESTABLE[0].campaign, { action: "quota" });
+                const parts = [];
 
-                if (q.remaining === null) {
-                    box.textContent = q.sentToday === null
-                        ? "Could not read today's sending figures from Brevo."
-                        : q.sentToday + " sent today. Brevo did not report a daily limit, which usually means the plan has none.";
-                    return;
+                if (q.sentToday !== null) parts.push("<strong>" + q.sentToday + "</strong> sent today");
+
+                if (q.remaining !== null) {
+                    parts.push("Brevo reports <strong>" + q.remaining + "</strong> left"
+                        + (q.planType ? " on the " + q.planType + " plan" : ""));
+                    box.className = "quota" + (q.remaining < 88 ? " spent" : (q.remaining < 150 ? " tight" : ""));
+                } else {
+                    parts.push("Brevo did not report a remaining figure");
+                    box.className = "quota";
                 }
 
-                box.className = "quota" + (q.remaining === 0 ? " spent" : (q.remaining < 120 ? " tight" : ""));
-                box.innerHTML = "Today: <strong>" + q.sentToday + "</strong> of <strong>" + q.allowance
-                    + "</strong> sent, <strong>" + q.remaining + "</strong> left"
-                    + (q.remaining < 90 ? " — not enough for a full run of 88." : ".");
+                if (q.remaining !== null && q.remaining < 88) {
+                    parts.push("not enough for a full run of 88");
+                }
+
+                box.innerHTML = parts.join(" · ");
+
+                if (q.statsError || q.accountError) {
+                    box.innerHTML += "<br><span style=\"font-size:11.5px;\">"
+                        + (q.statsError ? "stats: " + q.statsError + " " : "")
+                        + (q.accountError ? "account: " + q.accountError : "") + "</span>";
+                }
             } catch (error) {
                 box.textContent = "Could not check the sending allowance: " + error.message;
             }
