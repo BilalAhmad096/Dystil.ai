@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Internal submissions viewer, not for search engines
+Disallow: /students/database
+Disallow: /students/database.html
+
+Sitemap: https://dystil.ai/sitemap.xml
