@@ -220,6 +220,7 @@
         .reminder-status { font-size: 12.5px; color: var(--light-text); }
         .reminders .quota { font-size: 13px; margin-bottom: 12px; color: var(--light-text); }
         .reminders .quota strong { color: var(--white); }
+        .reminders .quota .aside { color: var(--light-text); }
         .reminders .quota.tight strong { color: #f8c98a; }
         .reminders .quota.spent strong { color: #ffb4a8; }
         .reminders .log {
@@ -963,10 +964,10 @@
                 const q = await reminderCall(TESTABLE[0].campaign, { action: "quota" });
                 const parts = [];
 
-                if (q.sentToday !== null) parts.push("<strong>" + q.sentToday + "</strong> sent today");
+                if (q.sentToday !== null) parts.push("<strong>" + q.sentToday + "</strong> emails sent today");
 
                 if (q.remaining !== null) {
-                    parts.push("Brevo reports <strong>" + q.remaining + "</strong> left"
+                    parts.push("Brevo reports <strong>" + q.remaining + "</strong> emails left"
                         + (q.planType ? " on the " + q.planType + " plan" : ""));
                     box.className = "quota" + (q.remaining < 88 ? " spent" : (q.remaining < 150 ? " tight" : ""));
                 } else {
@@ -978,7 +979,8 @@
                     parts.push("not enough for a full run of 88");
                 }
 
-                box.innerHTML = parts.join(" · ");
+                box.innerHTML = parts.join(" · ")
+                    + ". <span class=\"aside\">Note: each registration costs 2 emails.</span>";
 
                 if (q.statsError || q.accountError) {
                     box.innerHTML += "<br><span style=\"font-size:11.5px;\">"
