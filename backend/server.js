@@ -799,16 +799,28 @@ const CAMPAIGNS = {
         replyTo: { email: "frank@dystil.ai", name: "Frank M" },
         testRecipients: TASTER_TEST_TEAM
     },
-    "taster-2026-08-29-calendar-invite": {
+    "taster-2026-08-29-calendar-invite-frank": {
+        formType: "Free Taster Registration",
+        subject: "Calendar invitation | Dystil Free Taster Session, Saturday 29 August",
+        buildHtml: buildInviteHtml,
+        buildText: buildInviteText,
+        sender: { email: "frank@dystil.ai", name: "Frank M" },
+        replyTo: { email: "frank@dystil.ai", name: "Frank M" },
+        // Built per recipient, because the invitation names its attendee.
+        attachInvite: true,
+        dedupeKey: "taster-2026-08-29-calendar-invite",
+        testRecipients: TASTER_TEST_TEAM
+    },
+    "taster-2026-08-29-calendar-invite-askus": {
         formType: "Free Taster Registration",
         subject: "Calendar invitation | Dystil Free Taster Session, Saturday 29 August",
         buildHtml: buildInviteHtml,
         buildText: buildInviteText,
         sender: { email: "askus@dystil.ai", name: "Dystil" },
         replyTo: { email: "askus@dystil.ai", name: "Dystil" },
-        // The invitation names the person it is for, so it is built per
-        // recipient rather than once for the whole run.
+        // Built per recipient, because the invitation names its attendee.
         attachInvite: true,
+        dedupeKey: "taster-2026-08-29-calendar-invite",
         testRecipients: TASTER_TEST_TEAM
     },
     "taster-2026-08-29-joining-link-confirmstyle": {
