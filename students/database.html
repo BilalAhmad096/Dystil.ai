@@ -218,6 +218,10 @@
         .reminders button:hover:enabled { background: var(--primary-dark); }
         .reminders button:disabled { opacity: 0.45; cursor: not-allowed; }
         .reminder-status { font-size: 12.5px; color: var(--light-text); }
+        .reminders .quota { font-size: 13px; margin-bottom: 12px; color: var(--light-text); }
+        .reminders .quota strong { color: var(--white); }
+        .reminders .quota.tight strong { color: #f8c98a; }
+        .reminders .quota.spent strong { color: #ffb4a8; }
         .reminders .log {
             margin-top: 14px; font-size: 12.5px; line-height: 1.7; max-height: 190px;
             overflow-y: auto; color: var(--light-text); white-space: pre-wrap;
@@ -301,6 +305,8 @@
                 record, so sending “2 days to go” from Frank means the Dystil button skips those people
                 rather than mailing them again. Sends go one at a time, so allow around twelve minutes.
             </p>
+
+            <p class="quota" id="quota">Checking today's sending allowance…</p>
 
             <div id="reminder-rows"></div>
 
@@ -946,8 +952,33 @@
             });
         }
 
+        // Brevo counts test sends too, and those are deliberately not recorded
+        // here, so the ledger cannot tell you what is left of the day. Brevo can.
+        async function quotaRefresh() {
+            const box = document.getElementById("quota");
+
+            try {
+                const q = await reminderCall(TESTABLE[0].campaign, { action: "quota" });
+
+                if (q.remaining === null) {
+                    box.textContent = q.sentToday === null
+                        ? "Could not read today's sending figures from Brevo."
+                        : q.sentToday + " sent today. Brevo did not report a daily limit, which usually means the plan has none.";
+                    return;
+                }
+
+                box.className = "quota" + (q.remaining === 0 ? " spent" : (q.remaining < 120 ? " tight" : ""));
+                box.innerHTML = "Today: <strong>" + q.sentToday + "</strong> of <strong>" + q.allowance
+                    + "</strong> sent, <strong>" + q.remaining + "</strong> left"
+                    + (q.remaining < 90 ? " — not enough for a full run of 88." : ".");
+            } catch (error) {
+                box.textContent = "Could not check the sending allowance: " + error.message;
+            }
+        }
+
         async function reminderRefresh() {
             remindersPanel.hidden = false;
+            quotaRefresh();
 
             if (!reminderRows.children.length) reminderBuildRows();
 

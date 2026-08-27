@@ -961,6 +961,10 @@ async function handleBroadcast(request, env, corsHeaders) {
         return jsonResponse({ success: false, message: "Could not read the request." }, 400, corsHeaders);
     }
 
+    if (body.action === "quota") {
+        return readSendingQuota(env, corsHeaders);
+    }
+
     const campaign = CAMPAIGNS[body.campaign];
     if (!campaign) {
         return jsonResponse({ success: false, message: "Unknown campaign." }, 400, corsHeaders);
@@ -1954,4 +1958,74 @@ function buildInviteText(firstName) {
         "Kind regards,",
         "The Dystil Team"
     ].join("\n");
+}
+
+/* ---------------------------------------------------------------------------
+   Sending quota
+   ---------------------------------------------------------------------------
+   Brevo counts every message it accepts, including the test sends this page
+   deliberately does not record, so the ledger cannot answer how much of the
+   day's allowance is left. Brevo can, and the key it needs is already here.
+   Read-only: it asks how many have gone and what the plan allows.
+--------------------------------------------------------------------------- */
+
+const BREVO_ACCOUNT_URL = "https://api.brevo.com/v3/account";
+const BREVO_STATS_URL = "https://api.brevo.com/v3/smtp/statistics/aggregatedReport";
+
+async function brevoGet(apiKey, url) {
+    try {
+        const response = await fetch(url, {
+            headers: { "accept": "application/json", "api-key": apiKey }
+        });
+
+        if (!response.ok) {
+            const detail = await response.text();
+            return { ok: false, status: response.status, detail: detail.slice(0, 200) };
+        }
+
+        return { ok: true, body: await response.json() };
+    } catch (error) {
+        return { ok: false, status: 0, detail: error instanceof Error ? error.message : "Unknown error" };
+    }
+}
+
+async function readSendingQuota(env, corsHeaders) {
+    if (!env.BREVO_API_KEY) {
+        return jsonResponse({ success: false, message: "No email key is configured." }, 503, corsHeaders);
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    const [account, stats] = await Promise.all([
+        brevoGet(env.BREVO_API_KEY, BREVO_ACCOUNT_URL),
+        brevoGet(env.BREVO_API_KEY, `${BREVO_STATS_URL}?startDate=${today}&endDate=${today}`)
+    ]);
+
+    if (!account.ok && !stats.ok) {
+        return jsonResponse({
+            success: false,
+            message: `Brevo did not answer (${account.status}). ${account.detail || ""}`.trim()
+        }, 502, corsHeaders);
+    }
+
+    // Brevo describes a plan as a list of entries, and only one of them carries
+    // a send limit. Which key holds it has moved around over the years, so the
+    // whole plan is passed back rather than trusting one name for it.
+    const plans = (account.ok && Array.isArray(account.body.plan)) ? account.body.plan : [];
+    const sendLimit = plans.find((p) => p.creditsType === "sendLimit" || typeof p.credits === "number");
+
+    const sentToday = stats.ok ? (stats.body.requests ?? null) : null;
+    const allowance = sendLimit ? (sendLimit.credits ?? null) : null;
+
+    return jsonResponse({
+        success: true,
+        date: today,
+        sentToday,
+        allowance,
+        remaining: (allowance !== null && sentToday !== null) ? Math.max(0, allowance - sentToday) : null,
+        planType: sendLimit ? (sendLimit.type || null) : null,
+        plan: plans,
+        statsError: stats.ok ? null : `${stats.status} ${stats.detail || ""}`.trim(),
+        accountError: account.ok ? null : `${account.status} ${account.detail || ""}`.trim()
+    }, 200, corsHeaders);
 }
