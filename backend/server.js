@@ -759,6 +759,8 @@ const TASTER_SENDERS = {
 };
 
 const TASTER_TEST_TEAM = [
+    { email: "fayazkhadir78@gmail.com", fullName: "Fayyaz Khadir" },
+    { email: "aman.kaleeur@gmail.com", fullName: "Aman Kaleeur" },
     { email: "makki.arsalan07@gmail.com", fullName: "Arsalan Makki" },
     { email: "mailboxforbilal@gmail.com", fullName: "Bilal Ahmad" },
     // No dystil.ai mail has ever reached this address, so it shows how Gmail
