@@ -12,7 +12,9 @@ database_id = "4a352612-0ed3-4187-a0c5-14eae4e8ac34"
 [vars]
 ALLOWED_ORIGINS = "https://dystil.ai,https://www.dystil.ai"
 ADMIN_EMAIL = "askus@dystil.ai"
-# The Web Analytics site, same value the beacon in script.js already sends.
+# The Web Analytics site tag, which the GraphQL API filters on. This is NOT
+# the beacon token in script.js: that is the site token, a different value on
+# the same site. The tag is the one in the dashboard URL for the site.
 # The account ID and the API token are secrets, set with "wrangler secret put".
-CF_SITE_TAG = "9cea9d84df65490881d2fc85d295ee0e"
+CF_SITE_TAG = "eb62686eee01437ebd7b843ea889a796"
 FROM_EMAIL = "askus@dystil.ai"
