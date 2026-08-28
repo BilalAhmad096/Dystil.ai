@@ -925,3 +925,138 @@ test("never sends the analytics token back to the browser", async function() {
         assert.equal(calls[0].options.headers.Authorization, "Bearer secret-analytics-token");
     });
 });
+
+
+// ---------- FINDING THE RIGHT SITE TAG ----------
+
+// The beacon publishes the site token while the GraphQL API filters on the site
+// tag. They are different values, and the wrong one returns an empty window
+// rather than an error, so these cover the recovery.
+
+const emptyWindow = {
+    data: { viewer: { accounts: [{ totals: [], daily: [], referrers: [], pages: [], countries: [] }] } }
+};
+
+const filledWindow = {
+    data: {
+        viewer: {
+            accounts: [{
+                totals: [group({}, 240, 160)],
+                daily: [group({ date: "2026-08-28" }, 240, 160)],
+                referrers: [group({ refererHost: "l.instagram.com" }, 90, 60)],
+                pages: [group({ requestPath: "/students/taster" }, 120, 80)],
+                countries: [group({ countryName: "United Kingdom" }, 200, 140)]
+            }]
+        }
+    }
+};
+
+// Answers the GraphQL endpoint per site tag, and the site list endpoint
+// separately, so a test can say which tag actually holds the data.
+async function withMockedCloudflare({ byTag, sites, sitesStatus = 200 }, callback) {
+    const originalFetch = globalThis.fetch;
+    const calls = [];
+
+    globalThis.fetch = async function(url, options) {
+        const target = String(url);
+
+        if (target.includes("/rum/site_info/list")) {
+            calls.push({ kind: "sites", url: target });
+
+            return Response.json(
+                sitesStatus === 200 ? { success: true, result: sites || [] } : { success: false, errors: [] },
+                { status: sitesStatus }
+            );
+        }
+
+        const asked = JSON.parse(options.body).variables.siteTag;
+        calls.push({ kind: "graphql", siteTag: asked });
+
+        return Response.json(byTag[asked] || emptyWindow, { status: 200 });
+    };
+
+    try {
+        await callback(calls);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+}
+
+test("finds the real site tag when the beacon token returns nothing", async function() {
+    await withMockedCloudflare({
+        byTag: { "real-site-tag": filledWindow },
+        sites: [
+            { site_tag: "someone-elses-tag", site_token: "another-token" },
+            { site_tag: "real-site-tag", site_token: "9cea9d84df65490881d2fc85d295ee0e" }
+        ]
+    }, async function(calls) {
+        const response = await worker.fetch(makeAnalyticsRequest("correct horse battery"), analyticsEnv);
+        const result = await response.json();
+
+        assert.equal(response.status, 200);
+        assert.equal(result.success, true);
+        assert.equal(result.siteTag, "real-site-tag");
+        assert.equal(result.totals.views, 240);
+        assert.equal(result.referrers[0].channel, "Instagram");
+
+        // Configured tag first, then the list, then the tag that works.
+        assert.deepEqual(calls.map((call) => call.kind), ["graphql", "sites", "graphql"]);
+    });
+});
+
+test("uses the only site there is when no token matches", async function() {
+    await withMockedCloudflare({
+        byTag: { "the-only-tag": filledWindow },
+        sites: [{ site_tag: "the-only-tag", site_token: "some-other-token" }]
+    }, async function() {
+        const response = await worker.fetch(makeAnalyticsRequest("correct horse battery"), analyticsEnv);
+        const result = await response.json();
+
+        assert.equal(result.siteTag, "the-only-tag");
+        assert.equal(result.totals.visits, 160);
+    });
+});
+
+// A token scoped only to analytics may not be allowed to list sites. That is a
+// reason to show an empty week, never a reason to fail.
+test("still answers when the site list is refused", async function() {
+    await withMockedCloudflare({ byTag: {}, sites: [], sitesStatus: 403 }, async function() {
+        const response = await worker.fetch(makeAnalyticsRequest("correct horse battery"), analyticsEnv);
+        const result = await response.json();
+
+        assert.equal(response.status, 200);
+        assert.equal(result.success, true);
+        assert.equal(result.totals.views, 0);
+        assert.equal(result.siteTag, "9cea9d84df65490881d2fc85d295ee0e");
+    });
+});
+
+test("keeps the empty result when no other tag has data either", async function() {
+    await withMockedCloudflare({
+        byTag: {},
+        sites: [{ site_tag: "also-empty", site_token: "9cea9d84df65490881d2fc85d295ee0e" }]
+    }, async function() {
+        const response = await worker.fetch(makeAnalyticsRequest("correct horse battery"), analyticsEnv);
+        const result = await response.json();
+
+        assert.equal(result.success, true);
+        assert.equal(result.totals.views, 0);
+        assert.equal(result.siteTag, "9cea9d84df65490881d2fc85d295ee0e");
+    });
+});
+
+// A genuinely quiet week is the normal case; it must not cost a lookup every
+// time somebody opens the page.
+test("does not go looking when the configured tag already has data", async function() {
+    await withMockedCloudflare({
+        byTag: { "9cea9d84df65490881d2fc85d295ee0e": filledWindow },
+        sites: []
+    }, async function(calls) {
+        const response = await worker.fetch(makeAnalyticsRequest("correct horse battery"), analyticsEnv);
+        const result = await response.json();
+
+        assert.equal(result.siteTag, "9cea9d84df65490881d2fc85d295ee0e");
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].kind, "graphql");
+    });
+});

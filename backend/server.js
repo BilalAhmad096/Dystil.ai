@@ -25,6 +25,7 @@ const FORM_CODES = {
 // and a tagged link is then the only thing that still says where someone came
 // from. Matching is on a fragment, so l.instagram.com counts as Instagram.
 const ANALYTICS_API = "https://api.cloudflare.com/client/v4/graphql";
+const RUM_SITES_API = "https://api.cloudflare.com/client/v4/accounts/%s/rum/site_info/list";
 const ANALYTICS_DEFAULT_DAYS = 30;
 const ANALYTICS_MAX_DAYS = 90;
 const ANALYTICS_TOP_LIMIT = 12;
@@ -557,59 +558,34 @@ async function siteVisitors(request, env, corsHeaders) {
     const end = new Date();
     const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
 
-    let payload;
+    let siteTag = env.CF_SITE_TAG;
+    let attempt = await askForVisitors(env, siteTag, start, end);
 
-    try {
-        const response = await fetch(ANALYTICS_API, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${env.CF_ANALYTICS_TOKEN}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                query: VISITORS_QUERY,
-                variables: {
-                    accountTag: env.CF_ACCOUNT_ID,
-                    siteTag: env.CF_SITE_TAG,
-                    start: start.toISOString(),
-                    end: end.toISOString(),
-                    top: ANALYTICS_TOP_LIMIT
-                }
-            })
-        });
+    if (attempt.failure) return jsonResponse(attempt.failure.body, attempt.failure.status, corsHeaders);
 
-        payload = await response.json();
+    // A site tag that matches nothing comes back empty rather than as an error,
+    // which is indistinguishable from a quiet week. The beacon carries the site
+    // token, and the API filters on the site tag, so when the window is empty
+    // the account's sites are listed and the tag beside our token is tried.
+    if (isEmpty(attempt.account)) {
+        const resolved = await resolveSiteTag(env, siteTag);
 
-        if (!response.ok) throw new Error(`Cloudflare answered ${response.status}.`);
-    } catch (error) {
-        console.error("Could not reach the analytics API.", error instanceof Error ? error.message : "Unknown error");
+        if (resolved.siteTag && resolved.siteTag !== siteTag) {
+            const second = await askForVisitors(env, resolved.siteTag, start, end);
 
-        return jsonResponse({ success: false, message: "Could not reach the analytics service." }, 502, corsHeaders);
+            if (!second.failure && !isEmpty(second.account)) {
+                console.log("Recovered the visitor figures with site tag", resolved.siteTag);
+                siteTag = resolved.siteTag;
+                attempt = second;
+            }
+        }
     }
 
-    // GraphQL reports a rejected token or a misnamed field with a 200 and an
-    // errors array, so the message is passed through rather than swallowed.
-    // Only the password holder sees it, and it is what makes setup fixable.
-    if (payload.errors && payload.errors.length) {
-        const detail = payload.errors[0].message || "The query was rejected.";
-        console.error("The analytics query was rejected.", detail);
-
-        return jsonResponse({ success: false, message: `Cloudflare rejected the query: ${detail}` }, 502, corsHeaders);
-    }
-
-    const account = payload.data && payload.data.viewer && payload.data.viewer.accounts
-        ? payload.data.viewer.accounts[0]
-        : null;
-
-    if (!account) {
-        return jsonResponse({
-            success: false,
-            message: "Cloudflare returned no account. Check the account ID and that the token can read it."
-        }, 502, corsHeaders);
-    }
+    const account = attempt.account;
 
     return jsonResponse({
         success: true,
+        siteTag,
         range: { days, start: start.toISOString(), end: end.toISOString() },
         totals: totalsFrom(account.totals),
         daily: (account.daily || []).map(function (group) {
@@ -623,6 +599,109 @@ async function siteVisitors(request, env, corsHeaders) {
             return { country: group.dimensions.countryName || "Unknown", ...countsFrom(group) };
         })
     }, 200, corsHeaders);
+}
+
+// Runs the visitor query for one site tag. Failures come back as a ready-made
+// response body rather than thrown, so the caller can try a second tag without
+// unwinding anything.
+async function askForVisitors(env, siteTag, start, end) {
+    let payload;
+
+    try {
+        const response = await fetch(ANALYTICS_API, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${env.CF_ANALYTICS_TOKEN}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                query: VISITORS_QUERY,
+                variables: {
+                    accountTag: env.CF_ACCOUNT_ID,
+                    siteTag: siteTag,
+                    start: start.toISOString(),
+                    end: end.toISOString(),
+                    top: ANALYTICS_TOP_LIMIT
+                }
+            })
+        });
+
+        payload = await response.json();
+
+        if (!response.ok) throw new Error(`Cloudflare answered ${response.status}.`);
+    } catch (error) {
+        console.error("Could not reach the analytics API.", error instanceof Error ? error.message : "Unknown error");
+
+        return { failure: { status: 502, body: { success: false, message: "Could not reach the analytics service." } } };
+    }
+
+    // GraphQL reports a rejected token or a misnamed field with a 200 and an
+    // errors array, so the message is passed through rather than swallowed.
+    // Only the password holder sees it, and it is what makes setup fixable.
+    if (payload.errors && payload.errors.length) {
+        const detail = payload.errors[0].message || "The query was rejected.";
+        console.error("The analytics query was rejected.", detail);
+
+        return { failure: { status: 502, body: { success: false, message: `Cloudflare rejected the query: ${detail}` } } };
+    }
+
+    const account = payload.data && payload.data.viewer && payload.data.viewer.accounts
+        ? payload.data.viewer.accounts[0]
+        : null;
+
+    if (!account) {
+        return {
+            failure: {
+                status: 502,
+                body: {
+                    success: false,
+                    message: "Cloudflare returned no account. Check the account ID and that the token can read it."
+                }
+            }
+        };
+    }
+
+    return { account };
+}
+
+function isEmpty(account) {
+    const totals = totalsFrom(account.totals);
+
+    return totals.views === 0 && totals.visits === 0;
+}
+
+// Finds the site tag that belongs to the beacon token we already publish. The
+// list endpoint may be refused by a token scoped only to analytics, which is
+// not worth failing over: the configured tag simply stands.
+async function resolveSiteTag(env, currentTag) {
+    try {
+        const response = await fetch(RUM_SITES_API.replace("%s", env.CF_ACCOUNT_ID), {
+            headers: { "Authorization": `Bearer ${env.CF_ANALYTICS_TOKEN}` }
+        });
+
+        if (!response.ok) {
+            console.error("Could not list the Web Analytics sites.", response.status);
+
+            return {};
+        }
+
+        const body = await response.json();
+        const sites = Array.isArray(body.result) ? body.result : [];
+
+        // The beacon publishes the site token, so the site carrying it is ours.
+        const byToken = sites.find(function (site) { return site.site_token === currentTag; });
+
+        if (byToken && byToken.site_tag) return { siteTag: byToken.site_tag };
+
+        // Falling back to the only site there is beats showing nothing.
+        if (sites.length === 1 && sites[0].site_tag) return { siteTag: sites[0].site_tag };
+
+        return {};
+    } catch (error) {
+        console.error("Could not list the Web Analytics sites.", error instanceof Error ? error.message : "Unknown error");
+
+        return {};
+    }
 }
 
 // Adaptive sampling means one recorded event can stand for several real ones,
