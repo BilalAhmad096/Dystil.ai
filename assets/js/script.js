@@ -10,6 +10,21 @@
     window.history.replaceState(null, "", cleanPath + window.location.search + window.location.hash);
 })();
 
+/* Cloudflare Web Analytics — cookieless page counts, live domain only */
+(function loadWebAnalytics() {
+    const host = window.location.hostname;
+
+    if (host !== "dystil.ai" && host !== "www.dystil.ai") return;
+
+    const beacon = document.createElement("script");
+
+    beacon.type = "module";
+    beacon.src = "https://static.cloudflareinsights.com/beacon.min.js";
+    beacon.setAttribute("data-cf-beacon", '{"token": "9cea9d84df65490881d2fc85d295ee0e"}');
+
+    document.head.appendChild(beacon);
+})();
+
 function loadComponent(id, file) {
     const element = document.getElementById(id);
 
