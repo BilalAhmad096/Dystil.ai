@@ -1,7 +1,7 @@
 # Local Cloudflare files and secrets
 backend/.dev.vars
 backend/.env
-backend/.wrangler/
+.wrangler/
 
 # Dependencies are installed during development/deployment
 backend/node_modules/
