@@ -20,6 +20,76 @@ const FORM_CODES = {
     "Free Taster Registration": "TAS"
 };
 
+// A referring host or a ?ref= tag is turned into a channel name. The tag wins,
+// because the in-app browsers on Instagram and TikTok routinely strip referrers
+// and a tagged link is then the only thing that still says where someone came
+// from. Matching is on a fragment, so l.instagram.com counts as Instagram.
+const ANALYTICS_API = "https://api.cloudflare.com/client/v4/graphql";
+const ANALYTICS_DEFAULT_DAYS = 30;
+const ANALYTICS_MAX_DAYS = 90;
+const ANALYTICS_TOP_LIMIT = 12;
+
+// One round trip for every panel on the submissions page. Cloudflare samples
+// busy sites, so each group also carries the interval it was sampled at and the
+// counts are scaled back up before anybody reads them.
+const VISITORS_QUERY = `
+query Visitors($accountTag: string!, $siteTag: string!, $start: Time!, $end: Time!, $top: Int!) {
+    viewer {
+        accounts(filter: { accountTag: $accountTag }) {
+            totals: rumPageloadEventsAdaptiveGroups(
+                filter: { siteTag: $siteTag, datetime_geq: $start, datetime_leq: $end }
+                limit: 1
+            ) { count sum { visits } avg { sampleInterval } }
+
+            daily: rumPageloadEventsAdaptiveGroups(
+                filter: { siteTag: $siteTag, datetime_geq: $start, datetime_leq: $end }
+                limit: 100
+                orderBy: [date_ASC]
+            ) { count sum { visits } avg { sampleInterval } dimensions { date } }
+
+            referrers: rumPageloadEventsAdaptiveGroups(
+                filter: { siteTag: $siteTag, datetime_geq: $start, datetime_leq: $end }
+                limit: $top
+                orderBy: [count_DESC]
+            ) { count sum { visits } avg { sampleInterval } dimensions { refererHost } }
+
+            pages: rumPageloadEventsAdaptiveGroups(
+                filter: { siteTag: $siteTag, datetime_geq: $start, datetime_leq: $end }
+                limit: $top
+                orderBy: [count_DESC]
+            ) { count sum { visits } avg { sampleInterval } dimensions { requestPath } }
+
+            countries: rumPageloadEventsAdaptiveGroups(
+                filter: { siteTag: $siteTag, datetime_geq: $start, datetime_leq: $end }
+                limit: $top
+                orderBy: [count_DESC]
+            ) { count sum { visits } avg { sampleInterval } dimensions { countryName } }
+        }
+    }
+}`;
+
+const SOURCE_LABELS = [
+    ["instagram", "Instagram"],
+    ["ig.me", "Instagram"],
+    ["tiktok", "TikTok"],
+    ["facebook", "Facebook"],
+    ["fb.com", "Facebook"],
+    ["fb.me", "Facebook"],
+    ["linkedin", "LinkedIn"],
+    ["lnkd.in", "LinkedIn"],
+    ["youtube", "YouTube"],
+    ["youtu.be", "YouTube"],
+    ["google", "Google"],
+    ["bing", "Bing"],
+    ["duckduckgo", "DuckDuckGo"],
+    ["yahoo", "Yahoo"],
+    ["twitter", "X"],
+    ["x.com", "X"],
+    ["t.co", "X"],
+    ["whatsapp", "WhatsApp"],
+    ["reddit", "Reddit"]
+];
+
 const NEXT_REFERENCE_SQL = `
     INSERT INTO reference_counters (form_type, year, next_number) VALUES (?, ?, 1)
     ON CONFLICT (form_type, year) DO UPDATE SET next_number = next_number + 1
@@ -27,13 +97,15 @@ const NEXT_REFERENCE_SQL = `
 
 const SAVE_SUBMISSION_SQL = `
     INSERT INTO submissions
-        (reference, form_type, full_name, email, details, cv_filename, submitted_at, delivery_status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`;
+        (reference, form_type, full_name, email, details, cv_filename, submitted_at, delivery_status,
+         source_channel, source_detail, source_landing)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`;
 
 const MARK_DELIVERY_SQL = "UPDATE submissions SET delivery_status = ? WHERE reference = ?";
 
 const LIST_SUBMISSIONS_SQL = `
-    SELECT reference, form_type, full_name, email, details, cv_filename, submitted_at, delivery_status
+    SELECT reference, form_type, full_name, email, details, cv_filename, submitted_at, delivery_status,
+           source_channel, source_detail, source_landing
     FROM submissions
     ORDER BY submitted_at DESC
     LIMIT ?`;
@@ -122,6 +194,14 @@ export default {
             return listSubmissions(request, env, corsHeaders);
         }
 
+        if (request.method === "POST" && url.pathname === "/api/analytics") {
+            if (!allowedOrigins.has(origin)) {
+                return jsonResponse({ success: false, message: "Origin not allowed." }, 403);
+            }
+
+            return siteVisitors(request, env, corsHeaders);
+        }
+
         if (request.method === "POST" && url.pathname === "/api/broadcast") {
             if (!allowedOrigins.has(origin)) {
                 return jsonResponse({ success: false, message: "Origin not allowed." }, 403);
@@ -195,6 +275,7 @@ export default {
             return respond({ success: false, message: rateLimit.message }, 429);
         }
 
+        const source = describeSource(formData.get("sourceFirst"), formData.get("sourceVisit"));
         const fromEmail = env.FROM_EMAIL || "askus@dystil.ai";
         const adminEmail = env.ADMIN_EMAIL || "askus@dystil.ai";
         const submittedAt = new Date().toLocaleString("en-GB", {
@@ -209,7 +290,7 @@ export default {
         let reference;
         try {
             reference = await allocateReference(env.DB, formType);
-            await saveSubmission(env.DB, reference, formType, values, cvResult.attachment, submittedAt);
+            await saveSubmission(env.DB, reference, formType, values, cvResult.attachment, submittedAt, source);
         } catch (error) {
             console.error("Could not record the submission.", error instanceof Error ? error.message : "Unknown error");
 
@@ -442,13 +523,155 @@ async function checkRateLimit(request, formType, email) {
     };
 }
 
-// Reads the submissions for the unlisted /students/database page. The password
-// travels in a header rather than the URL so it never reaches a browser history,
-// a referrer, or an access log.
-async function listSubmissions(request, env, corsHeaders) {
+// Reads the visitor figures for the submissions page. The API token must never
+// reach a browser, so the Worker holds it and the page asks the Worker.
+async function siteVisitors(request, env, corsHeaders) {
+    const refusal = await refuseUnlessAdmin(request, env, corsHeaders, "Visitor figures are not configured yet.");
+
+    if (refusal) return refusal;
+
+    const missing = ["CF_ACCOUNT_ID", "CF_ANALYTICS_TOKEN", "CF_SITE_TAG"].filter(function (name) {
+        return !env[name];
+    });
+
+    if (missing.length) {
+        console.error("Visitor figures are missing configuration.", missing.join(", "));
+
+        return jsonResponse({
+            success: false,
+            message: `Visitor figures are not set up yet. Still to configure: ${missing.join(", ")}.`
+        }, 503, corsHeaders);
+    }
+
+    let requested = ANALYTICS_DEFAULT_DAYS;
+
+    try {
+        const body = await request.json();
+
+        if (body && Number.isFinite(Number(body.days))) requested = Number(body.days);
+    } catch {
+        /* No body is fine; the default window stands. */
+    }
+
+    const days = Math.min(Math.max(Math.round(requested), 1), ANALYTICS_MAX_DAYS);
+    const end = new Date();
+    const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
+
+    let payload;
+
+    try {
+        const response = await fetch(ANALYTICS_API, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${env.CF_ANALYTICS_TOKEN}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                query: VISITORS_QUERY,
+                variables: {
+                    accountTag: env.CF_ACCOUNT_ID,
+                    siteTag: env.CF_SITE_TAG,
+                    start: start.toISOString(),
+                    end: end.toISOString(),
+                    top: ANALYTICS_TOP_LIMIT
+                }
+            })
+        });
+
+        payload = await response.json();
+
+        if (!response.ok) throw new Error(`Cloudflare answered ${response.status}.`);
+    } catch (error) {
+        console.error("Could not reach the analytics API.", error instanceof Error ? error.message : "Unknown error");
+
+        return jsonResponse({ success: false, message: "Could not reach the analytics service." }, 502, corsHeaders);
+    }
+
+    // GraphQL reports a rejected token or a misnamed field with a 200 and an
+    // errors array, so the message is passed through rather than swallowed.
+    // Only the password holder sees it, and it is what makes setup fixable.
+    if (payload.errors && payload.errors.length) {
+        const detail = payload.errors[0].message || "The query was rejected.";
+        console.error("The analytics query was rejected.", detail);
+
+        return jsonResponse({ success: false, message: `Cloudflare rejected the query: ${detail}` }, 502, corsHeaders);
+    }
+
+    const account = payload.data && payload.data.viewer && payload.data.viewer.accounts
+        ? payload.data.viewer.accounts[0]
+        : null;
+
+    if (!account) {
+        return jsonResponse({
+            success: false,
+            message: "Cloudflare returned no account. Check the account ID and that the token can read it."
+        }, 502, corsHeaders);
+    }
+
+    return jsonResponse({
+        success: true,
+        range: { days, start: start.toISOString(), end: end.toISOString() },
+        totals: totalsFrom(account.totals),
+        daily: (account.daily || []).map(function (group) {
+            return { date: group.dimensions.date, ...countsFrom(group) };
+        }),
+        referrers: rankSources(account.referrers),
+        pages: (account.pages || []).map(function (group) {
+            return { path: group.dimensions.requestPath || "/", ...countsFrom(group) };
+        }),
+        countries: (account.countries || []).map(function (group) {
+            return { country: group.dimensions.countryName || "Unknown", ...countsFrom(group) };
+        })
+    }, 200, corsHeaders);
+}
+
+// Adaptive sampling means one recorded event can stand for several real ones,
+// so every figure is multiplied back out by the interval it was sampled at. A
+// quiet site samples everything and the interval is 1.
+function countsFrom(group) {
+    const interval = Math.max(Number(group.avg && group.avg.sampleInterval) || 1, 1);
+    const views = Math.round((Number(group.count) || 0) * interval);
+    const visits = Math.round((Number(group.sum && group.sum.visits) || 0) * interval);
+
+    return { views, visits };
+}
+
+function totalsFrom(groups) {
+    return (groups || []).reduce(function (running, group) {
+        const counts = countsFrom(group);
+
+        return { views: running.views + counts.views, visits: running.visits + counts.visits };
+    }, { views: 0, visits: 0 });
+}
+
+// Referring hosts are folded into the same channel names the submissions use,
+// so Instagram on this panel means what Instagram means on a row. Several hosts
+// share one channel, so equal names are added together.
+function rankSources(groups) {
+    const totals = new Map();
+
+    (groups || []).forEach(function (group) {
+        const host = String(group.dimensions.refererHost || "").replace(/^www\./, "").toLowerCase();
+        const external = host && host !== "dystil.ai" && !host.endsWith(".dystil.ai");
+        const channel = external ? labelForSource(host) : "Direct";
+        const counts = countsFrom(group);
+        const running = totals.get(channel) || { channel, views: 0, visits: 0 };
+
+        running.views += counts.views;
+        running.visits += counts.visits;
+        totals.set(channel, running);
+    });
+
+    return [...totals.values()].sort(function (left, right) { return right.views - left.views; });
+}
+
+// Every admin endpoint sits behind the same password, the same constant-time
+// comparison and the same cap on wrong guesses. Returns a Response when the
+// caller should be turned away, or null when they may go on.
+async function refuseUnlessAdmin(request, env, corsHeaders, unconfiguredMessage) {
     if (!env.ADMIN_KEY) {
         console.error("ADMIN_KEY is not configured.");
-        return jsonResponse({ success: false, message: "The submissions view is not configured yet." }, 503, corsHeaders);
+        return jsonResponse({ success: false, message: unconfiguredMessage }, 503, corsHeaders);
     }
 
     const address = request.headers.get("CF-Connecting-IP") || "unknown";
@@ -464,6 +687,17 @@ async function listSubmissions(request, env, corsHeaders) {
         await recordFailedAdminAttempt(address);
         return jsonResponse({ success: false, message: "That password was not recognised." }, 401, corsHeaders);
     }
+
+    return null;
+}
+
+// Reads the submissions for the unlisted /students/database page. The password
+// travels in a header rather than the URL so it never reaches a browser history,
+// a referrer, or an access log.
+async function listSubmissions(request, env, corsHeaders) {
+    const refusal = await refuseUnlessAdmin(request, env, corsHeaders, "The submissions view is not configured yet.");
+
+    if (refusal) return refusal;
 
     if (!env.DB) {
         return jsonResponse({ success: false, message: "No database is connected." }, 503, corsHeaders);
@@ -566,9 +800,64 @@ async function allocateReference(db, formType) {
     return `DYS-${FORM_CODES[formType]}-${year}-${String(row.next_number).padStart(4, "0")}`;
 }
 
+// The browser remembers how somebody first reached the site and sends it back
+// with the form. First touch is preferred over the current visit, so a person
+// who found us on Instagram still counts as Instagram when they return a week
+// later and register.
+function describeSource(firstTouch, thisVisit) {
+    const arrival = parseArrival(firstTouch) || parseArrival(thisVisit);
+
+    if (!arrival) return { channel: "Unknown", detail: "", landing: "" };
+
+    const tag = cleanText(arrival.tag, 60);
+    const detail = tag || referrerHost(arrival.referrer);
+
+    return {
+        channel: labelForSource(detail),
+        detail: detail,
+        landing: cleanText(arrival.landing, 200)
+    };
+}
+
+function parseArrival(raw) {
+    if (typeof raw !== "string" || !raw) return null;
+
+    try {
+        const parsed = JSON.parse(raw);
+
+        return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
+// Our own pages are not a source, so an internal referrer reads as no referrer.
+function referrerHost(referrer) {
+    if (typeof referrer !== "string" || !referrer) return "";
+
+    try {
+        const host = new URL(referrer).hostname.replace(/^www\./, "").toLowerCase();
+
+        return host === "dystil.ai" || host.endsWith(".dystil.ai") ? "" : host;
+    } catch {
+        return "";
+    }
+}
+
+// An unrecognised host is shown as itself rather than lumped into "Other", so a
+// referrer we have never seen before is still readable on the submissions page.
+function labelForSource(detail) {
+    if (!detail) return "Direct";
+
+    const value = detail.toLowerCase();
+    const match = SOURCE_LABELS.find(function (entry) { return value.includes(entry[0]); });
+
+    return match ? match[1] : detail;
+}
+
 // The CV is kept out of the database and stays an email attachment, so only its
 // filename is recorded here.
-async function saveSubmission(db, reference, formType, values, attachment, submittedAt) {
+async function saveSubmission(db, reference, formType, values, attachment, submittedAt, source) {
     await db.prepare(SAVE_SUBMISSION_SQL).bind(
         reference,
         formType,
@@ -576,7 +865,10 @@ async function saveSubmission(db, reference, formType, values, attachment, submi
         values.email,
         JSON.stringify(values),
         attachment ? attachment.filename : null,
-        submittedAt
+        submittedAt,
+        source.channel,
+        source.detail,
+        source.landing
     ).run();
 }
 
@@ -931,24 +1223,9 @@ const RECORD_BROADCAST_SQL = `
     ON CONFLICT (campaign, email) DO NOTHING`;
 
 async function handleBroadcast(request, env, corsHeaders) {
-    if (!env.ADMIN_KEY) {
-        console.error("ADMIN_KEY is not configured.");
-        return jsonResponse({ success: false, message: "Broadcasts are not configured yet." }, 503, corsHeaders);
-    }
+    const refusal = await refuseUnlessAdmin(request, env, corsHeaders, "Broadcasts are not configured yet.");
 
-    const address = request.headers.get("CF-Connecting-IP") || "unknown";
-
-    if (await adminAttemptsExhausted(address)) {
-        return jsonResponse({
-            success: false,
-            message: "Too many incorrect passwords. Please wait fifteen minutes and try again."
-        }, 429, corsHeaders);
-    }
-
-    if (!(await secretsMatch(request.headers.get("X-Admin-Key"), env.ADMIN_KEY))) {
-        await recordFailedAdminAttempt(address);
-        return jsonResponse({ success: false, message: "That password was not recognised." }, 401, corsHeaders);
-    }
+    if (refusal) return refusal;
 
     if (!env.DB) {
         return jsonResponse({ success: false, message: "No database is connected." }, 503, corsHeaders);

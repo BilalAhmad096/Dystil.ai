@@ -25,6 +25,46 @@
     document.head.appendChild(beacon);
 })();
 
+/* Remember how somebody reached the site, so a submission can say whether it
+   came from Instagram, a search or a direct visit */
+const VISIT_SOURCE_KEY = "dystil-visit-source";
+const FIRST_SOURCE_KEY = "dystil-first-source";
+
+(function recordArrival() {
+    if (!window.location.protocol.startsWith("http")) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const arrival = JSON.stringify({
+        referrer: document.referrer || "",
+        landing: window.location.pathname,
+        tag: params.get("ref") || params.get("utm_source") || "",
+        at: new Date().toISOString()
+    });
+
+    /* Written once per visit and once ever, so moving between our own pages
+       never overwrites the source somebody actually arrived from. */
+    rememberOnce(window.sessionStorage, VISIT_SOURCE_KEY, arrival);
+    rememberOnce(window.localStorage, FIRST_SOURCE_KEY, arrival);
+})();
+
+/* Private browsing refuses storage outright, and an unrecorded source is never
+   worth failing a page or a submission over. */
+function rememberOnce(store, storageKey, value) {
+    try {
+        if (!store.getItem(storageKey)) store.setItem(storageKey, value);
+    } catch {
+        /* Nothing to remember. */
+    }
+}
+
+function readStoredSource(store, storageKey) {
+    try {
+        return store.getItem(storageKey) || "";
+    } catch {
+        return "";
+    }
+}
+
 function loadComponent(id, file) {
     const element = document.getElementById(id);
 
@@ -204,6 +244,8 @@ async function submitEnquiryForm(event) {
     try {
         const formData = new FormData(form);
         formData.set("formType", form.dataset.formType || "Website Enquiry");
+        formData.set("sourceFirst", readStoredSource(window.localStorage, FIRST_SOURCE_KEY));
+        formData.set("sourceVisit", readStoredSource(window.sessionStorage, VISIT_SOURCE_KEY));
 
         const response = await fetch(endpoint, {
             method: "POST",

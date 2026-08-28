@@ -34,7 +34,10 @@ function makeFakeDatabase() {
                                     details: args[4],
                                     cv_filename: args[5],
                                     submitted_at: args[6],
-                                    delivery_status: "pending"
+                                    delivery_status: "pending",
+                                    source_channel: args[7],
+                                    source_detail: args[8],
+                                    source_landing: args[9]
                                 });
 
                                 return { success: true };
@@ -627,5 +630,298 @@ test("stops guessing after five wrong passwords from one address", async functio
             adminEnv
         );
         assert.equal(elsewhere.status, 200);
+    });
+});
+
+
+// ---------- WHERE THE SUBMISSION CAME FROM ----------
+
+// The browser sends back what it recorded when the person first arrived, so
+// these build that payload the same way script.js does.
+function arrival({ referrer = "", landing = "/students/taster", tag = "" } = {}) {
+    return JSON.stringify({ referrer, landing, tag, at: new Date().toISOString() });
+}
+
+async function submitWithSource(fields) {
+    let stored;
+
+    await withMockedEmailApi(async function() {
+        await worker.fetch(makeRequest({ ...studentEnquiry, ...fields }), env);
+        stored = env.DB.rows.at(-1);
+    });
+
+    return stored;
+}
+
+test("credits the channel a visitor arrived from", async function() {
+    const row = await submitWithSource({ sourceFirst: arrival({ referrer: "https://l.instagram.com/?u=x" }) });
+
+    assert.equal(row.source_channel, "Instagram");
+    assert.equal(row.source_detail, "l.instagram.com");
+    assert.equal(row.source_landing, "/students/taster");
+});
+
+// The in-app browsers strip referrers, so a tagged link is often the only
+// evidence a post produced the registration.
+test("trusts a ref tag ahead of the referring host", async function() {
+    const row = await submitWithSource({
+        sourceFirst: arrival({ referrer: "https://www.google.com/", tag: "instagram" })
+    });
+
+    assert.equal(row.source_channel, "Instagram");
+    assert.equal(row.source_detail, "instagram");
+});
+
+test("calls an arrival with no referrer and no tag direct", async function() {
+    const row = await submitWithSource({ sourceFirst: arrival() });
+
+    assert.equal(row.source_channel, "Direct");
+    assert.equal(row.source_detail, "");
+});
+
+test("does not treat our own pages as a source", async function() {
+    const row = await submitWithSource({ sourceFirst: arrival({ referrer: "https://dystil.ai/students/home" }) });
+
+    assert.equal(row.source_channel, "Direct");
+});
+
+// Somebody who found us on Instagram still counts as Instagram when they come
+// back a week later and register.
+test("prefers the first visit over the one the form was sent from", async function() {
+    const row = await submitWithSource({
+        sourceFirst: arrival({ referrer: "https://www.tiktok.com/" }),
+        sourceVisit: arrival({ referrer: "https://www.google.com/" })
+    });
+
+    assert.equal(row.source_channel, "TikTok");
+});
+
+test("falls back to the current visit when nothing was stored first", async function() {
+    const row = await submitWithSource({ sourceVisit: arrival({ referrer: "https://www.linkedin.com/" }) });
+
+    assert.equal(row.source_channel, "LinkedIn");
+});
+
+test("keeps an unfamiliar referring host readable rather than hiding it", async function() {
+    const row = await submitWithSource({ sourceFirst: arrival({ referrer: "https://news.example.org/piece" }) });
+
+    assert.equal(row.source_channel, "news.example.org");
+});
+
+// A tampered or truncated payload must never cost somebody their registration.
+test("still records the submission when the source payload is broken", async function() {
+    const row = await submitWithSource({ sourceFirst: "not json at all" });
+
+    assert.equal(row.source_channel, "Unknown");
+    assert.equal(row.reference.startsWith("DYS-STU-"), true);
+});
+
+test("records nothing rather than guessing when the browser sends no source", async function() {
+    const row = await submitWithSource({});
+
+    assert.equal(row.source_channel, "Unknown");
+});
+
+
+// ---------- VISITOR FIGURES ----------
+
+const analyticsEnv = {
+    ...adminEnv,
+    CF_ACCOUNT_ID: "account-tag-123",
+    CF_ANALYTICS_TOKEN: "secret-analytics-token",
+    CF_SITE_TAG: "9cea9d84df65490881d2fc85d295ee0e"
+};
+
+function makeAnalyticsRequest(password, body = null, origin = "https://dystil.ai") {
+    const headers = { Origin: origin, "Content-Type": "application/json" };
+    if (password !== null) headers["X-Admin-Key"] = password;
+
+    return new Request("https://dystil-contact.example/api/analytics", {
+        method: "POST",
+        headers,
+        body: body === null ? undefined : JSON.stringify(body)
+    });
+}
+
+// Shapes a group the way the Cloudflare RUM dataset returns one.
+function group(dimensions, count, visits, sampleInterval = 1) {
+    return { count, sum: { visits }, avg: { sampleInterval }, dimensions };
+}
+
+// Stands in for the Cloudflare GraphQL API, and records what it was asked so a
+// test can assert on the query the Worker actually sends.
+async function withMockedAnalyticsApi(payload, callback) {
+    const originalFetch = globalThis.fetch;
+    const calls = [];
+
+    globalThis.fetch = async function(url, options) {
+        calls.push({ url, options, body: JSON.parse(options.body) });
+
+        return Response.json(payload, { status: 200 });
+    };
+
+    try {
+        await callback(calls);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+}
+
+const sampleVisitorPayload = {
+    data: {
+        viewer: {
+            accounts: [{
+                totals: [group({}, 120, 80)],
+                daily: [group({ date: "2026-08-27" }, 70, 45), group({ date: "2026-08-28" }, 50, 35)],
+                referrers: [
+                    group({ refererHost: "l.instagram.com" }, 30, 25),
+                    group({ refererHost: "www.instagram.com" }, 10, 8),
+                    group({ refererHost: "" }, 60, 40),
+                    group({ refererHost: "www.google.com" }, 20, 7)
+                ],
+                pages: [group({ requestPath: "/students/taster" }, 45, 30)],
+                countries: [group({ countryName: "United Kingdom" }, 100, 70)]
+            }]
+        }
+    }
+};
+
+test("refuses the visitor figures without the password", async function() {
+    const response = await worker.fetch(makeAnalyticsRequest("guess"), analyticsEnv);
+
+    assert.equal(response.status, 401);
+    assert.equal((await response.json()).totals, undefined);
+});
+
+test("refuses the visitor figures from another website", async function() {
+    const response = await worker.fetch(
+        makeAnalyticsRequest("correct horse battery", null, "https://not-dystil.example"),
+        analyticsEnv
+    );
+
+    assert.equal(response.status, 403);
+});
+
+// Setup is done by hand, so the page has to say which piece is still missing.
+test("names the configuration that is still missing", async function() {
+    const response = await worker.fetch(makeAnalyticsRequest("correct horse battery"), {
+        ...analyticsEnv,
+        CF_ANALYTICS_TOKEN: ""
+    });
+    const result = await response.json();
+
+    assert.equal(response.status, 503);
+    assert.equal(result.success, false);
+    assert.match(result.message, /CF_ANALYTICS_TOKEN/);
+});
+
+test("reports the visitor totals for the window", async function() {
+    await withMockedAnalyticsApi(sampleVisitorPayload, async function() {
+        const response = await worker.fetch(makeAnalyticsRequest("correct horse battery"), analyticsEnv);
+        const result = await response.json();
+
+        assert.equal(response.status, 200);
+        assert.equal(result.success, true);
+        assert.equal(result.totals.views, 120);
+        assert.equal(result.totals.visits, 80);
+        assert.equal(result.daily.length, 2);
+        assert.equal(result.daily[0].date, "2026-08-27");
+        assert.equal(result.pages[0].path, "/students/taster");
+        assert.equal(result.countries[0].country, "United Kingdom");
+    });
+});
+
+// Two Instagram hosts are one channel, and an absent referrer is a direct visit.
+test("folds referring hosts into channels and adds equal ones together", async function() {
+    await withMockedAnalyticsApi(sampleVisitorPayload, async function() {
+        const response = await worker.fetch(makeAnalyticsRequest("correct horse battery"), analyticsEnv);
+        const result = await response.json();
+        const byChannel = Object.fromEntries(result.referrers.map((row) => [row.channel, row.views]));
+
+        assert.equal(byChannel.Instagram, 40);
+        assert.equal(byChannel.Direct, 60);
+        assert.equal(byChannel.Google, 20);
+
+        // Ordered by size, so the biggest source reads first.
+        assert.equal(result.referrers[0].channel, "Direct");
+    });
+});
+
+// A sampled site records one event in place of several, so the figures have to
+// be multiplied back out or a busy week reads as a quiet one.
+test("scales sampled counts back up to real ones", async function() {
+    const sampled = {
+        data: {
+            viewer: {
+                accounts: [{
+                    totals: [group({}, 100, 60, 10)],
+                    daily: [],
+                    referrers: [group({ refererHost: "www.tiktok.com" }, 25, 20, 10)],
+                    pages: [],
+                    countries: []
+                }]
+            }
+        }
+    };
+
+    await withMockedAnalyticsApi(sampled, async function() {
+        const response = await worker.fetch(makeAnalyticsRequest("correct horse battery"), analyticsEnv);
+        const result = await response.json();
+
+        assert.equal(result.totals.views, 1000);
+        assert.equal(result.totals.visits, 600);
+        assert.equal(result.referrers[0].channel, "TikTok");
+        assert.equal(result.referrers[0].views, 250);
+    });
+});
+
+// A rejected token or a renamed field comes back as a 200 with an errors array,
+// which would otherwise read as "no visitors" rather than "this is broken".
+test("passes a rejected analytics query through as an error", async function() {
+    await withMockedAnalyticsApi({ errors: [{ message: "Authentication error" }] }, async function() {
+        const response = await worker.fetch(makeAnalyticsRequest("correct horse battery"), analyticsEnv);
+        const result = await response.json();
+
+        assert.equal(response.status, 502);
+        assert.equal(result.success, false);
+        assert.match(result.message, /Authentication error/);
+        assert.equal(result.totals, undefined);
+    });
+});
+
+test("asks Cloudflare for the window the page requested", async function() {
+    await withMockedAnalyticsApi(sampleVisitorPayload, async function(calls) {
+        await worker.fetch(makeAnalyticsRequest("correct horse battery", { days: 7 }), analyticsEnv);
+
+        const asked = calls[0].body.variables;
+        const spanDays = (new Date(asked.end) - new Date(asked.start)) / (24 * 60 * 60 * 1000);
+
+        assert.equal(Math.round(spanDays), 7);
+        assert.equal(asked.siteTag, "9cea9d84df65490881d2fc85d295ee0e");
+        assert.equal(asked.accountTag, "account-tag-123");
+    });
+});
+
+// An unbounded window would let one click ask Cloudflare for years of data.
+test("clamps an absurd window to the maximum", async function() {
+    await withMockedAnalyticsApi(sampleVisitorPayload, async function(calls) {
+        await worker.fetch(makeAnalyticsRequest("correct horse battery", { days: 5000 }), analyticsEnv);
+
+        const asked = calls[0].body.variables;
+        const spanDays = (new Date(asked.end) - new Date(asked.start)) / (24 * 60 * 60 * 1000);
+
+        assert.equal(Math.round(spanDays), 90);
+    });
+});
+
+// The token is the whole reason this endpoint exists rather than the page
+// calling Cloudflare itself.
+test("never sends the analytics token back to the browser", async function() {
+    await withMockedAnalyticsApi(sampleVisitorPayload, async function(calls) {
+        const response = await worker.fetch(makeAnalyticsRequest("correct horse battery"), analyticsEnv);
+        const text = await response.text();
+
+        assert.equal(text.includes("secret-analytics-token"), false);
+        assert.equal(calls[0].options.headers.Authorization, "Bearer secret-analytics-token");
     });
 });

@@ -11,12 +11,17 @@ CREATE TABLE IF NOT EXISTS submissions (
     details TEXT NOT NULL,
     cv_filename TEXT,
     submitted_at TEXT NOT NULL,
-    delivery_status TEXT NOT NULL DEFAULT 'pending'
+    delivery_status TEXT NOT NULL DEFAULT 'pending',
+    -- Where the person came from. Older rows predate this and stay empty.
+    source_channel TEXT,
+    source_detail TEXT,
+    source_landing TEXT
 );
 
 CREATE INDEX IF NOT EXISTS submissions_email ON submissions (email);
 CREATE INDEX IF NOT EXISTS submissions_submitted_at ON submissions (submitted_at);
 CREATE INDEX IF NOT EXISTS submissions_form_type ON submissions (form_type);
+CREATE INDEX IF NOT EXISTS submissions_source_channel ON submissions (source_channel);
 
 -- One counter per form per year, so each form numbers from 0001 every January.
 -- The upsert in server.js increments and returns in a single atomic statement.

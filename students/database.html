@@ -228,6 +228,53 @@
             overflow-y: auto; color: var(--light-text); white-space: pre-wrap;
         }
 
+        /* ---------- VISITORS ---------- */
+        .visitors {
+            background: var(--dark);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 18px 20px;
+            margin-bottom: 20px;
+        }
+
+        .visitors .head {
+            display: flex; flex-wrap: wrap; gap: 12px;
+            align-items: flex-start; justify-content: space-between; margin-bottom: 16px;
+        }
+        .visitors h2 { font-size: 15px; margin-bottom: 4px; }
+        .visitors .head p { font-size: 13px; color: var(--light-text); }
+        .visitors .ranges { display: flex; gap: 6px; }
+        .visitors .ranges button {
+            padding: 6px 13px; font-size: 12px; background: transparent;
+            border: 1px solid var(--line); color: var(--light-text);
+        }
+        .visitors .ranges button.on { border-color: var(--accent); color: var(--white); }
+
+        .visitor-totals { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+        .visitor-totals .count { cursor: default; }
+
+        /* The tallest day sets the scale, so a trend still reads at small numbers. */
+        .chart { display: flex; align-items: flex-end; gap: 3px; height: 88px; margin-bottom: 20px; }
+        .chart .day { flex: 1; min-width: 2px; background: var(--primary); border-radius: 3px 3px 0 0; }
+        .chart .day:hover { background: var(--accent); }
+
+        .breakdown { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px; }
+        .breakdown h3 { font-size: 11px; letter-spacing: 1.2px; color: var(--accent); margin-bottom: 6px; }
+        .breakdown .line {
+            display: flex; justify-content: space-between; gap: 12px; font-size: 13px;
+            padding: 7px 0; border-top: 1px solid var(--line);
+        }
+        .breakdown .line:first-of-type { border-top: none; }
+        .breakdown .line span { color: var(--light-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .breakdown .line strong { white-space: nowrap; }
+        .breakdown .none { font-size: 13px; color: var(--light-text); padding: 7px 0; }
+
+        .visitors .note { font-size: 12.5px; color: var(--light-text); margin-top: 18px; line-height: 1.7; }
+        .visitors .note code { background: var(--dark-soft); padding: 1px 6px; border-radius: 5px; font-size: 12px; }
+        .visitors .fault { font-size: 12.5px; color: #ffb4a8; margin-top: 12px; }
+
+        td.src .landed { font-size: 11.5px; color: var(--light-text); margin-top: 5px; }
+
         /* ---------- LATE REGISTRATIONS ---------- */
         .pending {
             background: var(--dark);
@@ -281,6 +328,56 @@
         </div>
 
         <div class="counts" id="counts"></div>
+
+        <div class="visitors" id="visitors" hidden>
+            <div class="head">
+                <div>
+                    <h2>Visitors</h2>
+                    <p>How many people reached the site, and where they came from.</p>
+                </div>
+
+                <div class="ranges" id="ranges">
+                    <button type="button" data-days="7">7 days</button>
+                    <button type="button" class="on" data-days="30">30 days</button>
+                    <button type="button" data-days="90">90 days</button>
+                </div>
+            </div>
+
+            <div class="visitor-totals" id="visitor-totals"></div>
+            <div class="chart" id="visitor-chart"></div>
+
+            <div class="breakdown">
+                <div>
+                    <h3>VISITORS CAME FROM</h3>
+                    <div id="visitor-referrers"></div>
+                </div>
+
+                <div>
+                    <h3>REGISTRATIONS CAME FROM</h3>
+                    <div id="visitor-signups"></div>
+                </div>
+
+                <div>
+                    <h3>MOST VISITED PAGES</h3>
+                    <div id="visitor-pages"></div>
+                </div>
+
+                <div>
+                    <h3>COUNTRIES</h3>
+                    <div id="visitor-countries"></div>
+                </div>
+            </div>
+
+            <p class="note">
+                Instagram and TikTok open links inside their own browsers, which usually send no
+                referrer, so those visits land under Direct. Put <code>?ref=instagram</code> on the
+                link in your bio and it will be counted properly. Registrations are counted from what
+                each person's browser recorded when they first arrived, so that column is the reliable one.
+            </p>
+
+            <p class="fault" id="visitor-error" hidden></p>
+        </div>
+
 
         <div class="testing" id="testing" hidden>
             <h2>Test an email</h2>
@@ -343,6 +440,7 @@
                     <tr>
                         <th>Reference</th>
                         <th>Form</th>
+                        <th>Source</th>
                         <th>Name</th>
                         <th>Email</th>
                         <th>Submitted</th>
@@ -358,6 +456,7 @@
 
     <script>
         const API = "https://dystil-contact.dystil-ai.workers.dev/api/submissions";
+        const ANALYTICS_API = "https://dystil-contact.dystil-ai.workers.dev/api/analytics";
         const CODES = { "Free Taster Registration": "TAS", "Bootcamp Registration": "BOT", "Student Enquiry": "STU", "Corporate Enquiry": "COR" };
 
         // The labels the forms and the notification emails use, so a record reads
@@ -416,6 +515,7 @@
                 pendingRefresh();
                 reminderRefresh();
                 testRefresh();
+                visitorsRefresh();
             } catch (error) {
                 lockError.textContent = error.message;
                 lockError.hidden = false;
@@ -454,6 +554,7 @@
                 pendingRefresh();
                 reminderRefresh();
                 testRefresh();
+                visitorsRefresh();
             } catch (error) {
                 alert(error.message);
             } finally {
@@ -487,6 +588,10 @@
             testWho.innerHTML = "<option value=\"\">Choose a person…</option>";
             testLog.textContent = "";
             testLog.hidden = true;
+            visitors.hidden = true;
+            visitorTotals.innerHTML = "";
+            visitorChart.innerHTML = "";
+            visitorError.hidden = true;
             board.hidden = true;
             lock.hidden = false;
         });
@@ -529,6 +634,7 @@
                 const tr = document.createElement("tr");
                 tr.appendChild(cell(row.reference, "ref"));
                 tr.appendChild(tagCell(row.form_type));
+                tr.appendChild(sourceCell(row));
                 tr.appendChild(cell(row.full_name));
                 tr.appendChild(mailCell(row.email));
                 tr.appendChild(cell(formatDate(row.submitted_at), "when"));
@@ -541,6 +647,184 @@
             meta.textContent = list.length === all.length
                 ? all.length + " submission" + (all.length === 1 ? "" : "s")
                 : "Showing " + list.length + " of " + all.length;
+        }
+
+
+        // ---------- VISITORS ----------
+
+        const visitors = document.getElementById("visitors");
+        const visitorTotals = document.getElementById("visitor-totals");
+        const visitorChart = document.getElementById("visitor-chart");
+        const visitorError = document.getElementById("visitor-error");
+        const ranges = document.getElementById("ranges");
+        let visitorDays = 30;
+
+        ranges.addEventListener("click", function (event) {
+            const button = event.target.closest("button[data-days]");
+
+            if (!button) return;
+
+            visitorDays = Number(button.dataset.days);
+            ranges.querySelectorAll("button").forEach(function (item) {
+                item.classList.toggle("on", item === button);
+            });
+
+            visitorsRefresh();
+        });
+
+        // The panel opens as soon as the page unlocks. Registrations come from
+        // the submissions already loaded, so that half still fills in even when
+        // the Cloudflare figures are not set up or cannot be reached.
+        async function visitorsRefresh() {
+            if (!key) return;
+
+            visitors.hidden = false;
+            visitorError.hidden = true;
+            drawRegistrationSources();
+
+            let data;
+
+            try {
+                const response = await fetch(ANALYTICS_API, {
+                    method: "POST",
+                    headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
+                    body: JSON.stringify({ days: visitorDays })
+                });
+
+                data = await response.json().catch(function () { return {}; });
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || "Could not load the visitor figures.");
+                }
+            } catch (error) {
+                visitorTotals.innerHTML = "";
+                visitorChart.innerHTML = "";
+                drawLines("visitor-referrers", [], null);
+                drawLines("visitor-pages", [], null);
+                drawLines("visitor-countries", [], null);
+                visitorError.textContent = error.message;
+                visitorError.hidden = false;
+                return;
+            }
+
+            visitorTotals.innerHTML = "";
+            visitorTotals.appendChild(totalCard("VISITS", data.totals.visits));
+            visitorTotals.appendChild(totalCard("PAGE VIEWS", data.totals.views));
+            visitorTotals.appendChild(totalCard("BUSIEST DAY", busiestDay(data.daily)));
+
+            drawChart(data.daily);
+            drawLines("visitor-referrers", data.referrers, function (row) { return row.channel; });
+            drawLines("visitor-pages", data.pages, function (row) { return row.path; });
+            drawLines("visitor-countries", data.countries, function (row) { return row.country; });
+        }
+
+        function totalCard(label, value) {
+            const card = document.createElement("div");
+            card.className = "count";
+            card.innerHTML = "<span></span><strong></strong>";
+            card.querySelector("span").textContent = label;
+            card.querySelector("strong").textContent = value;
+
+            return card;
+        }
+
+        function busiestDay(daily) {
+            if (!daily || !daily.length) return "—";
+
+            const best = daily.reduce(function (top, day) { return day.views > top.views ? day : top; });
+
+            return formatDay(best.date);
+        }
+
+        function formatDay(date) {
+            const parsed = new Date(date);
+
+            if (Number.isNaN(parsed.getTime())) return String(date || "");
+
+            return parsed.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+        }
+
+        function drawChart(daily) {
+            visitorChart.innerHTML = "";
+
+            if (!daily || !daily.length) return;
+
+            const peak = daily.reduce(function (top, day) { return Math.max(top, day.views); }, 0) || 1;
+
+            daily.forEach(function (day) {
+                const bar = document.createElement("div");
+                bar.className = "day";
+                bar.style.height = Math.max(Math.round((day.views / peak) * 100), 3) + "%";
+                bar.title = formatDay(day.date) + " — " + day.views + " views, " + day.visits + " visits";
+                visitorChart.appendChild(bar);
+            });
+        }
+
+        // Counts the submissions already on the page by the channel each person
+        // arrived from, so traffic and actual registrations sit side by side.
+        function drawRegistrationSources() {
+            const tally = new Map();
+
+            all.forEach(function (row) {
+                const channel = row.source_channel || "Not recorded";
+                tally.set(channel, (tally.get(channel) || 0) + 1);
+            });
+
+            const list = [...tally.entries()]
+                .map(function (entry) { return { channel: entry[0], total: entry[1] }; })
+                .sort(function (left, right) { return right.total - left.total; });
+
+            drawLines("visitor-signups", list, function (row) { return row.channel; }, function (row) { return row.total; });
+        }
+
+        function drawLines(elementId, list, label, value) {
+            const holder = document.getElementById(elementId);
+            holder.innerHTML = "";
+
+            if (!list || !list.length) {
+                const none = document.createElement("p");
+                none.className = "none";
+                none.textContent = "Nothing recorded yet.";
+                holder.appendChild(none);
+
+                return;
+            }
+
+            list.slice(0, 8).forEach(function (row) {
+                const line = document.createElement("div");
+                const name = document.createElement("span");
+                const total = document.createElement("strong");
+
+                line.className = "line";
+                name.textContent = label(row);
+                name.title = label(row);
+                total.textContent = value ? value(row) : row.visits;
+
+                line.appendChild(name);
+                line.appendChild(total);
+                holder.appendChild(line);
+            });
+        }
+
+        // Rows saved before source tracking existed have nothing to show, and an
+        // em dash says that more honestly than calling them direct.
+        function sourceCell(row) {
+            const td = document.createElement("td");
+            const span = document.createElement("span");
+
+            td.className = "src";
+            span.className = "tag";
+            span.textContent = row.source_channel || "—";
+            td.appendChild(span);
+
+            if (row.source_landing) {
+                const landed = document.createElement("div");
+                landed.className = "landed";
+                landed.textContent = "landed on " + row.source_landing;
+                td.appendChild(landed);
+            }
+
+            return td;
         }
 
         function countCard(form, label, total) {
@@ -672,9 +956,10 @@
 
         document.getElementById("csv").addEventListener("click", function () {
             const list = visible();
-            const header = ["Reference", "Form", "Name", "Email", "Submitted", "Details", "Email sent"];
+            const header = ["Reference", "Form", "Source", "Came from", "Landed on", "Name", "Email", "Submitted", "Details", "Email sent"];
             const lines = [header].concat(list.map(function (row) {
-                return [row.reference, row.form_type, row.full_name, row.email, row.submitted_at, detailsText(row.details), row.delivery_status];
+                return [row.reference, row.form_type, row.source_channel, row.source_detail, row.source_landing,
+                    row.full_name, row.email, row.submitted_at, detailsText(row.details), row.delivery_status];
             }));
 
             const csv = lines.map(function (line) {

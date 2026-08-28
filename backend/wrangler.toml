@@ -12,4 +12,7 @@ database_id = "4a352612-0ed3-4187-a0c5-14eae4e8ac34"
 [vars]
 ALLOWED_ORIGINS = "https://dystil.ai,https://www.dystil.ai"
 ADMIN_EMAIL = "askus@dystil.ai"
+# The Web Analytics site, same value the beacon in script.js already sends.
+# The account ID and the API token are secrets, set with "wrangler secret put".
+CF_SITE_TAG = "9cea9d84df65490881d2fc85d295ee0e"
 FROM_EMAIL = "askus@dystil.ai"
