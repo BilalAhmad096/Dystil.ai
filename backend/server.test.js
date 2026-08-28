@@ -1060,3 +1060,34 @@ test("does not go looking when the configured tag already has data", async funct
         assert.equal(calls[0].kind, "graphql");
     });
 });
+
+// A sampled window turns a handful of events into round hundreds, so the page
+// has to be told when to stop presenting them as a measurement.
+test("says when Cloudflare sampled the window", async function() {
+    const sampled = {
+        data: {
+            viewer: {
+                accounts: [{
+                    totals: [group({}, 3, 3, 100)],
+                    daily: [], referrers: [], pages: [], countries: []
+                }]
+            }
+        }
+    };
+
+    await withMockedAnalyticsApi(sampled, async function() {
+        const response = await worker.fetch(makeAnalyticsRequest("correct horse battery"), analyticsEnv);
+        const result = await response.json();
+
+        assert.equal(result.sampled, true);
+        assert.equal(result.totals.views, 300);
+    });
+});
+
+test("does not cry sampling over a directly measured window", async function() {
+    await withMockedAnalyticsApi(sampleVisitorPayload, async function() {
+        const response = await worker.fetch(makeAnalyticsRequest("correct horse battery"), analyticsEnv);
+
+        assert.equal((await response.json()).sampled, false);
+    });
+});

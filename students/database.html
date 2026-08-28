@@ -257,6 +257,9 @@
         .chart { display: flex; align-items: flex-end; gap: 3px; height: 88px; margin-bottom: 20px; }
         .chart .day { flex: 1; min-width: 2px; background: var(--primary); border-radius: 3px 3px 0 0; }
         .chart .day:hover { background: var(--accent); }
+        .chart .day.quiet { background: var(--line); }
+
+        .visitors .note.sampled { color: #f8c98a; }
 
         .breakdown { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px; }
         .breakdown h3 { font-size: 11px; letter-spacing: 1.2px; color: var(--accent); margin-bottom: 6px; }
@@ -373,6 +376,11 @@
                 referrer, so those visits land under Direct. Put <code>?ref=instagram</code> on the
                 link in your bio and it will be counted properly. Registrations are counted from what
                 each person's browser recorded when they first arrived, so that column is the reliable one.
+            </p>
+
+            <p class="note sampled" id="sampled-note" hidden>
+                Cloudflare sampled this window, so these figures are estimates and will look
+                rounded. A shorter window is measured directly and is the more accurate one.
             </p>
 
             <p class="fault" id="visitor-error" hidden></p>
@@ -657,6 +665,7 @@
         const visitorChart = document.getElementById("visitor-chart");
         const visitorError = document.getElementById("visitor-error");
         const ranges = document.getElementById("ranges");
+        const sampledNote = document.getElementById("sampled-note");
         let visitorDays = 30;
 
         ranges.addEventListener("click", function (event) {
@@ -680,6 +689,7 @@
 
             visitors.hidden = false;
             visitorError.hidden = true;
+            sampledNote.hidden = true;
             drawRegistrationSources();
 
             let data;
@@ -712,10 +722,14 @@
             visitorTotals.appendChild(totalCard("PAGE VIEWS", data.totals.views));
             visitorTotals.appendChild(totalCard("BUSIEST DAY", busiestDay(data.daily)));
 
-            drawChart(data.daily);
+            drawChart(data.daily, data.range);
             drawLines("visitor-referrers", data.referrers, function (row) { return row.channel; });
-            drawLines("visitor-pages", data.pages, function (row) { return row.path; });
+
+            // A page is measured in views: a visit only counts where the session
+            // began, so inner pages would otherwise all read as zero.
+            drawLines("visitor-pages", data.pages, function (row) { return row.path; }, function (row) { return row.views; });
             drawLines("visitor-countries", data.countries, function (row) { return row.country; });
+            sampledNote.hidden = !data.sampled;
         }
 
         function totalCard(label, value) {
@@ -744,20 +758,43 @@
             return parsed.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
         }
 
-        function drawChart(daily) {
+        // Cloudflare only returns the days it has, so a single day of data would
+        // otherwise stretch to one full-width block. The window is filled in
+        // first and the quiet days drawn as empty, which is the honest picture.
+        function drawChart(daily, range) {
             visitorChart.innerHTML = "";
 
-            if (!daily || !daily.length) return;
+            const byDate = new Map((daily || []).map(function (day) { return [day.date, day]; }));
+            const span = wholeWindow(range).map(function (date) {
+                return byDate.get(date) || { date, views: 0, visits: 0 };
+            });
 
-            const peak = daily.reduce(function (top, day) { return Math.max(top, day.views); }, 0) || 1;
+            if (!span.length) return;
 
-            daily.forEach(function (day) {
+            const peak = span.reduce(function (top, day) { return Math.max(top, day.views); }, 0) || 1;
+
+            span.forEach(function (day) {
                 const bar = document.createElement("div");
-                bar.className = "day";
-                bar.style.height = Math.max(Math.round((day.views / peak) * 100), 3) + "%";
+                bar.className = "day" + (day.views ? "" : " quiet");
+                bar.style.height = day.views ? Math.max(Math.round((day.views / peak) * 100), 4) + "%" : "2px";
                 bar.title = formatDay(day.date) + " — " + day.views + " views, " + day.visits + " visits";
                 visitorChart.appendChild(bar);
             });
+        }
+
+        function wholeWindow(range) {
+            if (!range || !range.start || !range.end) return [];
+
+            const days = [];
+            const cursor = new Date(range.start);
+            const last = new Date(range.end);
+
+            while (cursor <= last && days.length < 400) {
+                days.push(cursor.toISOString().slice(0, 10));
+                cursor.setDate(cursor.getDate() + 1);
+            }
+
+            return days;
         }
 
         // Counts the submissions already on the page by the channel each person
@@ -790,7 +827,18 @@
                 return;
             }
 
-            list.slice(0, 8).forEach(function (row) {
+            const worth = list.filter(function (row) { return (value ? value(row) : row.visits) > 0; });
+
+            if (!worth.length) {
+                const none = document.createElement("p");
+                none.className = "none";
+                none.textContent = "Nothing recorded yet.";
+                holder.appendChild(none);
+
+                return;
+            }
+
+            worth.slice(0, 8).forEach(function (row) {
                 const line = document.createElement("div");
                 const name = document.createElement("span");
                 const total = document.createElement("strong");

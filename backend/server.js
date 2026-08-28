@@ -586,6 +586,7 @@ async function siteVisitors(request, env, corsHeaders) {
     return jsonResponse({
         success: true,
         siteTag,
+        sampled: wasSampled(account.totals),
         range: { days, start: start.toISOString(), end: end.toISOString() },
         totals: totalsFrom(account.totals),
         daily: (account.daily || []).map(function (group) {
@@ -713,6 +714,16 @@ function countsFrom(group) {
     const visits = Math.round((Number(group.sum && group.sum.visits) || 0) * interval);
 
     return { views, visits };
+}
+
+// A wide window over a quiet site gets sampled hard: Cloudflare returns a
+// handful of events and the scaling turns them into round hundreds. The figures
+// are still the best estimate available, but the page has to say so rather than
+// present three sampled events as three hundred visits.
+function wasSampled(groups) {
+    return (groups || []).some(function (group) {
+        return (Number(group.avg && group.avg.sampleInterval) || 1) > 1;
+    });
 }
 
 function totalsFrom(groups) {
