@@ -318,6 +318,59 @@ test("records the CV filename without storing the file", async function() {
     });
 });
 
+const tasterFeedback = {
+    formType: "Taster Session Feedback",
+    fullName: "Priya Attendee",
+    email: "priya@example.com",
+    attended: "Yes, I joined the whole session",
+    rating: "4 — Good",
+    mostUseful: "The live demo on my own job role.",
+    improvement: "Less time on the intro.",
+    nextStep: "Ready to start a pathway",
+    message: ""
+};
+
+test("records taster feedback under its own reference", async function() {
+    await withMockedEmailApi(async function() {
+        const response = await worker.fetch(makeRequest(tasterFeedback), env);
+        const { reference } = await response.json();
+        const row = env.DB.rows.find((candidate) => candidate.reference === reference);
+        const details = JSON.parse(row.details);
+
+        assert.ok(reference.startsWith("DYS-FBK-"));
+        assert.equal(row.form_type, "Taster Session Feedback");
+        assert.equal(row.delivery_status, "sent");
+        assert.equal(details.rating, "4 — Good");
+        assert.equal(details.attended, "Yes, I joined the whole session");
+        assert.equal(details.nextStep, "Ready to start a pathway");
+        assert.equal(details.mostUseful, "The live demo on my own job role.");
+    });
+});
+
+// The two open questions are the ones people skip, and losing a rating over a
+// blank box would be the wrong trade.
+test("takes feedback with the open questions left blank", async function() {
+    await withMockedEmailApi(async function() {
+        const response = await worker.fetch(makeRequest({
+            ...tasterFeedback,
+            email: "quiet@example.com",
+            mostUseful: "",
+            improvement: ""
+        }), env);
+
+        assert.equal((await response.json()).success, true);
+    });
+});
+
+test("does not promise a feedback sender that somebody will be in touch", async function() {
+    await withMockedEmailApi(async function(calls) {
+        await worker.fetch(makeRequest({ ...tasterFeedback, email: "receipt@example.com" }), env);
+
+        assert.match(calls[1].body.textContent, /feedback has been sent successfully/i);
+        assert.equal(calls[1].body.textContent.includes("contact you shortly"), false);
+    });
+});
+
 test("puts the reference in both emails", async function() {
     await withMockedEmailApi(async function(calls) {
         const response = await worker.fetch(makeRequest(studentEnquiry), env);

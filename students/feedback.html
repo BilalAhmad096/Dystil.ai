@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Feedback | DYSTIL Launchpad</title>
+    <meta name="description" content="Tell us what you made of the Dystil Launchpad free taster session. Three short questions, two minutes, and every answer is read by our team.">
+    <link rel="canonical" href="https://dystil.ai/students/feedback">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="DYSTIL">
+    <meta property="og:title" content="Session Feedback | DYSTIL Launchpad">
+    <meta property="og:description" content="Tell us what you made of the Dystil Launchpad free taster session. Three short questions, two minutes, and every answer is read by our team.">
+    <meta property="og:url" content="https://dystil.ai/students/feedback">
+    <meta property="og:image" content="https://dystil.ai/assets/images/social-preview.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+    <meta property="og:image:alt" content="DYSTIL logo">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Session Feedback | DYSTIL Launchpad">
+    <meta name="twitter:description" content="Tell us what you made of the Dystil Launchpad free taster session. Three short questions, two minutes, and every answer is read by our team.">
+    <meta name="twitter:image" content="https://dystil.ai/assets/images/social-preview.png">
+    <meta name="twitter:image:alt" content="DYSTIL logo">
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="icon" type="image/png" href="/assets/images/favicon.png">
+    <link rel="shortcut icon" type="image/x-icon" href="/assets/images/favicon.ico">
+    <link rel="apple-touch-icon" href="/assets/images/favicon.png">
+</head>
+<body>
+
+    <div id="header"></div>
+
+    <main>
+        <section class="contact-hero">
+            <div class="student-badge">YOUR FEEDBACK</div>
+
+            <h1>
+                How Was the Session? <br>
+                <span>Tell Us in Two Minutes.</span>
+            </h1>
+
+            <p>
+                You registered for the Dystil Launchpad free taster session on Saturday
+                29 August. Whether you joined us or could not make it in the end, we would
+                like to know what you made of it. There is no wrong answer here, and the
+                unflattering ones are the useful ones.
+            </p>
+        </section>
+
+        <section class="student-contact-section">
+            <div class="contact-info-panel">
+                <span class="contact-label">WHY WE ASK</span>
+
+                <h2>What you say here decides what we run next.</h2>
+
+                <p>
+                    We read every answer. The taster session is the front door to the
+                    Dystil Launchpad pathways, so what worked, what dragged and what was
+                    missing all change the shape of the next one.
+                </p>
+
+                <div class="contact-detail-grid">
+                    <div class="contact-detail-card">
+                        <span>⏱</span>
+                        <h3>Two Minutes</h3>
+                        <p>Three short questions and a rating.</p>
+                    </div>
+
+                    <div class="contact-detail-card">
+                        <span>👀</span>
+                        <h3>Read by Us</h3>
+                        <p>Not shared or published anywhere.</p>
+                    </div>
+
+                    <div class="contact-detail-card">
+                        <span>✉</span>
+                        <h3>Rather Reply?</h3>
+                        <p><a href="mailto:askus@dystil.ai">askus@dystil.ai</a></p>
+                    </div>
+                </div>
+            </div>
+
+            <form class="student-contact-form" method="post" action="https://dystil-contact.dystil-ai.workers.dev/api/enquiry" enctype="multipart/form-data" data-enquiry-form data-form-type="Taster Session Feedback">
+                <input type="hidden" name="formType" value="Taster Session Feedback">
+
+                <label for="feedback-full-name">Full Name</label>
+                <input id="feedback-full-name" name="fullName" type="text" placeholder="Enter your full name" autocomplete="name" maxlength="120" required>
+
+                <label for="feedback-email">Email Address</label>
+                <input id="feedback-email" name="email" type="email" placeholder="Enter your email address" autocomplete="email" maxlength="254" required>
+
+                <label for="feedback-attended">Did you join the session?</label>
+                <select id="feedback-attended" name="attended" required>
+                    <option value="">Select one option</option>
+                    <option>Yes, I joined the whole session</option>
+                    <option>I joined part of it</option>
+                    <option>No, I could not make it</option>
+                </select>
+
+                <label for="feedback-rating">How useful was it?</label>
+                <select id="feedback-rating" name="rating" required>
+                    <option value="">Select one option</option>
+                    <option>5 &mdash; Excellent</option>
+                    <option>4 &mdash; Good</option>
+                    <option>3 &mdash; Mixed</option>
+                    <option>2 &mdash; Not much use</option>
+                    <option>1 &mdash; Poor</option>
+                    <option>I did not attend</option>
+                </select>
+
+                <label for="feedback-most-useful">If you joined us, what was the most useful part of the session? If you could not make it, what got in the way?</label>
+                <textarea id="feedback-most-useful" name="mostUseful" placeholder="A couple of lines is plenty" maxlength="4000"></textarea>
+
+                <label for="feedback-improvement">What was missing, or what would you change?</label>
+                <textarea id="feedback-improvement" name="improvement" placeholder="The parts that did not work are the most useful to us" maxlength="4000"></textarea>
+
+                <label for="feedback-next-step">Where are you now?</label>
+                <select id="feedback-next-step" name="nextStep" required>
+                    <option value="">Select one option</option>
+                    <option>Ready to start a pathway</option>
+                    <option>Interested, but I have questions first</option>
+                    <option>Thinking about it</option>
+                    <option>Not for me right now</option>
+                </select>
+
+                <label for="feedback-message">Anything else?</label>
+                <textarea id="feedback-message" name="message" placeholder="Optional" maxlength="4000"></textarea>
+
+                <div class="form-honeypot" aria-hidden="true">
+                    <label for="feedback-website">Website</label>
+                    <input id="feedback-website" name="website" type="text" tabindex="-1" autocomplete="off">
+                </div>
+
+                <p class="form-privacy">We store the answers you send here and email them to our team so that we can act on them. We do not share or publish them. Email <a href="mailto:askus@dystil.ai">askus@dystil.ai</a> at any time to get a copy of your answers or ask us to delete them.</p>
+
+                <button type="submit">Send Feedback</button>
+                <p class="form-status" role="status" aria-live="polite"></p>
+            </form>
+        </section>
+
+        <section class="register-cta">
+            <h2>Ready to start your career accelerator journey?</h2>
+            <a href="/students/register" class="register-btn">Register Now</a>
+        </section>
+    </main>
+
+    <div id="footer"></div>
+
+    <script src="/assets/js/form-config.js"></script>
+    <script src="/assets/js/script.js"></script>
+    <script>
+        loadStudentLayout();
+    </script>
+    <script src="/assets/js/mobile-menu.js"></script>
+</body>
+</html>

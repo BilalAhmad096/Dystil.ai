@@ -17,8 +17,13 @@ const FORM_CODES = {
     "Student Enquiry": "STU",
     "Corporate Enquiry": "COR",
     "Bootcamp Registration": "BOT",
-    "Free Taster Registration": "TAS"
+    "Free Taster Registration": "TAS",
+    "Taster Session Feedback": "FBK"
 };
+
+// Feedback is the one form nobody is waiting on a reply to, so the receipt it
+// sends back says something different from the other four.
+const FEEDBACK_FORM = "Taster Session Feedback";
 
 // A referring host or a ?ref= tag is turned into a channel name. The tag wins,
 // because the in-app browsers on Instagram and TikTok routinely strip referrers
@@ -143,6 +148,16 @@ const FORM_SCHEMAS = {
         ["currentStatus", "Current status"],
         ["areaOfInterest", "Area of interest"],
         ["message", "Message"]
+    ],
+    "Taster Session Feedback": [
+        ["fullName", "Full name"],
+        ["email", "Email"],
+        ["attended", "Attended"],
+        ["rating", "Rating"],
+        ["mostUseful", "Most useful part, or what got in the way"],
+        ["improvement", "What was missing or would change"],
+        ["nextStep", "Where they are now"],
+        ["message", "Anything else"]
     ]
 };
 
@@ -150,7 +165,8 @@ const REQUIRED_FIELDS = {
     "Student Enquiry": ["fullName", "email", "phone", "interest"],
     "Corporate Enquiry": ["fullName", "email", "company", "focusArea"],
     "Bootcamp Registration": ["fullName", "email", "phone", "package"],
-    "Free Taster Registration": ["fullName", "email", "currentStatus", "areaOfInterest"]
+    "Free Taster Registration": ["fullName", "email", "currentStatus", "areaOfInterest"],
+    "Taster Session Feedback": ["fullName", "email", "attended", "rating", "nextStep"]
 };
 
 const FIELD_LIMITS = {
@@ -164,6 +180,11 @@ const FIELD_LIMITS = {
     package: 120,
     currentStatus: 120,
     areaOfInterest: 120,
+    attended: 60,
+    rating: 60,
+    nextStep: 120,
+    mostUseful: 4000,
+    improvement: 4000,
     message: 4000,
     challenge: 4000,
     careerGoal: 4000,
@@ -1059,6 +1080,14 @@ function buildAdminText(formType, schema, values, attachment, submittedAt, refer
 }
 
 function buildConfirmationHtml(fullName, formType, reference) {
+    const isFeedback = formType === FEEDBACK_FORM;
+    const opening = isFeedback
+        ? "Your feedback has been sent successfully and received by Dystil."
+        : "Your enquiry has been sent successfully and received by Dystil.";
+    const recorded = isFeedback
+        ? "We read every answer, and what people tell us here decides what the next session looks like."
+        : "A member of our team will review your details and contact you shortly.";
+
     return `<!doctype html>
         <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
             <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
@@ -1066,9 +1095,9 @@ function buildConfirmationHtml(fullName, formType, reference) {
                     <h1 style="font-size:24px;margin:0;">Thank you, ${escapeHtml(fullName)}.</h1>
                 </div>
                 <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
-                    <p style="margin-top:0;">Your enquiry has been sent successfully and received by Dystil.</p>
+                    <p style="margin-top:0;">${escapeHtml(opening)}</p>
                     <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;">Your reference is <strong>${escapeHtml(reference)}</strong>. Please quote it if you contact us about this enquiry.</p>
-                    <p>We’ve recorded it as <strong>${escapeHtml(formType)}</strong>. A member of our team will review your details and contact you shortly.</p>
+                    <p>We’ve recorded it as <strong>${escapeHtml(formType)}</strong>. ${escapeHtml(recorded)}</p>
                     <p>If you need to add anything, reply to this email or contact us at <a href="mailto:askus@dystil.ai" style="color:#147a59;">askus@dystil.ai</a>.</p>
                     <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
                 </div>
@@ -1077,7 +1106,26 @@ function buildConfirmationHtml(fullName, formType, reference) {
 }
 
 function buildConfirmationText(fullName, formType, reference) {
-    return `Thank you, ${fullName}.\n\nYour enquiry has been sent successfully and received by Dystil.\n\nYour reference is ${reference}. Please quote it if you contact us about this enquiry.\n\nWe’ve recorded it as ${formType}. A member of our team will review your details and contact you shortly.\n\nIf you need to add anything, reply to this email or contact askus@dystil.ai.\n\nKind regards,\nThe Dystil Team`;
+    const isFeedback = formType === FEEDBACK_FORM;
+
+    return [
+        `Thank you, ${fullName}.`,
+        "",
+        isFeedback
+            ? "Your feedback has been sent successfully and received by Dystil."
+            : "Your enquiry has been sent successfully and received by Dystil.",
+        "",
+        `Your reference is ${reference}. Please quote it if you contact us about this enquiry.`,
+        "",
+        `We’ve recorded it as ${formType}. ` + (isFeedback
+            ? "We read every answer, and what people tell us here decides what the next session looks like."
+            : "A member of our team will review your details and contact you shortly."),
+        "",
+        "If you need to add anything, reply to this email or contact askus@dystil.ai.",
+        "",
+        "Kind regards,",
+        "The Dystil Team"
+    ].join("\n");
 }
 
 function formatFileSize(bytes) {
@@ -1173,6 +1221,11 @@ const TASTER_TEST_TEAM = [
 ];
 
 const TASTER_FEEDBACK_SUBJECT = "How was it? | Dystil Free Taster Session";
+
+// The short link redirects to /students/feedback, and the form writes the
+// answers to the same table the registrations are in. A reply still works for
+// anyone who would rather not open a form, which is why the email says so.
+const TASTER_FEEDBACK_URL = "https://dystil.ai/feedback";
 
 const TASTER_FEEDBACK_QUESTIONS = [
     "If you joined us, what was the most useful part of the session? If you could not make it, what got in the way?",
@@ -2245,11 +2298,12 @@ function buildFeedbackHtml(firstName) {
                 </div>
                 <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
                     <p style="margin-top:0;">You registered for the Dystil free taster session on Saturday morning, and we would like to know what you made of it.</p>
-                    <p>Three questions. A couple of lines on each is plenty, and there is no wrong answer — the unflattering ones are the useful ones.</p>
+                    <p>Three questions, two minutes: <a href="${escapeHtml(TASTER_FEEDBACK_URL)}" style="color:#147a59;font-weight:bold;">dystil.ai/feedback</a></p>
                     <ol style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px 12px 36px;margin:0 0 16px;">
                         ${questions}
                     </ol>
-                    <p>Just reply to this email. Everything you write is read by us and is not shared or published anywhere.</p>
+                    <p>A couple of lines on each is plenty, and there is no wrong answer — the unflattering ones are the useful ones. Everything you write is read by us and is not shared or published anywhere.</p>
+                    <p>If you would rather not open a form, replying to this email reaches the same people.</p>
                     <p>If you already know you want to go further, the pathways are here: <a href="https://dystil.ai/students/pathways" style="color:#147a59;">dystil.ai/students/pathways</a>.</p>
                     <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
                 </div>
@@ -2263,11 +2317,13 @@ function buildFeedbackText(firstName) {
         "",
         "You registered for the Dystil free taster session on Saturday morning, and we would like to know what you made of it.",
         "",
-        "Three questions. A couple of lines on each is plenty, and there is no wrong answer - the unflattering ones are the useful ones.",
+        "Three questions, two minutes: " + TASTER_FEEDBACK_URL,
         "",
         ...TASTER_FEEDBACK_QUESTIONS.map((question, index) => `${index + 1}. ${question}`),
         "",
-        "Just reply to this email. Everything you write is read by us and is not shared or published anywhere.",
+        "A couple of lines on each is plenty, and there is no wrong answer - the unflattering ones are the useful ones. Everything you write is read by us and is not shared or published anywhere.",
+        "",
+        "If you would rather not open a form, replying to this email reaches the same people.",
         "",
         "If you already know you want to go further, the pathways are here: https://dystil.ai/students/pathways",
         "",
