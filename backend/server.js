@@ -1250,10 +1250,11 @@ const FOUNDATION_REGISTER_URL = "https://dystil.ai/students/register?package=fou
 const ADVANCED_REGISTER_URL = "https://dystil.ai/students/register?package=advanced";
 const TASTER_SHARE_URL = "https://dystil.ai/students/taster";
 
-// The taster deck, once it is on the site. While this is empty the email
-// leaves the whole "revisit the session" block out, so the campaign can never
-// go out pointing at a file that is not there.
-const TASTER_DECK_URL = "";
+// The taster deck. While this is empty the email leaves the whole "revisit the
+// session" block out, so the campaign can never go out pointing at a file that
+// is not there.
+const TASTER_DECK_URL = "https://dystil.ai/assets/files/Dystil_Taster_Session_Kickoff.pdf";
+const TASTER_DECK_NAME = "Dystil Taster Session.pdf";
 
 const DYSTIL_PHONE = "+44 7516 317705";
 const DYSTIL_PHONE_LINK = "tel:+447516317705";
@@ -1535,6 +1536,10 @@ async function handleBroadcast(request, env, corsHeaders) {
 
         if (campaign.attachInvite) {
             payload.attachment = [buildInviteAttachment(person, campaign.sender)];
+        } else if (campaign.attachDeck && TASTER_DECK_URL) {
+            // Brevo fetches it from the site, so the file is named once, there,
+            // rather than carried through the Worker as base64 on every send.
+            payload.attachment = [{ url: TASTER_DECK_URL, name: TASTER_DECK_NAME }];
         }
 
         const sent = campaign.route === "graph"
@@ -1616,6 +1621,10 @@ async function sendBroadcastTest(env, campaign, corsHeaders, onlyEmail) {
 
         if (campaign.attachInvite) {
             payload.attachment = [buildInviteAttachment(person, campaign.sender)];
+        } else if (campaign.attachDeck && TASTER_DECK_URL) {
+            // Brevo fetches it from the site, so the file is named once, there,
+            // rather than carried through the Worker as base64 on every send.
+            payload.attachment = [{ url: TASTER_DECK_URL, name: TASTER_DECK_NAME }];
         }
 
         const sent = campaign.route === "graph"
@@ -2624,6 +2633,10 @@ function buildMuazCampaigns() {
             buildText: buildMuazText,
             sender,
             replyTo: sender,
+            // The copy says the presentation is attached, so it is, as well as
+            // being linked. This rides the Brevo route only: buildGraphMessage
+            // carries no attachment.
+            attachDeck: true,
             // One ledger for both names, as with every other pair.
             dedupeKey: "taster-2026-08-29-muaz",
             testRecipients: TASTER_TEST_TEAM
