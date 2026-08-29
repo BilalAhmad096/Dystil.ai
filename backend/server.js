@@ -1220,13 +1220,25 @@ const TASTER_TEST_TEAM = [
     { email: "aman@dystil.ai", fullName: "Aman" }
 ];
 
-const TASTER_FEEDBACK_SUBJECT = "How was it? | Dystil Free Taster Session";
+const TASTER_FEEDBACK_SUBJECT = "Thank you for Saturday | Your feedback, and the next cohort";
 
 // The short link redirects to /students/feedback, and the form writes the
 // answers to the same table the registrations are in. A reply still works for
 // anyone who would rather not open a form, which is why the email says so.
 const TASTER_FEEDBACK_URL = "https://dystil.ai/feedback";
 const TASTER_REGISTER_URL = "https://dystil.ai/students/register";
+
+// The cohort the taster session was the front door to. Written out here so the
+// two dates are stated once and cannot drift apart between the HTML and the
+// plain text.
+const NEXT_COHORT = {
+    name: "Foundation Career Accelerator",
+    starts: "Saturday 26 September 2026",
+    closes: "Tuesday 15 September 2026"
+};
+
+const DYSTIL_PHONE = "+44 7516 317705";
+const DYSTIL_PHONE_LINK = "tel:+447516317705";
 
 const TASTER_FEEDBACK_QUESTIONS = [
     "If you joined us, what was the most useful part of the session? If you could not make it, what got in the way?",
@@ -2284,33 +2296,49 @@ function buildReminderCampaigns() {
 
 function buildFeedbackHtml(firstName) {
     const heading = firstName
-        ? `How was it, ${escapeHtml(firstName)}?`
-        : "How was it?";
+        ? `Thank you for joining us, ${escapeHtml(firstName)}.`
+        : "Thank you for joining us.";
 
     const questions = TASTER_FEEDBACK_QUESTIONS
         .map((question) => `<li style="margin-bottom:8px;">${escapeHtml(question)}</li>`)
         .join("\n                        ");
 
+    const socials = TASTER_SOCIALS.map(([icon, name, href]) =>
+        `${icon} <a href="${escapeHtml(href)}" style="color:#147a59;">${escapeHtml(name)}</a>`
+    ).join(" &nbsp;·&nbsp; ");
+
     return `<!doctype html>
         <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
             <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
-                <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
-                    <h1 style="font-size:24px;margin:0;">${heading}</h1>
+                <div style="background:#123f31;color:#fff;padding:28px 24px;border-radius:12px 12px 0 0;">
+                    <p style="margin:0 0 6px;font-size:12px;letter-spacing:1.6px;color:#8fd3b8;">FREE TASTER SESSION · SATURDAY 29 AUGUST</p>
+                    <h1 style="font-size:26px;margin:0;">${heading}</h1>
                 </div>
                 <div style="background:#fff;padding:24px;line-height:1.6;">
-                    <p style="margin-top:0;">You registered for the Dystil free taster session on Saturday morning, and we would like to know what you made of it.</p>
-                    <p>Three questions, two minutes: <a href="${escapeHtml(TASTER_FEEDBACK_URL)}" style="color:#147a59;font-weight:bold;">dystil.ai/feedback</a></p>
+                    <p style="margin-top:0;">That was two hours of your Saturday morning, and we are grateful for them. Two things before we let you get on with your week.</p>
+                    <p style="margin:20px 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">1 · HOW DID WE DO?</p>
+                    <p style="margin:0 0 12px;">Three questions, two minutes: <a href="${escapeHtml(TASTER_FEEDBACK_URL)}" style="color:#147a59;font-weight:bold;">dystil.ai/feedback</a></p>
                     <ol style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px 12px 36px;margin:0 0 16px;">
                         ${questions}
                     </ol>
                     <p>A couple of lines on each is plenty, and there is no wrong answer — the unflattering ones are the useful ones. Everything you write is read by us and is not shared or published anywhere.</p>
-                    <p>If you would rather not open a form, replying to this email reaches the same people.</p>
-                    <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
+                    <p style="margin-bottom:0;">If you would rather not open a form, replying to this email reaches the same people.</p>
                 </div>
-                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:20px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;">
-                    <p style="margin:0 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">NEXT COHORT</p>
-                    <p style="margin:0 0 12px;">Registration for the next Dystil Launchpad cohort is open. If Saturday made the decision for you, take your place here:</p>
+                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:22px 24px;line-height:1.6;">
+                    <p style="margin:0 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">2 · THE NEXT COHORT</p>
+                    <h2 style="font-size:20px;margin:0 0 12px;color:#123f31;">${escapeHtml(NEXT_COHORT.name)}</h2>
+                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;margin:0 0 14px;">
+                        <strong>Starts ${escapeHtml(NEXT_COHORT.starts)}</strong><br>
+                        Registration closes ${escapeHtml(NEXT_COHORT.closes)}
+                    </p>
+                    <p style="margin:0 0 14px;">Places are limited and are held in the order registrations arrive, so the closing date is the last day to register rather than the day to decide. If Saturday made the decision for you, take your place now.</p>
                     <p style="margin:0;font-size:17px;">👉 <a href="${escapeHtml(TASTER_REGISTER_URL)}" style="color:#147a59;font-weight:bold;">dystil.ai/students/register</a></p>
+                </div>
+                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:20px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;font-size:14px;color:#4c5a54;">
+                    <p style="margin:0 0 6px;">Questions before you register? Call or write, and one of us will answer.</p>
+                    <p style="margin:0 0 16px;">☎ <a href="${escapeHtml(DYSTIL_PHONE_LINK)}" style="color:#147a59;">${escapeHtml(DYSTIL_PHONE)}</a> &nbsp;·&nbsp; ✉ <a href="mailto:askus@dystil.ai" style="color:#147a59;">askus@dystil.ai</a></p>
+                    <p style="margin:0 0 16px;">${socials}</p>
+                    <p style="margin:0;color:#16221d;">Kind regards,<br><strong>The Dystil Team</strong></p>
                 </div>
             </div>
         </body></html>`;
@@ -2318,9 +2346,11 @@ function buildFeedbackHtml(firstName) {
 
 function buildFeedbackText(firstName) {
     return [
-        firstName ? `How was it, ${firstName}?` : "How was it?",
+        firstName ? `Thank you for joining us, ${firstName}.` : "Thank you for joining us.",
         "",
-        "You registered for the Dystil free taster session on Saturday morning, and we would like to know what you made of it.",
+        "That was two hours of your Saturday morning, and we are grateful for them. Two things before we let you get on with your week.",
+        "",
+        "1. HOW DID WE DO?",
         "",
         "Three questions, two minutes: " + TASTER_FEEDBACK_URL,
         "",
@@ -2330,13 +2360,21 @@ function buildFeedbackText(firstName) {
         "",
         "If you would rather not open a form, replying to this email reaches the same people.",
         "",
+        "2. THE NEXT COHORT: " + NEXT_COHORT.name.toUpperCase(),
+        "",
+        "Starts " + NEXT_COHORT.starts,
+        "Registration closes " + NEXT_COHORT.closes,
+        "",
+        "Places are limited and are held in the order registrations arrive, so the closing date is the last day to register rather than the day to decide. If Saturday made the decision for you, take your place now.",
+        "",
+        "Take your place: " + TASTER_REGISTER_URL,
+        "",
+        "Questions before you register? Call " + DYSTIL_PHONE + " or write to askus@dystil.ai, and one of us will answer.",
+        "",
+        ...TASTER_SOCIALS.map(([icon, name, href]) => `${icon} ${name}: ${href}`),
+        "",
         "Kind regards,",
-        "The Dystil Team",
-        "",
-        "NEXT COHORT",
-        "",
-        "Registration for the next Dystil Launchpad cohort is open. If Saturday made the decision for you, take your place here:",
-        TASTER_REGISTER_URL
+        "The Dystil Team"
     ].join("\n");
 }
 
