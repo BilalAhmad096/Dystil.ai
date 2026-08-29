@@ -1123,6 +1123,17 @@ const TASTER_REMINDERS = [
         ]
     },
     {
+        key: "final",
+        subject: "We start at 11:00 | Dystil Free Taster Session",
+        heading: "We start at 11:00",
+        opening: "Your Dystil free taster session starts shortly.",
+        when: "Today, Saturday 29 August 2026",
+        closing: [
+            "The link opens in your browser, so there is nothing to install.",
+            "See you shortly."
+        ]
+    },
+    {
         key: "hours",
         subject: "Starting at 11:00 today | Dystil Free Taster Session",
         heading: "This morning",
