@@ -1314,6 +1314,12 @@ img {
     color: var(--accent-text);
 }
 
+.recommended-tag {
+    background-color: var(--accent);
+    color: var(--dark);
+    margin-left: 10px;
+}
+
 .bootcamp-choice h3 {
     font-size: 30px;
     line-height: 1.2;
