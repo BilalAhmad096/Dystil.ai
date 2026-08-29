@@ -1157,7 +1157,8 @@ const TASTER_TEST_TEAM = [
     { email: "mailbox.makki@gmail.com", fullName: "Arsalan Makki" },
     { email: "danishzia2016@gmail.com", fullName: "Danish" },
     { email: "muaaz.daily@gmail.com", fullName: "Muaz" },
-    { email: "h.aqibnazir@gmail.com", fullName: "Aqib" }
+    { email: "h.aqibnazir@gmail.com", fullName: "Aqib" },
+    { email: "immanuelchar82@gmail.com", fullName: "Immanuel" }
 ];
 
 const CAMPAIGNS = {
