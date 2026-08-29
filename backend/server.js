@@ -1237,6 +1237,12 @@ const NEXT_COHORT = {
     closes: "Tuesday 15 September 2026"
 };
 
+// The brand marks, rendered from the same SVG paths the site footer uses and
+// hosted on the site, because mail clients strip inline SVG. They are decorative
+// here: the account name beside each one is the link text, so a client that
+// blocks images loses nothing but the picture.
+const SOCIAL_ICONS = "https://dystil.ai/assets/images/social/";
+
 const DYSTIL_PHONE = "+44 7516 317705";
 const DYSTIL_PHONE_LINK = "tel:+447516317705";
 
@@ -2303,9 +2309,11 @@ function buildFeedbackHtml(firstName) {
         .map((question) => `<li style="margin-bottom:8px;">${escapeHtml(question)}</li>`)
         .join("\n                        ");
 
-    const socials = TASTER_SOCIALS.map(([icon, name, href]) =>
-        `${icon} <a href="${escapeHtml(href)}" style="color:#147a59;">${escapeHtml(name)}</a>`
-    ).join(" &nbsp;·&nbsp; ");
+    const socials = TASTER_SOCIALS.map(([, name, href]) =>
+        `<a href="${escapeHtml(href)}" style="color:#147a59;text-decoration:none;white-space:nowrap;">`
+        + `<img src="${SOCIAL_ICONS}${name.toLowerCase()}.png" width="18" height="18" alt=""`
+        + ` style="border:0;vertical-align:-3px;margin-right:6px;"><span style="text-decoration:underline;">${escapeHtml(name)}</span></a>`
+    ).join(" &nbsp;&nbsp; ");
 
     return `<!doctype html>
         <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
