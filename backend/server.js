@@ -1243,6 +1243,18 @@ const NEXT_COHORT = {
 // blocks images loses nothing but the picture.
 const SOCIAL_ICONS = "https://dystil.ai/assets/images/social/";
 
+// The pathway pages the two bootcamp buttons point at. The query is read by
+// the register page, which preselects the package, so a reader who picked
+// Foundation in the email does not have to pick it again on the form.
+const FOUNDATION_REGISTER_URL = "https://dystil.ai/students/register?package=foundation";
+const ADVANCED_REGISTER_URL = "https://dystil.ai/students/register?package=advanced";
+const TASTER_SHARE_URL = "https://dystil.ai/students/taster";
+
+// The taster deck, once it is on the site. While this is empty the email
+// leaves the whole "revisit the session" block out, so the campaign can never
+// go out pointing at a file that is not there.
+const TASTER_DECK_URL = "";
+
 const DYSTIL_PHONE = "+44 7516 317705";
 const DYSTIL_PHONE_LINK = "tel:+447516317705";
 
@@ -1251,6 +1263,8 @@ const TASTER_FEEDBACK_QUESTIONS = [
     "What was missing, or what would you change?",
     "Where are you now: ready to start a pathway, thinking about it, or not for you?"
 ];
+
+const MUAZ_SUBJECT = "You showed up. Now for the next step \u{1F680} | Dystil Career Accelerator";
 
 const CAMPAIGNS = {
     "taster-2026-08-29-joining-link": {
@@ -1389,7 +1403,8 @@ const CAMPAIGNS = {
         testRecipients: TASTER_TEST_TEAM
     },
     ...buildReminderCampaigns(),
-    ...buildFeedbackCampaigns()
+    ...buildFeedbackCampaigns(),
+    ...buildMuazCampaigns()
 };
 
 const BROADCAST_ROSTER_SQL = `
@@ -2400,6 +2415,239 @@ function buildFeedbackCampaigns() {
             // One ledger for both names, so a person asked by Frank is not
             // asked again by Dystil.
             dedupeKey: "taster-2026-08-29-feedback",
+            testRecipients: TASTER_TEST_TEAM
+        };
+    }
+
+    return campaigns;
+}
+
+/* ---------------------------------------------------------------------------
+   The bootcamp call
+   ---------------------------------------------------------------------------
+   A second email for the same register, in a warmer and much longer voice than
+   the feedback note: it thanks the room, asks for feedback, and then spends
+   most of its length on the two bootcamp pathways and the closing date.
+
+   Kept as its own campaign rather than a rewrite of the feedback email, so the
+   two can go to different people, or to the same people in either order,
+   without one ledger blocking the other.
+--------------------------------------------------------------------------- */
+
+const MUAZ_PATHWAYS = [
+    ["\u{1F331}", "Foundation Bootcamp", "For those who want to build their foundations, understand the changing world of work and develop practical, future-ready skills."],
+    ["\u{26A1}", "Advanced Bootcamp", "For those ready to go further, work on more advanced projects and build a stronger profile for the opportunities ahead."]
+];
+
+const MUAZ_FEEDBACK_PROMPTS = [
+    "What did you enjoy?",
+    "What could we improve?",
+    "What would you like to see next?"
+];
+
+const MUAZ_FRIEND_THOUGHTS = [
+    "What should I learn next?",
+    "How do I become more employable?",
+    "How is AI going to affect my career?",
+    "What can I do to stand out?"
+];
+
+// One kicker style for every section heading in this email.
+function muazKicker(text) {
+    return `<p style="margin:24px 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">${text}</p>`;
+}
+
+function muazAction(href, label) {
+    return `<p style="margin:0 0 14px;font-size:17px;">\u{1F449} <a href="${escapeHtml(href)}" style="color:#147a59;font-weight:bold;">${escapeHtml(label)}</a></p>`;
+}
+
+function buildMuazHtml(firstName) {
+    const greeting = firstName ? `Hey ${escapeHtml(firstName)}!` : "Hey!";
+
+    const pathways = MUAZ_PATHWAYS.map(([icon, name, detail]) => `
+                    <div style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;margin:0 0 12px;">
+                        <strong style="color:#123f31;">${icon} ${escapeHtml(name.toUpperCase())}</strong><br>
+                        <span style="color:#4c5a54;">${escapeHtml(detail)}</span>
+                    </div>`).join("");
+
+    const prompts = MUAZ_FEEDBACK_PROMPTS
+        .map((prompt) => `<li style="margin-bottom:6px;">${escapeHtml(prompt)}</li>`)
+        .join("");
+
+    const thoughts = MUAZ_FRIEND_THOUGHTS
+        .map((thought) => `<li style="margin-bottom:6px;">“${escapeHtml(thought)}”</li>`)
+        .join("");
+
+    const socials = TASTER_SOCIALS.map(([, name, href]) =>
+        `<a href="${escapeHtml(href)}" style="color:#147a59;text-decoration:none;white-space:nowrap;">`
+        + `<img src="${SOCIAL_ICONS}${name.toLowerCase()}.png" width="18" height="18" alt=""`
+        + ` style="border:0;vertical-align:-3px;margin-right:6px;"><span style="text-decoration:underline;">${escapeHtml(name)}</span></a>`
+    ).join(" &nbsp;&nbsp; ");
+
+    // Left out entirely until the deck is on the site, so the campaign can
+    // never go out pointing at a file that is not there.
+    const deck = TASTER_DECK_URL
+        ? muazKicker("\u{1F4DA} WANT TO REVISIT THE SESSION?")
+            + `<p style="margin:0 0 12px;">The Taster Session presentation is online, so you can go back through the ideas, insights and opportunities we explored together.</p>`
+            + muazAction(TASTER_DECK_URL, "View the taster session presentation")
+        : "";
+
+    return `<!doctype html>
+        <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
+            <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
+                <div style="background:#123f31;color:#fff;padding:28px 24px;border-radius:12px 12px 0 0;">
+                    <p style="margin:0 0 6px;font-size:12px;letter-spacing:1.6px;color:#8fd3b8;">CAREER ACCELERATOR · FIRST TASTER SESSION</p>
+                    <h1 style="font-size:26px;margin:0;">${greeting}</h1>
+                    <p style="margin:8px 0 0;font-size:16px;color:#d8ede5;">You showed up. You explored. You asked questions.</p>
+                </div>
+                <div style="background:#fff;padding:24px;line-height:1.6;">
+                    <p style="margin-top:0;">And now… it’s time for the next step. \u{1F680}</p>
+                    <p>A huge <strong>THANK YOU</strong> to everyone who joined us for Dystil’s very first Career Accelerator Free Taster Session.</p>
+                    <p>Whether you came to discover what AI means for your career, see what real-world projects look like, or simply figure out what your next move could be — we hope you left with something valuable.</p>
+                    <p style="margin-bottom:0;">But the taster was just that… a taste. \u{1F440}</p>
+                    ${deck}
+                    ${muazKicker("\u{1F4AC} TELL US WHAT YOU THOUGHT")}
+                    <p style="margin:0 0 10px;">Your feedback matters. This was our very first taster session, and we’re building the Career Accelerator experience with learners like you at the centre of it.</p>
+                    <ul style="margin:0 0 14px;padding-left:20px;color:#4c5a54;">${prompts}</ul>
+                    ${muazAction(TASTER_FEEDBACK_URL, "Share your feedback")}
+                    <p style="margin:0;font-size:14px;color:#4c5a54;">It only takes a few minutes — and your feedback could help shape what comes next.</p>
+                </div>
+                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:8px 24px 24px;line-height:1.6;">
+                    ${muazKicker("\u{1F680} READY FOR THE NEXT LEVEL?")}
+                    <p style="margin:0 0 10px;">The taster gave you the <strong>WHY</strong>. The Bootcamp is where you start building the <strong>HOW</strong>.</p>
+                    <p style="margin:0 0 14px;">Our next Career Accelerator Bootcamp session is on Saturday, 26 September 2026, and we’re opening places for two pathways:</p>
+                    ${pathways}
+                    <p style="margin:0 0 14px;">Different starting points. One goal: becoming career-ready for the future.</p>
+                    <p style="background:#123f31;color:#fff;padding:14px 16px;margin:0 0 14px;border-radius:8px;">
+                        \u{1F4C5} <strong>Bootcamp: Saturday, 26 September 2026</strong><br>
+                        ⏳ Registration closes: Tuesday, 15 September 2026<br>
+                        \u{1F39F}️ Seats are limited.
+                    </p>
+                    <p style="margin:0 0 8px;">Don’t wait until the seats are gone and think, “I should have registered.” \u{1F609}</p>
+                    ${muazKicker("\u{1F3AF} YOUR NEXT MOVE STARTS HERE")}
+                    ${muazAction(FOUNDATION_REGISTER_URL, "Register for the Foundation Bootcamp")}
+                    ${muazAction(ADVANCED_REGISTER_URL, "Register for the Advanced Bootcamp")}
+                    <p style="margin:0;">Pick your pathway. Secure your seat. Start building your future.</p>
+                </div>
+                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:8px 24px 24px;line-height:1.6;">
+                    ${muazKicker("\u{1F465} GOT A FRIEND WHO SHOULD BE HERE TOO?")}
+                    <p style="margin:0 0 10px;">You don’t have to keep the opportunity to yourself. Know a friend, classmate, colleague, sibling or family member who’s thinking:</p>
+                    <ul style="margin:0 0 14px;padding-left:20px;color:#4c5a54;">${thoughts}</ul>
+                    <p style="margin:0 0 10px;">Send them this email. Share the opportunity. Bring them with you. Because the best career moves are even better when you don’t make them alone. \u{1F680}</p>
+                    ${muazAction(TASTER_SHARE_URL, "dystil.ai/students/taster")}
+                </div>
+                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:8px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;">
+                    ${muazKicker("\u{1F4F2} STAY CONNECTED")}
+                    <p style="margin:0 0 10px;font-size:14px;color:#4c5a54;">Follow Dystil for updates, insights and what’s coming next:</p>
+                    <p style="margin:0 0 16px;">${socials}</p>
+                    <p style="margin:0 0 6px;font-size:14px;color:#4c5a54;">Have a question? Want to speak to someone about the Bootcamp?</p>
+                    <p style="margin:0 0 18px;">\u{1F4DE} <a href="${escapeHtml(DYSTIL_PHONE_LINK)}" style="color:#147a59;">${escapeHtml(DYSTIL_PHONE)}</a></p>
+                    <p style="margin:0 0 6px;">The taster was the introduction. The Bootcamp is where the real journey begins.</p>
+                    <p style="margin:0 0 18px;">Choose your pathway. Grab your seat. And let’s build what’s next. \u{1F680}</p>
+                    <p style="margin:0;">See you on 26 September.<br><br><strong>The Dystil Team</strong><br>Frank M<br><span style="color:#4c5a54;">Executive Partner</span></p>
+                </div>
+            </div>
+        </body></html>`;
+}
+
+function buildMuazText(firstName) {
+    const deck = TASTER_DECK_URL
+        ? [
+            "\u{1F4DA} WANT TO REVISIT THE SESSION?",
+            "",
+            "The Taster Session presentation is online, so you can go back through the ideas, insights and opportunities we explored together.",
+            "\u{1F449} " + TASTER_DECK_URL,
+            ""
+        ]
+        : [];
+
+    return [
+        firstName ? `Hey ${firstName}!` : "Hey!",
+        "",
+        "You showed up. You explored. You asked questions.",
+        "And now… it’s time for the next step. \u{1F680}",
+        "",
+        "A huge THANK YOU to everyone who joined us for Dystil’s very first Career Accelerator Free Taster Session.",
+        "",
+        "Whether you came to discover what AI means for your career, see what real-world projects look like, or simply figure out what your next move could be — we hope you left with something valuable.",
+        "",
+        "But the taster was just that… a taste. \u{1F440}",
+        "",
+        ...deck,
+        "\u{1F4AC} TELL US WHAT YOU THOUGHT",
+        "",
+        "Your feedback matters. This was our very first taster session, and we’re building the Career Accelerator experience with learners like you at the centre of it.",
+        "",
+        ...MUAZ_FEEDBACK_PROMPTS.map((prompt) => "- " + prompt),
+        "",
+        "\u{1F449} " + TASTER_FEEDBACK_URL,
+        "",
+        "It only takes a few minutes — and your feedback could help shape what comes next.",
+        "",
+        "\u{1F680} READY FOR THE NEXT LEVEL?",
+        "",
+        "The taster gave you the WHY. The Bootcamp is where you start building the HOW.",
+        "",
+        "Our next Career Accelerator Bootcamp session is on Saturday, 26 September 2026, and we’re opening places for two pathways:",
+        "",
+        ...MUAZ_PATHWAYS.flatMap(([icon, name, detail]) => [`${icon} ${name.toUpperCase()}`, detail, ""]),
+        "Different starting points. One goal: becoming career-ready for the future.",
+        "",
+        "\u{1F4C5} Bootcamp: Saturday, 26 September 2026",
+        "⏳ Registration closes: Tuesday, 15 September 2026",
+        "\u{1F39F}️ Seats are limited.",
+        "",
+        "Don’t wait until the seats are gone and think, “I should have registered.” \u{1F609}",
+        "",
+        "\u{1F3AF} YOUR NEXT MOVE STARTS HERE",
+        "",
+        "\u{1F449} Register for the Foundation Bootcamp: " + FOUNDATION_REGISTER_URL,
+        "\u{1F449} Register for the Advanced Bootcamp: " + ADVANCED_REGISTER_URL,
+        "",
+        "Pick your pathway. Secure your seat. Start building your future.",
+        "",
+        "\u{1F465} GOT A FRIEND WHO SHOULD BE HERE TOO?",
+        "",
+        "You don’t have to keep the opportunity to yourself. Know a friend, classmate, colleague, sibling or family member who’s thinking:",
+        "",
+        ...MUAZ_FRIEND_THOUGHTS.map((thought) => `- “${thought}”`),
+        "",
+        "Send them this email. Share the opportunity. Bring them with you. Because the best career moves are even better when you don’t make them alone. \u{1F680}",
+        "",
+        "\u{1F449} " + TASTER_SHARE_URL,
+        "",
+        "\u{1F4F2} STAY CONNECTED",
+        "",
+        "Follow Dystil for updates, insights and what’s coming next:",
+        ...TASTER_SOCIALS.map(([icon, name, href]) => `${icon} ${name}: ${href}`),
+        "",
+        "Have a question? Want to speak to someone about the Bootcamp?",
+        "\u{1F4DE} " + DYSTIL_PHONE,
+        "",
+        "The taster was the introduction. The Bootcamp is where the real journey begins.",
+        "Choose your pathway. Grab your seat. And let’s build what’s next. \u{1F680}",
+        "",
+        "See you on 26 September.",
+        "",
+        "The Dystil Team",
+        "Frank M",
+        "Executive Partner"
+    ].join("\n");
+}
+
+function buildMuazCampaigns() {
+    const campaigns = {};
+
+    for (const [who, sender] of Object.entries(TASTER_SENDERS)) {
+        campaigns[`taster-2026-08-29-muaz-${who}`] = {
+            formType: "Free Taster Registration",
+            subject: MUAZ_SUBJECT,
+            buildHtml: buildMuazHtml,
+            buildText: buildMuazText,
+            sender,
+            replyTo: sender,
+            // One ledger for both names, as with every other pair.
+            dedupeKey: "taster-2026-08-29-muaz",
             testRecipients: TASTER_TEST_TEAM
         };
     }

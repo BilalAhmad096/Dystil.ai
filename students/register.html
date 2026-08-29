@@ -89,6 +89,22 @@
     <script>
         loadStudentLayout();
     </script>
+    <script>
+        /* The bootcamp emails send people here with the pathway already chosen,
+           as ?package=foundation or ?package=advanced. Anything else, and the
+           select is left on "Select Package" as before. */
+        (function () {
+            var wanted = new URLSearchParams(window.location.search).get("package");
+            if (!wanted) return;
+
+            var select = document.getElementById("register-package");
+            var match = [].slice.call(select.options).find(function (option) {
+                return option.value.toLowerCase().indexOf(wanted.trim().toLowerCase()) === 0;
+            });
+
+            if (match) select.value = match.value;
+        })();
+    </script>
     <script src="/assets/js/mobile-menu.js"></script>
 </body>
 </html>

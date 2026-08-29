@@ -1189,6 +1189,15 @@
                     ["taster-2026-08-29-feedback-frank", "from Frank"],
                     ["taster-2026-08-29-feedback-askus", "from Dystil"]
                 ]
+            },
+            // The longer bootcamp call. Its own ledger, so sending it does not
+            // stop the feedback email going to the same person, or the reverse.
+            {
+                label: "Bootcamp call",
+                buttons: [
+                    ["taster-2026-08-29-muaz-frank", "Muaz Style Frank"],
+                    ["taster-2026-08-29-muaz-askus", "Muaz Style Dystil"]
+                ]
             }
         ];
 
@@ -1390,7 +1399,9 @@
             { campaign: "taster-2026-08-29-reminder-hours-frank", label: "Few hours · Frank" },
             { campaign: "taster-2026-08-29-reminder-hours-askus", label: "Few hours · Dystil" },
             { campaign: "taster-2026-08-29-feedback-frank", label: "Feedback · Frank" },
-            { campaign: "taster-2026-08-29-feedback-askus", label: "Feedback · Dystil" }
+            { campaign: "taster-2026-08-29-feedback-askus", label: "Feedback · Dystil" },
+            { campaign: "taster-2026-08-29-muaz-frank", label: "Muaz Style Frank" },
+            { campaign: "taster-2026-08-29-muaz-askus", label: "Muaz Style Dystil" }
         ];
 
         const testPanel = document.getElementById("testing");
