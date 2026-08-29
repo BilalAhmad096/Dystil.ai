@@ -2339,6 +2339,18 @@ function buildFeedbackHtml(firstName) {
         + ` style="border:0;vertical-align:-3px;margin-right:6px;"><span style="text-decoration:underline;">${escapeHtml(name)}</span></a>`
     ).join(" &nbsp;&nbsp; ");
 
+    // The deck is the first of the three, so the other two shuffle up a number
+    // if it is ever taken away again.
+    const hasDeck = Boolean(TASTER_DECK_URL);
+    const step = (number) => (hasDeck ? number : number - 1);
+    const kicker = (text) => `<p style="margin:20px 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">${text}</p>`;
+
+    const deck = hasDeck
+        ? kicker("1 · THE SESSION DECK")
+            + `<p style="margin:0 0 12px;">The taster session presentation is attached, so you can go back through the ideas, the demonstrations and the pathways in your own time.</p>`
+            + `<p style="margin:0 0 4px;">👉 <a href="${escapeHtml(TASTER_DECK_URL)}" style="color:#147a59;font-weight:bold;">Download the presentation</a></p>`
+        : "";
+
     return `<!doctype html>
         <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
             <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
@@ -2347,17 +2359,16 @@ function buildFeedbackHtml(firstName) {
                     <h1 style="font-size:26px;margin:0;">${heading}</h1>
                 </div>
                 <div style="background:#fff;padding:24px;line-height:1.6;">
-                    <p style="margin-top:0;">That was two hours of your Saturday morning, and we are grateful for them. Two things before we let you get on with your week.</p>
-                    <p style="margin:20px 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">1 · HOW DID WE DO?</p>
+                    <p style="margin-top:0;">That was two hours of your Saturday morning, and we are grateful for them. ${hasDeck ? "Three" : "Two"} things before we let you get on with your week.</p>
+                    ${deck}
+                    ${kicker(`${step(2)} · HOW DID WE DO?`)}
                     <p style="margin:0 0 12px;">Three questions, two minutes: <a href="${escapeHtml(TASTER_FEEDBACK_URL)}" style="color:#147a59;font-weight:bold;">dystil.ai/feedback</a></p>
-                    <ol style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px 12px 36px;margin:0 0 16px;">
+                    <ol style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px 12px 36px;margin:0;">
                         ${questions}
                     </ol>
-                    <p>A couple of lines on each is plenty, and there is no wrong answer — the unflattering ones are the useful ones. Everything you write is read by us and is not shared or published anywhere.</p>
-                    <p style="margin-bottom:0;">If you would rather not open a form, replying to this email reaches the same people.</p>
                 </div>
                 <div style="background:#fff;border-top:1px solid #e4ebe8;padding:22px 24px;line-height:1.6;">
-                    <p style="margin:0 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">2 · THE NEXT COHORT</p>
+                    <p style="margin:0 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">${step(3)} · THE NEXT COHORT</p>
                     <h2 style="font-size:20px;margin:0 0 12px;color:#123f31;">${escapeHtml(NEXT_COHORT.name)}</h2>
                     <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;margin:0 0 14px;">
                         <strong>Starts ${escapeHtml(NEXT_COHORT.starts)}</strong><br>
@@ -2365,6 +2376,11 @@ function buildFeedbackHtml(firstName) {
                     </p>
                     <p style="margin:0 0 14px;">Places are limited and are held in the order registrations arrive, so the closing date is the last day to register rather than the day to decide. If Saturday made the decision for you, take your place now.</p>
                     <p style="margin:0;font-size:17px;">👉 <a href="${escapeHtml(TASTER_REGISTER_URL)}" style="color:#147a59;font-weight:bold;">dystil.ai/students/register</a></p>
+                </div>
+                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:22px 24px;line-height:1.6;">
+                    <p style="margin:0 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">PASS IT ON</p>
+                    <p style="margin:0 0 12px;">Know a friend, classmate or colleague asking the same questions about AI and their career? Forward them this email, or send them the taster page — the next session is open to them too.</p>
+                    <p style="margin:0;font-size:17px;">👉 <a href="${escapeHtml(TASTER_SHARE_URL)}" style="color:#147a59;font-weight:bold;">dystil.ai/students/taster</a></p>
                 </div>
                 <div style="background:#fff;border-top:1px solid #e4ebe8;padding:20px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;font-size:14px;color:#4c5a54;">
                     <p style="margin:0 0 6px;">Questions before you register? Call or write, and one of us will answer.</p>
@@ -2377,22 +2393,33 @@ function buildFeedbackHtml(firstName) {
 }
 
 function buildFeedbackText(firstName) {
+    const hasDeck = Boolean(TASTER_DECK_URL);
+    const step = (number) => (hasDeck ? number : number - 1);
+
+    const deck = hasDeck
+        ? [
+            "1. THE SESSION DECK",
+            "",
+            "The taster session presentation is attached, so you can go back through the ideas, the demonstrations and the pathways in your own time.",
+            "",
+            "Download it here: " + TASTER_DECK_URL,
+            ""
+        ]
+        : [];
+
     return [
         firstName ? `Thank you for joining us, ${firstName}.` : "Thank you for joining us.",
         "",
-        "That was two hours of your Saturday morning, and we are grateful for them. Two things before we let you get on with your week.",
+        `That was two hours of your Saturday morning, and we are grateful for them. ${hasDeck ? "Three" : "Two"} things before we let you get on with your week.`,
         "",
-        "1. HOW DID WE DO?",
+        ...deck,
+        `${step(2)}. HOW DID WE DO?`,
         "",
         "Three questions, two minutes: " + TASTER_FEEDBACK_URL,
         "",
         ...TASTER_FEEDBACK_QUESTIONS.map((question, index) => `${index + 1}. ${question}`),
         "",
-        "A couple of lines on each is plenty, and there is no wrong answer - the unflattering ones are the useful ones. Everything you write is read by us and is not shared or published anywhere.",
-        "",
-        "If you would rather not open a form, replying to this email reaches the same people.",
-        "",
-        "2. THE NEXT COHORT: " + NEXT_COHORT.name.toUpperCase(),
+        `${step(3)}. THE NEXT COHORT: ` + NEXT_COHORT.name.toUpperCase(),
         "",
         "Starts " + NEXT_COHORT.starts,
         "Registration closes " + NEXT_COHORT.closes,
@@ -2400,6 +2427,12 @@ function buildFeedbackText(firstName) {
         "Places are limited and are held in the order registrations arrive, so the closing date is the last day to register rather than the day to decide. If Saturday made the decision for you, take your place now.",
         "",
         "Take your place: " + TASTER_REGISTER_URL,
+        "",
+        "PASS IT ON",
+        "",
+        "Know a friend, classmate or colleague asking the same questions about AI and their career? Forward them this email, or send them the taster page - the next session is open to them too.",
+        "",
+        TASTER_SHARE_URL,
         "",
         "Questions before you register? Call " + DYSTIL_PHONE + " or write to askus@dystil.ai, and one of us will answer.",
         "",
@@ -2421,6 +2454,8 @@ function buildFeedbackCampaigns() {
             buildText: buildFeedbackText,
             sender,
             replyTo: sender,
+            // The email says the deck is attached, so it goes with it.
+            attachDeck: true,
             // One ledger for both names, so a person asked by Frank is not
             // asked again by Dystil.
             dedupeKey: "taster-2026-08-29-feedback",
