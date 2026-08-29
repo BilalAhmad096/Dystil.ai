@@ -1172,6 +1172,14 @@ const TASTER_TEST_TEAM = [
     { email: "aman@dystil.ai", fullName: "Aman" }
 ];
 
+const TASTER_FEEDBACK_SUBJECT = "How was it? | Dystil Free Taster Session";
+
+const TASTER_FEEDBACK_QUESTIONS = [
+    "If you joined us, what was the most useful part of the session? If you could not make it, what got in the way?",
+    "What was missing, or what would you change?",
+    "Where are you now: ready to start a pathway, thinking about it, or not for you?"
+];
+
 const CAMPAIGNS = {
     "taster-2026-08-29-joining-link": {
         formType: "Free Taster Registration",
@@ -1308,7 +1316,8 @@ const CAMPAIGNS = {
         replyTo: { email: "askus@dystil.ai", name: "Dystil" },
         testRecipients: TASTER_TEST_TEAM
     },
-    ...buildReminderCampaigns()
+    ...buildReminderCampaigns(),
+    ...buildFeedbackCampaigns()
 };
 
 const BROADCAST_ROSTER_SQL = `
@@ -2198,6 +2207,91 @@ function buildReminderCampaigns() {
                 testRecipients: TASTER_TEST_TEAM
             };
         }
+    }
+
+    return campaigns;
+}
+
+/* ---------------------------------------------------------------------------
+   Feedback
+   ---------------------------------------------------------------------------
+   The one email that goes out after the session rather than before it. It asks
+   three short questions and takes the answers as a plain reply, because a form
+   is one more thing to open and the reply lands in the same mailbox anyway.
+
+   It goes to the whole register rather than to the people who turned up, so
+   nothing in it thanks the reader for attending; the first question asks a
+   no-show what got in the way instead, which is worth knowing on its own.
+
+   Built to the shape of the reminders, so someone who has had four emails from
+   us this week recognises the fifth. Sendable under either name, sharing one
+   ledger, so asking as Frank does not ask again as Dystil.
+--------------------------------------------------------------------------- */
+
+function buildFeedbackHtml(firstName) {
+    const heading = firstName
+        ? `How was it, ${escapeHtml(firstName)}?`
+        : "How was it?";
+
+    const questions = TASTER_FEEDBACK_QUESTIONS
+        .map((question) => `<li style="margin-bottom:8px;">${escapeHtml(question)}</li>`)
+        .join("\n                        ");
+
+    return `<!doctype html>
+        <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
+            <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
+                <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
+                    <h1 style="font-size:24px;margin:0;">${heading}</h1>
+                </div>
+                <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
+                    <p style="margin-top:0;">You registered for the Dystil free taster session on Saturday morning, and we would like to know what you made of it.</p>
+                    <p>Three questions. A couple of lines on each is plenty, and there is no wrong answer — the unflattering ones are the useful ones.</p>
+                    <ol style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px 12px 36px;margin:0 0 16px;">
+                        ${questions}
+                    </ol>
+                    <p>Just reply to this email. Everything you write is read by us and is not shared or published anywhere.</p>
+                    <p>If you already know you want to go further, the pathways are here: <a href="https://dystil.ai/students/pathways" style="color:#147a59;">dystil.ai/students/pathways</a>.</p>
+                    <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
+                </div>
+            </div>
+        </body></html>`;
+}
+
+function buildFeedbackText(firstName) {
+    return [
+        firstName ? `How was it, ${firstName}?` : "How was it?",
+        "",
+        "You registered for the Dystil free taster session on Saturday morning, and we would like to know what you made of it.",
+        "",
+        "Three questions. A couple of lines on each is plenty, and there is no wrong answer - the unflattering ones are the useful ones.",
+        "",
+        ...TASTER_FEEDBACK_QUESTIONS.map((question, index) => `${index + 1}. ${question}`),
+        "",
+        "Just reply to this email. Everything you write is read by us and is not shared or published anywhere.",
+        "",
+        "If you already know you want to go further, the pathways are here: https://dystil.ai/students/pathways",
+        "",
+        "Kind regards,",
+        "The Dystil Team"
+    ].join("\n");
+}
+
+function buildFeedbackCampaigns() {
+    const campaigns = {};
+
+    for (const [who, sender] of Object.entries(TASTER_SENDERS)) {
+        campaigns[`taster-2026-08-29-feedback-${who}`] = {
+            formType: "Free Taster Registration",
+            subject: TASTER_FEEDBACK_SUBJECT,
+            buildHtml: buildFeedbackHtml,
+            buildText: buildFeedbackText,
+            sender,
+            replyTo: sender,
+            // One ledger for both names, so a person asked by Frank is not
+            // asked again by Dystil.
+            dedupeKey: "taster-2026-08-29-feedback",
+            testRecipients: TASTER_TEST_TEAM
+        };
     }
 
     return campaigns;

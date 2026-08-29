@@ -407,7 +407,7 @@
         <div class="reminders" id="reminders" hidden>
             <h2>Reminders</h2>
             <p>
-                Each reminder goes to everyone who has registered, once. Both names write to the same
+                Each message goes to everyone who has registered, once. Both names write to the same
                 record, so sending “2 days to go” from Frank means the Dystil button skips those people
                 rather than mailing them again. Sends go one at a time, so allow around twelve minutes.
             </p>
@@ -1175,6 +1175,14 @@
                     ["taster-2026-08-29-reminder-hours-frank", "from Frank"],
                     ["taster-2026-08-29-reminder-hours-askus", "from Dystil"]
                 ]
+            },
+            // The one that goes out after the session rather than before it.
+            {
+                label: "Feedback after the session",
+                buttons: [
+                    ["taster-2026-08-29-feedback-frank", "from Frank"],
+                    ["taster-2026-08-29-feedback-askus", "from Dystil"]
+                ]
             }
         ];
 
@@ -1227,7 +1235,7 @@
 
             const minutes = Math.ceil(waiting.length * PENDING_PACE_MS / 60000);
 
-            if (!confirm("Send the “" + reminder.label + "” reminder from " + from
+            if (!confirm("Send “" + reminder.label + "” from " + from
                 + " to " + waiting.length + " people?\n\nThis takes about " + minutes
                 + " minutes and cannot be taken back.")) return;
 
@@ -1374,7 +1382,9 @@
             { campaign: "taster-2026-08-29-reminder-final-frank", label: "We start at 11:00 · Frank" },
             { campaign: "taster-2026-08-29-reminder-final-askus", label: "We start at 11:00 · Dystil" },
             { campaign: "taster-2026-08-29-reminder-hours-frank", label: "Few hours · Frank" },
-            { campaign: "taster-2026-08-29-reminder-hours-askus", label: "Few hours · Dystil" }
+            { campaign: "taster-2026-08-29-reminder-hours-askus", label: "Few hours · Dystil" },
+            { campaign: "taster-2026-08-29-feedback-frank", label: "Feedback · Frank" },
+            { campaign: "taster-2026-08-29-feedback-askus", label: "Feedback · Dystil" }
         ];
 
         const testPanel = document.getElementById("testing");
