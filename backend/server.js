@@ -1226,6 +1226,7 @@ const TASTER_FEEDBACK_SUBJECT = "How was it? | Dystil Free Taster Session";
 // answers to the same table the registrations are in. A reply still works for
 // anyone who would rather not open a form, which is why the email says so.
 const TASTER_FEEDBACK_URL = "https://dystil.ai/feedback";
+const TASTER_REGISTER_URL = "https://dystil.ai/students/register";
 
 const TASTER_FEEDBACK_QUESTIONS = [
     "If you joined us, what was the most useful part of the session? If you could not make it, what got in the way?",
@@ -2296,7 +2297,7 @@ function buildFeedbackHtml(firstName) {
                 <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
                     <h1 style="font-size:24px;margin:0;">${heading}</h1>
                 </div>
-                <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
+                <div style="background:#fff;padding:24px;line-height:1.6;">
                     <p style="margin-top:0;">You registered for the Dystil free taster session on Saturday morning, and we would like to know what you made of it.</p>
                     <p>Three questions, two minutes: <a href="${escapeHtml(TASTER_FEEDBACK_URL)}" style="color:#147a59;font-weight:bold;">dystil.ai/feedback</a></p>
                     <ol style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px 12px 36px;margin:0 0 16px;">
@@ -2304,8 +2305,12 @@ function buildFeedbackHtml(firstName) {
                     </ol>
                     <p>A couple of lines on each is plenty, and there is no wrong answer — the unflattering ones are the useful ones. Everything you write is read by us and is not shared or published anywhere.</p>
                     <p>If you would rather not open a form, replying to this email reaches the same people.</p>
-                    <p>If you already know you want to go further, the pathways are here: <a href="https://dystil.ai/students/pathways" style="color:#147a59;">dystil.ai/students/pathways</a>.</p>
                     <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
+                </div>
+                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:20px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;">
+                    <p style="margin:0 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">NEXT COHORT</p>
+                    <p style="margin:0 0 12px;">Registration for the next Dystil Launchpad cohort is open. If Saturday made the decision for you, take your place here:</p>
+                    <p style="margin:0;font-size:17px;">👉 <a href="${escapeHtml(TASTER_REGISTER_URL)}" style="color:#147a59;font-weight:bold;">dystil.ai/students/register</a></p>
                 </div>
             </div>
         </body></html>`;
@@ -2325,10 +2330,13 @@ function buildFeedbackText(firstName) {
         "",
         "If you would rather not open a form, replying to this email reaches the same people.",
         "",
-        "If you already know you want to go further, the pathways are here: https://dystil.ai/students/pathways",
-        "",
         "Kind regards,",
-        "The Dystil Team"
+        "The Dystil Team",
+        "",
+        "NEXT COHORT",
+        "",
+        "Registration for the next Dystil Launchpad cohort is open. If Saturday made the decision for you, take your place here:",
+        TASTER_REGISTER_URL
     ].join("\n");
 }
 
