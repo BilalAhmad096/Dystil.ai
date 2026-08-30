@@ -107,6 +107,34 @@
         .bar .ghost { background: transparent; border: 1px solid var(--line); color: var(--light-text); }
         .bar .ghost:hover { color: var(--white); border-color: var(--primary); }
 
+        /* ---------- VIEW TABS ---------- */
+        .views {
+            display: flex; flex-wrap: wrap; gap: 8px;
+            padding-bottom: 16px; margin-bottom: 18px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .views button {
+            display: inline-flex; align-items: center; gap: 9px;
+            padding: 10px 17px; font-size: 13.5px;
+            background: transparent; border: 1px solid var(--line); color: var(--light-text);
+            transition: 0.15s ease;
+        }
+
+        .views button:hover { color: var(--white); border-color: var(--primary); }
+        .views button.on { background: var(--primary); border-color: var(--primary); color: var(--white); }
+
+        .views .badge {
+            font-size: 11px; padding: 2px 8px; border-radius: 999px;
+            background: rgba(255, 255, 255, 0.12); color: inherit; font-weight: bold;
+        }
+
+        .views button.on .badge { background: rgba(7, 17, 31, 0.34); }
+
+        .view-head { margin-bottom: 18px; }
+        .view-head h2 { font-size: 19px; letter-spacing: -0.01em; margin-bottom: 3px; }
+        .view-head p { font-size: 13.5px; color: var(--light-text); max-width: 760px; }
+
         .counts { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
 
         .count {
@@ -127,6 +155,7 @@
         .tools .meta { font-size: 13px; color: var(--light-text); }
 
         .scroller { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+        .scroller[data-single] th:nth-child(2), .scroller[data-single] td:nth-child(2) { display: none; }
 
         table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px; }
 
@@ -240,7 +269,7 @@
 
         .visitors .head {
             display: flex; flex-wrap: wrap; gap: 12px;
-            align-items: flex-start; justify-content: space-between; margin-bottom: 16px;
+            align-items: flex-start; justify-content: flex-end; margin-bottom: 16px;
         }
         .visitors h2 { font-size: 15px; margin-bottom: 4px; }
         .visitors .head p { font-size: 13px; color: var(--light-text); }
@@ -331,15 +360,23 @@
             </div>
         </div>
 
+        <nav class="views" id="views">
+            <button type="button" class="on" data-view="all">All submissions <span class="badge" data-badge="">0</span></button>
+            <button type="button" data-view="taster">First taster session <span class="badge" data-badge="Free Taster Registration">0</span></button>
+            <button type="button" data-view="bootcamp">Bootcamp registration <span class="badge" data-badge="Bootcamp Registration">0</span></button>
+            <button type="button" data-view="analytics">Analytics</button>
+            <button type="button" data-view="emails">Emails</button>
+        </nav>
+
+        <div class="view-head">
+            <h2 id="view-title">All submissions</h2>
+            <p id="view-note">Every form the site has taken.</p>
+        </div>
+
         <div class="counts" id="counts"></div>
 
         <div class="visitors" id="visitors" hidden>
             <div class="head">
-                <div>
-                    <h2>Visitors</h2>
-                    <p>How many people reached the site, and where they came from.</p>
-                </div>
-
                 <div class="ranges" id="ranges">
                     <button type="button" data-days="7">7 days</button>
                     <button type="button" class="on" data-days="30">30 days</button>
@@ -406,7 +443,7 @@
         </div>
 
         <div class="reminders" id="reminders" hidden>
-            <h2>Reminders</h2>
+            <h2>Send to everyone who registered</h2>
             <p>
                 Each message goes to everyone who has registered, once. Both names write to the same
                 record, so sending “2 days to go” from Frank means the Dystil button skips those people
@@ -438,12 +475,12 @@
             <div class="log" id="pending-log" hidden></div>
         </div>
 
-        <div class="tools">
+        <div class="tools" id="tools">
             <input id="search" type="search" placeholder="Search name, email, reference or details">
             <span class="meta" id="meta"></span>
         </div>
 
-        <div class="scroller">
+        <div class="scroller" id="scroller">
             <table>
                 <thead>
                     <tr>
@@ -509,6 +546,42 @@
         let key = "";
         let all = [];
         let formFilter = "";
+
+        // Which page of the board is open. The panels below are built once and
+        // shown or hidden per view, so switching costs nothing and never
+        // refetches.
+        const VIEWS = {
+            all: {
+                title: "All submissions",
+                note: "Every form the site has taken. Pick a card to narrow it, or search across all of them.",
+                form: ""
+            },
+            taster: {
+                title: "First taster session",
+                note: "Everyone who registered for the free taster session on Saturday 29 August 2026, no-shows included.",
+                form: "Free Taster Registration"
+            },
+            bootcamp: {
+                title: "Bootcamp registration",
+                note: "Everyone who has registered for a Career Accelerator bootcamp, with the pathway they chose and their CV filename.",
+                form: "Bootcamp Registration"
+            },
+            analytics: {
+                title: "Analytics",
+                note: "How many people reached the site, where they came from, and what they did when they arrived."
+            },
+            emails: {
+                title: "Emails",
+                note: "Test an email against the team list first. The send buttons below go to everyone who registered, once each."
+            }
+        };
+
+        const TABLE_VIEWS = ["all", "taster", "bootcamp"];
+
+        // A panel is only shown once its own refresh has run, so switching to a
+        // view never puts an empty box on screen.
+        const ready = { analytics: false, pending: false, reminders: false, test: false };
+        let view = "all";
 
         lockForm.addEventListener("submit", async function (event) {
             event.preventDefault();
@@ -583,6 +656,11 @@
             key = "";
             all = [];
             formFilter = "";
+            ready.analytics = false;
+            ready.pending = false;
+            ready.reminders = false;
+            ready.test = false;
+            showView("all");
             rows.innerHTML = "";
             counts.innerHTML = "";
             meta.textContent = "";
@@ -610,6 +688,58 @@
             lock.hidden = false;
         });
 
+        document.getElementById("views").addEventListener("click", function (event) {
+            const button = event.target.closest("button[data-view]");
+            if (button) showView(button.dataset.view);
+        });
+
+        function showView(name) {
+            if (!VIEWS[name]) return;
+
+            view = name;
+            document.getElementById("view-title").textContent = VIEWS[name].title;
+            document.getElementById("view-note").textContent = VIEWS[name].note;
+
+            document.querySelectorAll("#views button[data-view]").forEach(function (button) {
+                button.classList.toggle("on", button.dataset.view === name);
+            });
+
+            // The two named views are the form filter, so the cards are only
+            // needed on the view that has no filter of its own.
+            if (TABLE_VIEWS.includes(name)) formFilter = VIEWS[name].form;
+
+            syncPanels();
+            if (TABLE_VIEWS.includes(name)) render();
+        }
+
+        function syncPanels() {
+            const isTable = TABLE_VIEWS.includes(view);
+
+            const scroller = document.getElementById("scroller");
+
+            document.getElementById("csv").hidden = !isTable;
+            document.getElementById("tools").hidden = !isTable;
+            scroller.hidden = !isTable;
+
+            if (isTable && VIEWS[view].form) scroller.dataset.single = "";
+            else delete scroller.dataset.single;
+            counts.hidden = view !== "all";
+
+            visitors.hidden = !(view === "analytics" && ready.analytics);
+            testPanel.hidden = !(view === "emails" && ready.test);
+            remindersPanel.hidden = !(view === "emails" && ready.reminders);
+            pendingPanel.hidden = !(view === "emails" && ready.pending);
+        }
+
+        function badgeCounts() {
+            document.querySelectorAll("#views .badge").forEach(function (badge) {
+                const form = badge.dataset.badge;
+                badge.textContent = form
+                    ? all.filter(function (row) { return row.form_type === form; }).length
+                    : all.length;
+            });
+        }
+
         search.addEventListener("input", render);
 
         counts.addEventListener("click", function (event) {
@@ -632,6 +762,8 @@
         }
 
         function render() {
+            badgeCounts();
+
             const tally = new Map();
             all.forEach(function (row) { tally.set(row.form_type, (tally.get(row.form_type) || 0) + 1); });
 
@@ -652,7 +784,7 @@
                 tr.appendChild(cell(row.full_name));
                 tr.appendChild(mailCell(row.email));
                 tr.appendChild(cell(formatDate(row.submitted_at), "when"));
-                tr.appendChild(detailsCell(row.details));
+                tr.appendChild(detailsCell(row.details, row.cv_filename));
                 tr.appendChild(statusCell(row.delivery_status));
                 rows.appendChild(tr);
             });
@@ -693,7 +825,8 @@
         async function visitorsRefresh() {
             if (!key) return;
 
-            visitors.hidden = false;
+            ready.analytics = true;
+            syncPanels();
             visitorError.hidden = true;
             sampledNote.hidden = true;
             drawRegistrationSources();
@@ -926,10 +1059,15 @@
             return words.charAt(0).toUpperCase() + words.slice(1);
         }
 
-        function detailsCell(details) {
+        // The CV never goes in the details: the file is not kept, only its name,
+        // and that lives in its own column. A bootcamp row is half a story
+        // without it, so it is shown as one more field.
+        function detailsCell(details, cvFilename) {
             const td = document.createElement("td");
             td.className = "details";
             const pairs = detailPairs(details);
+
+            if (Array.isArray(pairs) && cvFilename) pairs.push(["CV", cvFilename]);
 
             // Not JSON at all: show exactly what was stored rather than nothing.
             if (pairs === null) {
@@ -1026,7 +1164,7 @@
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
-            link.download = "dystil-submissions-" + new Date().toISOString().slice(0, 10) + ".csv";
+            link.download = "dystil-" + view + "-" + new Date().toISOString().slice(0, 10) + ".csv";
             link.click();
             URL.revokeObjectURL(url);
         });
@@ -1065,7 +1203,8 @@
         }
 
         async function pendingRefresh() {
-            pendingPanel.hidden = false;
+            ready.pending = true;
+            syncPanels();
 
             try {
                 const roster = await pendingCall({ action: "list" });
@@ -1356,7 +1495,8 @@
         }
 
         async function reminderRefresh() {
-            remindersPanel.hidden = false;
+            ready.reminders = true;
+            syncPanels();
             quotaRefresh();
 
             if (!reminderRows.children.length) reminderBuildRows();
@@ -1446,7 +1586,8 @@
         }
 
         async function testRefresh() {
-            testPanel.hidden = false;
+            ready.test = true;
+            syncPanels();
 
             if (testButtons.children.length) return;
 
