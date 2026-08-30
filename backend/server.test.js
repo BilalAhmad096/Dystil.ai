@@ -64,14 +64,12 @@ function makeFakeDatabase() {
                 reference: args[1],
                 form_type: args[2],
                 details: args[3],
-                cv_filename: args[4],
-                cv_key: args[5],
-                source_channel: args[6],
-                source_detail: args[7],
-                source_landing: args[8],
-                submitted_at: args[9],
-                fee: args[10],
-                created_at: args[11]
+                source_channel: args[4],
+                source_detail: args[5],
+                source_landing: args[6],
+                submitted_at: args[7],
+                fee: args[8],
+                created_at: args[9]
             });
 
             return { success: true, meta: { changes: 1 } };
@@ -155,7 +153,7 @@ function makeFakeDatabase() {
                             throw new Error(`Unexpected statement: ${sql}`);
                         },
                         async all() {
-                            if (sql.includes("SELECT token, cv_key")) {
+                            if (sql.includes("SELECT token FROM pending_registrations")) {
                                 return { results: pending.filter((row) => row.created_at < args[0]) };
                             }
 
@@ -175,27 +173,6 @@ function makeFakeDatabase() {
                     };
                 }
             };
-        }
-    };
-}
-
-// The CV waits in R2 between the form and the payment.
-function makeFakeBucket() {
-    const objects = new Map();
-
-    return {
-        objects,
-        async put(key, value) {
-            objects.set(key, value);
-        },
-        async get(key) {
-            if (!objects.has(key)) return null;
-
-            const value = objects.get(key);
-            return { async text() { return value; } };
-        },
-        async delete(key) {
-            objects.delete(key);
         }
     };
 }
@@ -1315,7 +1292,6 @@ function makePaidEnv() {
     return {
         ...env,
         DB: makeFakeDatabase(),
-        CV_STORE: makeFakeBucket(),
         STRIPE_SECRET_KEY: "sk_test_key",
         STRIPE_WEBHOOK_SECRET
     };
@@ -1493,7 +1469,9 @@ test("records the registration and sends the emails once the fee is paid", async
     assert.ok(paidEnv.DB.leads[0].paid_at);
 });
 
-test("keeps the CV until the fee is paid, then attaches it", async function() {
+// The bootcamp form no longer asks for one, and a stale copy of the old page
+// sending a file anyway must not stop somebody registering.
+test("ignores a CV sent to a paid registration", async function() {
     paidEnv = makePaidEnv();
 
     const started = await startRegistration({
@@ -1501,19 +1479,14 @@ test("keeps the CV until the fee is paid, then attaches it", async function() {
         cv: new File(["a sample cv"], "Priya CV.pdf", { type: "application/pdf" })
     });
 
-    // Waiting in the bucket, not in the database and not in anybody's inbox.
-    assert.equal(paidEnv.CV_STORE.objects.size, 1);
+    assert.equal(started.status, 200);
+    assert.equal(paidEnv.DB.pending.length, 1);
     assert.equal(started.emailCalls.length, 0);
 
     const paid = await payFor(started);
-    const attachment = paid.emailCalls[0].body.attachment;
 
-    assert.equal(attachment.length, 1);
-    assert.equal(attachment[0].name, "Priya CV.pdf");
-    assert.equal(atob(attachment[0].content), "a sample cv");
-
-    // And it does not linger once it has been sent.
-    assert.equal(paidEnv.CV_STORE.objects.size, 0);
+    assert.equal(rowFor(paidEnv.DB, started.result.reference).cv_filename, null);
+    assert.equal(paid.emailCalls[0].body.attachment, undefined);
 });
 
 // The whole point of the change: an unpaid registration is not a registration.
@@ -1581,7 +1554,6 @@ test("throws the hold away when Stripe cannot be reached", async function() {
 
     assert.equal(paidEnv.DB.pending.length, 0);
     assert.equal(paidEnv.DB.rows.length, 0);
-    assert.equal(paidEnv.CV_STORE.objects.size, 0);
 });
 
 test("charges nothing for a package it does not recognise", async function() {

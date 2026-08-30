@@ -4,16 +4,14 @@
 --   npx wrangler d1 execute dystil-submissions --remote --file=migrations/0003-pay-before-record.sql
 --
 -- A registration now waits here between the form and the payment, and is moved
--- into submissions only when Stripe confirms the fee was paid. The CV waits in
--- R2 rather than in this table, because a 4 MB file does not fit D1's 2 MB row.
+-- into submissions only when Stripe confirms the fee was paid. Nothing large
+-- waits: the bootcamp form asks for typed answers only.
 
 CREATE TABLE IF NOT EXISTS pending_registrations (
     token TEXT PRIMARY KEY,
     reference TEXT NOT NULL,
     form_type TEXT NOT NULL,
     details TEXT NOT NULL,
-    cv_filename TEXT,
-    cv_key TEXT,
     source_channel TEXT,
     source_detail TEXT,
     source_landing TEXT,

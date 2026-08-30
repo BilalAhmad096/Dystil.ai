@@ -6,9 +6,9 @@ four website forms and uses Brevo to send:
 1. the complete submission to `askus@dystil.ai`; and
 2. a confirmation to the visitor from `askus@dystil.ai`.
 
-The bootcamp registration email includes an uploaded PDF, DOC or DOCX CV (up to
-4 MB). Email/API secrets stay in Cloudflare and are never exposed in the public
-GitHub Pages JavaScript.
+Email and API secrets stay in Cloudflare and are never exposed in the public
+GitHub Pages JavaScript. The Worker still accepts a PDF, DOC or DOCX attachment
+(up to 4 MB) on the unpaid forms, though none of them currently asks for one.
 
 ## Why Brevo instead of Resend?
 
@@ -128,8 +128,8 @@ being verified.
 ### What happens when somebody registers
 
 1. The Worker validates the form, allocates the reference, and puts the whole
-   submission in `pending_registrations`. The CV goes into the R2 bucket. No row
-   is written to `submissions` and no email is sent.
+   submission in `pending_registrations`. No row is written to `submissions` and
+   no email is sent.
 2. The name and email are written to `registration_leads`, so somebody who stops
    at the payment page can still be followed up.
 3. The visitor is sent to a Stripe payment page for the chosen package.
@@ -137,8 +137,7 @@ being verified.
    `https://dystil.ai/students/payment-complete`.
 5. Stripe calls `POST /api/stripe-webhook`. The Worker checks the signature,
    moves the held registration into `submissions` as paid, sends the
-   notification and the confirmation with the CV attached, marks the lead paid,
-   and deletes the hold and the file.
+   notification and the confirmation, marks the lead paid, and deletes the hold.
 
 If Stripe cannot be reached at step 3 the hold is thrown away and the visitor is
 asked to try again, because a registration waiting on a payment page that never
@@ -149,8 +148,12 @@ proves nothing, since anybody can type that address. A repeated webhook is
 harmless: the reference is a primary key, so the second delivery inserts
 nothing, sends nothing, and answers 200.
 
-Anything still held 24 hours later was never paid for. It is deleted, along with
-its CV, by the next registration that comes through.
+Anything still held 24 hours later was never paid for. It is deleted by the next
+registration that comes through.
+
+The bootcamp form asks for typed answers only. It no longer takes a CV upload,
+so nothing large ever waits for a payment and no file store is involved. Ask a
+paid student for a CV by replying to their registration email.
 
 ### The prices
 
@@ -175,7 +178,6 @@ price there and on `students/services.html` together.
 3. From the `backend` directory:
 
 ```powershell
-npx wrangler r2 bucket create dystil-pending-cvs
 npx wrangler d1 execute dystil-submissions --remote --file=migrations/0002-add-payment-columns.sql
 npx wrangler d1 execute dystil-submissions --remote --file=migrations/0003-pay-before-record.sql
 npx wrangler secret put STRIPE_SECRET_KEY
@@ -240,9 +242,9 @@ subject line of the notification to `askus@dystil.ai`, in the visitor's
 confirmation, and in the message shown on the website.
 
 The record holds the form type, name, email, every field the visitor filled in,
-the CV filename, the submission time, and whether the emails were delivered
-(`pending`, `sent` or `failed`). **The CV file itself is not stored** — it stays
-an email attachment.
+the submission time, and whether the emails were delivered (`pending`, `sent` or
+`failed`). Where an attachment is sent, only its filename is recorded: **the file
+itself is not stored** and stays an email attachment.
 
 Because the reference cannot exist without the record, a database failure stops
 the submission and asks the visitor to try again rather than sending an enquiry

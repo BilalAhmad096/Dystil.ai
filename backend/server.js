@@ -150,17 +150,16 @@ const SAVE_PAID_SUBMISSION_SQL = `
 
 const SAVE_PENDING_SQL = `
     INSERT INTO pending_registrations
-        (token, reference, form_type, details, cv_filename, cv_key,
+        (token, reference, form_type, details,
          source_channel, source_detail, source_landing, submitted_at, fee, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 const READ_PENDING_SQL = "SELECT * FROM pending_registrations WHERE token = ?";
 
 const DELETE_PENDING_SQL = "DELETE FROM pending_registrations WHERE token = ?";
 
-// Anything still waiting a day later was never paid for. The CV keys come back
-// so the files can go too, rather than being orphaned in the bucket.
-const STALE_PENDING_SQL = "SELECT token, cv_key FROM pending_registrations WHERE created_at < ? LIMIT 20";
+// Anything still waiting a day later was never paid for.
+const STALE_PENDING_SQL = "SELECT token FROM pending_registrations WHERE created_at < ? LIMIT 20";
 
 const SAVE_LEAD_SQL = `
     INSERT INTO registration_leads (reference, form_type, full_name, email, package, fee, started_at)
@@ -396,11 +395,12 @@ export default {
         // A registration with a fee to pay is not a record yet. It waits in the
         // holding table until Stripe says the money arrived, so the submissions
         // list only ever contains people who actually paid.
+        // The bootcamp form asks for typed answers only, so there is no file to
+        // hold. A CV arriving from a cached copy of the old page is ignored
+        // rather than refused: the registration is what matters.
         if (fee) {
             return startPaidRegistration(env, respond, {
-                formType, values, source, submittedAt, fee,
-                attachment: cvResult.attachment,
-                rateLimit
+                formType, values, source, submittedAt, fee, rateLimit
             });
         }
 
@@ -1141,29 +1141,18 @@ async function deliverSubmission(env, { reference, formType, schema, values, att
 // emailed and nothing appears in the submissions list until Stripe confirms the
 // money arrived; only the name and email are kept, as a lead, so somebody who
 // stops at the payment page can still be followed up.
-async function startPaidRegistration(env, respond, { formType, values, source, submittedAt, fee, attachment, rateLimit }) {
+async function startPaidRegistration(env, respond, { formType, values, source, submittedAt, fee, rateLimit }) {
     const token = crypto.randomUUID();
     let reference;
-    let cvKey = null;
 
     try {
         reference = await allocateReference(env.DB, formType);
-
-        if (attachment) {
-            cvKey = `pending/${token}`;
-            await env.CV_STORE.put(cvKey, attachment.content, {
-                httpMetadata: { contentType: "text/plain" },
-                customMetadata: { filename: attachment.filename }
-            });
-        }
 
         await env.DB.prepare(SAVE_PENDING_SQL).bind(
             token,
             reference,
             formType,
             JSON.stringify(values),
-            attachment ? attachment.filename : null,
-            cvKey,
             source.channel,
             source.detail,
             source.landing,
@@ -1177,7 +1166,7 @@ async function startPaidRegistration(env, respond, { formType, values, source, s
         ).run();
     } catch (error) {
         console.error("Could not hold the registration.", error instanceof Error ? error.message : "Unknown error");
-        await discardPending(env, token, cvKey);
+        await discardPending(env, token);
 
         return respond({
             success: false,
@@ -1190,7 +1179,7 @@ async function startPaidRegistration(env, respond, { formType, values, source, s
     // Without a payment page there is nothing for the held registration to be
     // waiting on, so it is thrown away rather than left to expire quietly.
     if (!paymentUrl) {
-        await discardPending(env, token, cvKey);
+        await discardPending(env, token);
 
         return respond({
             success: false,
@@ -1237,7 +1226,7 @@ async function completePaidRegistration(env, session) {
         values.fullName,
         values.email,
         pending.details,
-        pending.cv_filename,
+        null,
         pending.submitted_at,
         pending.source_channel,
         pending.source_detail,
@@ -1249,54 +1238,31 @@ async function completePaidRegistration(env, session) {
     // A repeated delivery inserts nothing. The record and the emails already
     // exist, so this one only clears up after itself.
     if (!saved.meta || saved.meta.changes === 0) {
-        await discardPending(env, token, pending.cv_key);
+        await discardPending(env, token);
         return true;
     }
 
     await env.DB.prepare(MARK_LEAD_PAID_SQL).bind(new Date().toISOString(), pending.reference).run();
-
-    const attachment = await readPendingCv(env, pending);
 
     await deliverSubmission(env, {
         reference: pending.reference,
         formType: pending.form_type,
         schema,
         values,
-        attachment,
+        attachment: null,
         submittedAt: pending.submitted_at
     });
 
     // The record exists whether or not the emails did, so the hold is released
     // either way. A failed email is visible on the submissions page as its
     // delivery status; asking Stripe to retry would only write it twice.
-    await discardPending(env, token, pending.cv_key);
+    await discardPending(env, token);
 
     return true;
 }
 
-// The CV comes back out of R2 as the base64 the email needs. A file that has
-// gone missing is worth reporting, but not worth losing the registration over.
-async function readPendingCv(env, pending) {
-    if (!pending.cv_key || !env.CV_STORE) return null;
-
+async function discardPending(env, token) {
     try {
-        const object = await env.CV_STORE.get(pending.cv_key);
-        if (!object) throw new Error("The held CV was not in the bucket.");
-
-        return { filename: pending.cv_filename, content: await object.text() };
-    } catch (error) {
-        console.error("Could not read the held CV.", {
-            reference: pending.reference,
-            message: error instanceof Error ? error.message : "Unknown error"
-        });
-
-        return null;
-    }
-}
-
-async function discardPending(env, token, cvKey) {
-    try {
-        if (cvKey && env.CV_STORE) await env.CV_STORE.delete(cvKey);
         if (env.DB) await env.DB.prepare(DELETE_PENDING_SQL).bind(token).run();
     } catch (error) {
         console.error("Could not clear a held registration.", {
@@ -1315,7 +1281,7 @@ async function purgeStalePending(env) {
             .all();
 
         for (const row of results || []) {
-            await discardPending(env, row.token, row.cv_key);
+            await discardPending(env, row.token);
         }
     } catch (error) {
         console.error("Could not clear the expired registrations.",

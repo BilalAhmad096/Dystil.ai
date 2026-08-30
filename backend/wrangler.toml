@@ -9,13 +9,6 @@ binding = "DB"
 database_name = "dystil-submissions"
 database_id = "4a352612-0ed3-4187-a0c5-14eae4e8ac34"
 
-# Where a CV waits while its registration is unpaid. Nothing lives here for
-# long: the file is attached to the notification email and deleted the moment
-# the fee is paid, and an abandoned one is cleared out after a day.
-[[r2_buckets]]
-binding = "CV_STORE"
-bucket_name = "dystil-pending-cvs"
-
 [vars]
 ALLOWED_ORIGINS = "https://dystil.ai,https://www.dystil.ai"
 ADMIN_EMAIL = "askus@dystil.ai"
