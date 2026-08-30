@@ -1089,17 +1089,21 @@ function siteUrl(env) {
 // Builds and sends the notification and the confirmation, then records whether
 // they arrived. Both the unpaid forms and the paid registrations end here, so
 // an enquiry reads the same however it reached us.
-async function deliverSubmission(env, { reference, formType, schema, values, attachment, submittedAt }) {
+async function deliverSubmission(env, { reference, formType, schema, values, attachment, submittedAt, payment = null }) {
     const fromEmail = env.FROM_EMAIL || "askus@dystil.ai";
     const adminEmail = env.ADMIN_EMAIL || "askus@dystil.ai";
 
+    // A paid registration says so in the subject line, so the inbox separates
+    // the people who have paid from the people who are asking.
     const adminEmailPayload = {
         sender: { name: "Dystil Website", email: fromEmail },
         to: [{ email: adminEmail, name: "Dystil" }],
         replyTo: { email: values.email, name: values.fullName },
-        subject: `[${reference}] New ${formType} — ${values.fullName}`,
-        htmlContent: buildAdminHtml(formType, schema, values, attachment, submittedAt, reference),
-        textContent: buildAdminText(formType, schema, values, attachment, submittedAt, reference)
+        subject: payment
+            ? `[${reference}] PAID ${formatMoney(payment.amount)} — ${formType} — ${values.fullName}`
+            : `[${reference}] New ${formType} — ${values.fullName}`,
+        htmlContent: buildAdminHtml(formType, schema, values, attachment, submittedAt, reference, payment),
+        textContent: buildAdminText(formType, schema, values, attachment, submittedAt, reference, payment)
     };
 
     if (attachment) {
@@ -1113,9 +1117,11 @@ async function deliverSubmission(env, { reference, formType, schema, values, att
         sender: { name: "Dystil", email: fromEmail },
         to: [{ email: values.email, name: values.fullName }],
         replyTo: { email: adminEmail, name: "Dystil" },
-        subject: `We’ve received your enquiry | ${reference}`,
-        htmlContent: buildConfirmationHtml(values.fullName, formType, reference),
-        textContent: buildConfirmationText(values.fullName, formType, reference)
+        subject: payment
+            ? `Payment received | ${reference}`
+            : `We’ve received your enquiry | ${reference}`,
+        htmlContent: buildConfirmationHtml(values.fullName, formType, reference, payment),
+        textContent: buildConfirmationText(values.fullName, formType, reference, payment)
     };
 
     const [adminResult, confirmationResult] = await Promise.all([
@@ -1250,7 +1256,16 @@ async function completePaidRegistration(env, session) {
         schema,
         values,
         attachment: null,
-        submittedAt: pending.submitted_at
+        submittedAt: pending.submitted_at,
+        payment: {
+            amount: session.amount_total ?? pending.fee,
+            reference: session.payment_intent || session.id || "",
+            paidAt: new Date().toLocaleString("en-GB", {
+                dateStyle: "long",
+                timeStyle: "short",
+                timeZone: "Europe/London"
+            })
+        }
     });
 
     // The record exists whether or not the emails did, so the hold is released
@@ -1500,7 +1515,7 @@ function formatHtmlValue(value) {
     return escapeHtml(value || "—").replace(/\r?\n/g, "<br>");
 }
 
-function buildAdminHtml(formType, schema, values, attachment, submittedAt, reference) {
+function buildAdminHtml(formType, schema, values, attachment, submittedAt, reference, payment = null) {
     const referenceRow = `
         <tr>
             <td style="padding:10px;border:1px solid #e5e7eb;font-weight:700;vertical-align:top;width:34%;">Reference</td>
@@ -1519,35 +1534,64 @@ function buildAdminHtml(formType, schema, values, attachment, submittedAt, refer
             <td style="padding:10px;border:1px solid #e5e7eb;vertical-align:top;">${escapeHtml(attachment.filename)} (${formatFileSize(attachment.size)}) — attached</td>
         </tr>` : "";
 
+    // Highlighted, because whether the money arrived is the first thing worth
+    // knowing when this lands in the inbox.
+    const paymentRow = payment ? `
+        <tr>
+            <td style="padding:10px;border:1px solid #e5e7eb;font-weight:700;vertical-align:top;background:#eaf6f0;">Payment</td>
+            <td style="padding:10px;border:1px solid #e5e7eb;vertical-align:top;background:#eaf6f0;"><strong>${escapeHtml(formatMoney(payment.amount))} received</strong> on ${escapeHtml(payment.paidAt)}<br>Stripe: ${escapeHtml(payment.reference)}</td>
+        </tr>` : "";
+
     return `<!doctype html>
         <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
             <div style="max-width:680px;margin:0 auto;padding:32px 16px;">
                 <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
-                    <h1 style="font-size:24px;margin:0;">New ${escapeHtml(formType)}</h1>
+                    <h1 style="font-size:24px;margin:0;">${payment ? `Payment received — ${escapeHtml(formType)}` : `New ${escapeHtml(formType)}`}</h1>
                     <p style="margin:8px 0 0;color:#d8ede5;">Submitted ${escapeHtml(submittedAt)}</p>
                 </div>
                 <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;">
                     <p style="margin-top:0;">Reply to this email to contact <strong>${escapeHtml(values.fullName)}</strong>.</p>
-                    <table style="border-collapse:collapse;width:100%;font-size:14px;">${referenceRow}${rows}${cvRow}</table>
+                    <table style="border-collapse:collapse;width:100%;font-size:14px;">${referenceRow}${paymentRow}${rows}${cvRow}</table>
                 </div>
             </div>
         </body></html>`;
 }
 
-function buildAdminText(formType, schema, values, attachment, submittedAt, reference) {
+function buildAdminText(formType, schema, values, attachment, submittedAt, reference, payment = null) {
     const lines = schema.map(([field, label]) => `${label}: ${values[field] || "—"}`);
     if (attachment) lines.push(`CV: ${attachment.filename} (${formatFileSize(attachment.size)}) — attached`);
-    return [`New ${formType}`, `Reference ${reference}`, `Submitted ${submittedAt}`, "", ...lines].join("\n");
+
+    return [
+        payment ? `Payment received — ${formType}` : `New ${formType}`,
+        `Reference ${reference}`,
+        `Submitted ${submittedAt}`,
+        ...(payment ? [
+            `Payment: ${formatMoney(payment.amount)} received on ${payment.paidAt}`,
+            `Stripe: ${payment.reference}`
+        ] : []),
+        "",
+        ...lines
+    ].join("\n");
 }
 
-function buildConfirmationHtml(fullName, formType, reference) {
+function buildConfirmationHtml(fullName, formType, reference, payment = null) {
     const isFeedback = formType === FEEDBACK_FORM;
-    const opening = isFeedback
-        ? "Your feedback has been sent successfully and received by Dystil."
-        : "Your enquiry has been sent successfully and received by Dystil.";
-    const recorded = isFeedback
-        ? "We read every answer, and what people tell us here decides what the next session looks like."
-        : "A member of our team will review your details and contact you shortly.";
+    const opening = payment
+        ? `Payment received. Your ${formType.toLowerCase()} is complete and your place is confirmed.`
+        : isFeedback
+            ? "Your feedback has been sent successfully and received by Dystil."
+            : "Your enquiry has been sent successfully and received by Dystil.";
+    const recorded = payment
+        ? "We will email your joining details before the programme starts."
+        : isFeedback
+            ? "We read every answer, and what people tell us here decides what the next session looks like."
+            : "A member of our team will review your details and contact you shortly.";
+
+    // The receipt Stripe sends is the formal one. This repeats the figure so the
+    // amount and the reference sit in the same email as everything else.
+    const paidRow = payment
+        ? `<p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;">Amount paid: <strong>${escapeHtml(formatMoney(payment.amount))}</strong><br>Paid on ${escapeHtml(payment.paidAt)}<br>Stripe emails a receipt separately.</p>`
+        : "";
 
     return `<!doctype html>
         <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
@@ -1557,7 +1601,8 @@ function buildConfirmationHtml(fullName, formType, reference) {
                 </div>
                 <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
                     <p style="margin-top:0;">${escapeHtml(opening)}</p>
-                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;">Your reference is <strong>${escapeHtml(reference)}</strong>. Please quote it if you contact us about this enquiry.</p>
+                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;">Your reference is <strong>${escapeHtml(reference)}</strong>. Please quote it if you contact us about ${payment ? "your place" : "this enquiry"}.</p>
+                    ${paidRow}
                     <p>We’ve recorded it as <strong>${escapeHtml(formType)}</strong>. ${escapeHtml(recorded)}</p>
                     <p>If you need to add anything, reply to this email or contact us at <a href="mailto:askus@dystil.ai" style="color:#147a59;">askus@dystil.ai</a>.</p>
                     <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
@@ -1566,27 +1611,44 @@ function buildConfirmationHtml(fullName, formType, reference) {
         </body></html>`;
 }
 
-function buildConfirmationText(fullName, formType, reference) {
+function buildConfirmationText(fullName, formType, reference, payment = null) {
     const isFeedback = formType === FEEDBACK_FORM;
 
     return [
         `Thank you, ${fullName}.`,
         "",
-        isFeedback
-            ? "Your feedback has been sent successfully and received by Dystil."
-            : "Your enquiry has been sent successfully and received by Dystil.",
+        payment
+            ? `Payment received. Your ${formType.toLowerCase()} is complete and your place is confirmed.`
+            : isFeedback
+                ? "Your feedback has been sent successfully and received by Dystil."
+                : "Your enquiry has been sent successfully and received by Dystil.",
         "",
-        `Your reference is ${reference}. Please quote it if you contact us about this enquiry.`,
+        `Your reference is ${reference}. Please quote it if you contact us about ${payment ? "your place" : "this enquiry"}.`,
+        ...(payment ? [
+            "",
+            `Amount paid: ${formatMoney(payment.amount)}`,
+            `Paid on ${payment.paidAt}`,
+            "Stripe emails a receipt separately."
+        ] : []),
         "",
-        `We’ve recorded it as ${formType}. ` + (isFeedback
-            ? "We read every answer, and what people tell us here decides what the next session looks like."
-            : "A member of our team will review your details and contact you shortly."),
+        `We’ve recorded it as ${formType}. ` + (payment
+            ? "We will email your joining details before the programme starts."
+            : isFeedback
+                ? "We read every answer, and what people tell us here decides what the next session looks like."
+                : "A member of our team will review your details and contact you shortly."),
         "",
         "If you need to add anything, reply to this email or contact askus@dystil.ai.",
         "",
         "Kind regards,",
         "The Dystil Team"
     ].join("\n");
+}
+
+// Pence to pounds, for an email a person reads rather than a database column.
+function formatMoney(pence) {
+    if (!Number.isFinite(pence)) return "the programme fee";
+
+    return `£${(pence / 100).toFixed(2)}`;
 }
 
 function formatFileSize(bytes) {

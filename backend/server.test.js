@@ -1692,3 +1692,52 @@ test("shows the unpaid starts to the submissions page", async function() {
 
     assert.equal((await after.json()).leads.length, 0);
 });
+
+// The emails only go out once the money has arrived, so they should say so
+// rather than describing the registration as an enquiry awaiting a reply.
+test("says the payment was received in both emails", async function() {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+    const paid = await payFor(started);
+
+    const [notification, confirmation] = paid.emailCalls;
+
+    // What lands in the Dystil inbox.
+    assert.match(notification.body.subject, /^\[DYS-BOT-26-\d{4}\] PAID £399\.00 — Bootcamp Registration — Priya Graduate$/);
+    assert.match(notification.body.htmlContent, /Payment received/);
+    assert.match(notification.body.htmlContent, /£399\.00 received/);
+    assert.match(notification.body.textContent, /^Payment received — Bootcamp Registration/);
+    assert.match(notification.body.textContent, /Payment: £399\.00 received on /);
+
+    // What lands in the student's inbox.
+    assert.match(confirmation.body.subject, /^Payment received \| DYS-BOT-26-\d{4}$/);
+    assert.match(confirmation.body.htmlContent, /Payment received\. Your bootcamp registration is complete and your place is confirmed\./);
+    assert.match(confirmation.body.htmlContent, /Amount paid: <strong>£399\.00<\/strong>/);
+    assert.match(confirmation.body.htmlContent, /joining details before the programme starts/);
+    assert.match(confirmation.body.textContent, /Amount paid: £399\.00/);
+    assert.match(confirmation.body.textContent, /Stripe emails a receipt separately\./);
+});
+
+test("shows the amount Stripe charged, not the amount we asked for", async function() {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration({ ...bootcampRegistration, package: "Advanced Bootcamp" });
+    const paid = await payFor(started, 89900);
+
+    assert.match(paid.emailCalls[0].body.subject, /PAID £899\.00/);
+    assert.match(paid.emailCalls[1].body.htmlContent, /Amount paid: <strong>£899\.00<\/strong>/);
+});
+
+// An enquiry nobody paid for must not start claiming a payment arrived.
+test("leaves the unpaid forms saying what they always said", async function() {
+    await withMockedApis(async function(calls) {
+        await worker.fetch(makeRequest(studentEnquiry), env);
+
+        const [notification, confirmation] = calls.emailCalls;
+
+        assert.match(notification.body.subject, /^\[DYS-STU-26-\d{4}\] New Student Enquiry — Sam Student$/);
+        assert.doesNotMatch(notification.body.htmlContent, /Payment/);
+        assert.match(confirmation.body.subject, /^We’ve received your enquiry \| /);
+        assert.match(confirmation.body.textContent, /enquiry has been sent successfully/);
+        assert.doesNotMatch(confirmation.body.htmlContent, /Amount paid/);
+    });
+});
