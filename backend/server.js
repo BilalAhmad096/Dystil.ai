@@ -27,6 +27,11 @@ const PAID_FORM = "Bootcamp Registration";
 // be refused rather than trusted. Five minutes is Stripe's own tolerance.
 const STRIPE_SIGNATURE_TOLERANCE_SECONDS = 300;
 
+// How long a registration waits for its fee before it is thrown away. Long
+// enough for somebody to fetch their card from another room, short enough that
+// the details of a registration that never happened are not kept.
+const PENDING_LIFETIME_MS = 24 * 60 * 60 * 1000;
+
 // The reference number tells us at a glance which form was filled in, and each
 // form counts from 0001 again every January: DYS-TAS-26-0001.
 const FORM_CODES = {
@@ -127,11 +132,50 @@ const SAVE_SUBMISSION_SQL = `
 const MARK_DELIVERY_SQL = "UPDATE submissions SET delivery_status = ? WHERE reference = ?";
 
 // Only a row that was expecting a fee can be marked paid, so a webhook naming a
-// reference that never owed anything changes nothing.
+// reference that never owed anything changes nothing. Kept for the rows written
+// before payment came first, which could exist as unpaid.
 const MARK_PAID_SQL = `
     UPDATE submissions
     SET payment_status = 'paid', payment_amount = ?, stripe_session_id = ?
     WHERE reference = ? AND payment_status IS NOT NULL`;
+
+// A paid registration becomes a record here. OR IGNORE against the reference
+// primary key is what makes a repeated webhook harmless: the second delivery
+// inserts nothing, reports no change, and so sends no second email.
+const SAVE_PAID_SUBMISSION_SQL = `
+    INSERT OR IGNORE INTO submissions
+        (reference, form_type, full_name, email, details, cv_filename, submitted_at, delivery_status,
+         source_channel, source_detail, source_landing, payment_status, payment_amount, stripe_session_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, 'paid', ?, ?)`;
+
+const SAVE_PENDING_SQL = `
+    INSERT INTO pending_registrations
+        (token, reference, form_type, details, cv_filename, cv_key,
+         source_channel, source_detail, source_landing, submitted_at, fee, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+const READ_PENDING_SQL = "SELECT * FROM pending_registrations WHERE token = ?";
+
+const DELETE_PENDING_SQL = "DELETE FROM pending_registrations WHERE token = ?";
+
+// Anything still waiting a day later was never paid for. The CV keys come back
+// so the files can go too, rather than being orphaned in the bucket.
+const STALE_PENDING_SQL = "SELECT token, cv_key FROM pending_registrations WHERE created_at < ? LIMIT 20";
+
+const SAVE_LEAD_SQL = `
+    INSERT INTO registration_leads (reference, form_type, full_name, email, package, fee, started_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (reference) DO NOTHING`;
+
+const MARK_LEAD_PAID_SQL = "UPDATE registration_leads SET paid_at = ? WHERE reference = ?";
+
+// The people who reached the payment page and never came back.
+const LIST_LEADS_SQL = `
+    SELECT reference, full_name, email, package, fee, started_at
+    FROM registration_leads
+    WHERE paid_at IS NULL
+    ORDER BY started_at DESC
+    LIMIT ?`;
 
 const LIST_SUBMISSIONS_SQL = `
     SELECT reference, form_type, full_name, email, details, cv_filename, submitted_at, delivery_status,
@@ -340,26 +384,33 @@ export default {
         }
 
         const source = describeSource(formData.get("sourceFirst"), formData.get("sourceVisit"));
-        const fromEmail = env.FROM_EMAIL || "askus@dystil.ai";
-        const adminEmail = env.ADMIN_EMAIL || "askus@dystil.ai";
         const submittedAt = new Date().toLocaleString("en-GB", {
             dateStyle: "long",
             timeStyle: "short",
             timeZone: "Europe/London"
         });
 
+        // What this registration owes, if anything.
+        const fee = feeFor(env, formType, values);
+
+        // A registration with a fee to pay is not a record yet. It waits in the
+        // holding table until Stripe says the money arrived, so the submissions
+        // list only ever contains people who actually paid.
+        if (fee) {
+            return startPaidRegistration(env, respond, {
+                formType, values, source, submittedAt, fee,
+                attachment: cvResult.attachment,
+                rateLimit
+            });
+        }
+
         // Every enquiry is recorded before it is sent, so nothing is lost if the
         // email provider fails. Without that record there is no reference number
         // to quote, so a storage failure stops the submission.
-        // What this registration owes, if anything. Working it out before the
-        // row is written means the record says "unpaid" from the moment it
-        // exists, rather than only once somebody reaches the payment page.
-        const fee = feeFor(env, formType, values);
-
         let reference;
         try {
             reference = await allocateReference(env.DB, formType);
-            await saveSubmission(env.DB, reference, formType, values, cvResult.attachment, submittedAt, source, fee);
+            await saveSubmission(env.DB, reference, formType, values, cvResult.attachment, submittedAt, source, 0);
         } catch (error) {
             console.error("Could not record the submission.", error instanceof Error ? error.message : "Unknown error");
 
@@ -369,46 +420,12 @@ export default {
             }, 503);
         }
 
-        const adminEmailPayload = {
-            sender: { name: "Dystil Website", email: fromEmail },
-            to: [{ email: adminEmail, name: "Dystil" }],
-            replyTo: { email: values.email, name: values.fullName },
-            subject: `[${reference}] New ${formType} — ${values.fullName}`,
-            htmlContent: buildAdminHtml(formType, schema, values, cvResult.attachment, submittedAt, reference),
-            textContent: buildAdminText(formType, schema, values, cvResult.attachment, submittedAt, reference)
-        };
-
-        if (cvResult.attachment) {
-            adminEmailPayload.attachment = [{
-                name: cvResult.attachment.filename,
-                content: cvResult.attachment.content
-            }];
-        }
-
-        const confirmationEmailPayload = {
-            sender: { name: "Dystil", email: fromEmail },
-            to: [{ email: values.email, name: values.fullName }],
-            replyTo: { email: adminEmail, name: "Dystil" },
-            subject: `We’ve received your enquiry | ${reference}`,
-            htmlContent: buildConfirmationHtml(values.fullName, formType, reference),
-            textContent: buildConfirmationText(values.fullName, formType, reference)
-        };
-
-        const [adminResult, confirmationResult] = await Promise.all([
-            sendEmail(env.BREVO_API_KEY, adminEmailPayload, crypto.randomUUID()),
-            sendEmail(env.BREVO_API_KEY, confirmationEmailPayload, crypto.randomUUID())
-        ]);
-
-        const delivered = adminResult.ok && confirmationResult.ok;
-        await markDelivery(env.DB, reference, delivered ? "sent" : "failed");
+        const delivered = await deliverSubmission(env, {
+            reference, formType, schema, values, submittedAt,
+            attachment: cvResult.attachment
+        });
 
         if (!delivered) {
-            console.error("Email delivery request failed.", {
-                reference,
-                adminStatus: adminResult.status,
-                confirmationStatus: confirmationResult.status
-            });
-
             return respond({
                 success: false,
                 message: "We could not send your enquiry right now. Please email askus@dystil.ai directly."
@@ -417,29 +434,10 @@ export default {
 
         await recordSubmission(rateLimit);
 
-        // The registration is complete and recorded whatever happens next. A
-        // payment page that cannot be opened leaves somebody we can still reach
-        // and still invoice, which is worth far more than a failed submission.
-        const paymentUrl = fee ? await createCheckoutSession(env, reference, values, fee) : "";
-
-        if (fee && !paymentUrl) {
-            return respond({
-                success: true,
-                reference,
-                message: `Thanks — your details have been sent and your reference is ${reference}. We could not open the payment page just now, so please email askus@dystil.ai and we will send you a payment link.`
-            }, 200);
-        }
-
         return respond({
             success: true,
             reference,
-            paymentUrl: paymentUrl || undefined,
-            // The same sentence has to read correctly in two places: on the page
-            // that redirects to Stripe, and on the result page somebody without
-            // JavaScript is left looking at with a payment button under it.
-            message: paymentUrl
-                ? `Thanks — your registration is recorded under reference ${reference}. The last step is the programme fee, paid securely through Stripe.`
-                : `Thanks — your details have been sent. Your reference is ${reference}. Please check your inbox for confirmation.`
+            message: `Thanks — your details have been sent. Your reference is ${reference}. Please check your inbox for confirmation.`
         }, 200);
     }
 };
@@ -890,7 +888,19 @@ async function listSubmissions(request, env, corsHeaders) {
     try {
         const { results } = await env.DB.prepare(LIST_SUBMISSIONS_SQL).bind(ADMIN_PAGE_SIZE).all();
 
-        return jsonResponse({ success: true, submissions: results || [] }, 200, corsHeaders);
+        // Everybody who reached the payment page and never paid. A missing table
+        // is not worth failing the whole page over, so the list is simply empty
+        // until the migration has run.
+        let leads = [];
+        try {
+            const started = await env.DB.prepare(LIST_LEADS_SQL).bind(ADMIN_PAGE_SIZE).all();
+            leads = started.results || [];
+        } catch (error) {
+            console.error("Could not read the unpaid registrations.",
+                error instanceof Error ? error.message : "Unknown error");
+        }
+
+        return jsonResponse({ success: true, submissions: results || [], leads }, 200, corsHeaders);
     } catch (error) {
         console.error("Could not read the submissions.", error);
         return jsonResponse({ success: false, message: "Could not read the submissions." }, 500, corsHeaders);
@@ -1076,11 +1086,248 @@ function siteUrl(env) {
     return [...getAllowedOrigins(env)][0] || "https://dystil.ai";
 }
 
+// Builds and sends the notification and the confirmation, then records whether
+// they arrived. Both the unpaid forms and the paid registrations end here, so
+// an enquiry reads the same however it reached us.
+async function deliverSubmission(env, { reference, formType, schema, values, attachment, submittedAt }) {
+    const fromEmail = env.FROM_EMAIL || "askus@dystil.ai";
+    const adminEmail = env.ADMIN_EMAIL || "askus@dystil.ai";
+
+    const adminEmailPayload = {
+        sender: { name: "Dystil Website", email: fromEmail },
+        to: [{ email: adminEmail, name: "Dystil" }],
+        replyTo: { email: values.email, name: values.fullName },
+        subject: `[${reference}] New ${formType} — ${values.fullName}`,
+        htmlContent: buildAdminHtml(formType, schema, values, attachment, submittedAt, reference),
+        textContent: buildAdminText(formType, schema, values, attachment, submittedAt, reference)
+    };
+
+    if (attachment) {
+        adminEmailPayload.attachment = [{
+            name: attachment.filename,
+            content: attachment.content
+        }];
+    }
+
+    const confirmationEmailPayload = {
+        sender: { name: "Dystil", email: fromEmail },
+        to: [{ email: values.email, name: values.fullName }],
+        replyTo: { email: adminEmail, name: "Dystil" },
+        subject: `We’ve received your enquiry | ${reference}`,
+        htmlContent: buildConfirmationHtml(values.fullName, formType, reference),
+        textContent: buildConfirmationText(values.fullName, formType, reference)
+    };
+
+    const [adminResult, confirmationResult] = await Promise.all([
+        sendEmail(env.BREVO_API_KEY, adminEmailPayload, crypto.randomUUID()),
+        sendEmail(env.BREVO_API_KEY, confirmationEmailPayload, crypto.randomUUID())
+    ]);
+
+    const delivered = adminResult.ok && confirmationResult.ok;
+    await markDelivery(env.DB, reference, delivered ? "sent" : "failed");
+
+    if (!delivered) {
+        console.error("Email delivery request failed.", {
+            reference,
+            adminStatus: adminResult.status,
+            confirmationStatus: confirmationResult.status
+        });
+    }
+
+    return delivered;
+}
+
+// A registration that owes a fee is parked rather than recorded. Nothing is
+// emailed and nothing appears in the submissions list until Stripe confirms the
+// money arrived; only the name and email are kept, as a lead, so somebody who
+// stops at the payment page can still be followed up.
+async function startPaidRegistration(env, respond, { formType, values, source, submittedAt, fee, attachment, rateLimit }) {
+    const token = crypto.randomUUID();
+    let reference;
+    let cvKey = null;
+
+    try {
+        reference = await allocateReference(env.DB, formType);
+
+        if (attachment) {
+            cvKey = `pending/${token}`;
+            await env.CV_STORE.put(cvKey, attachment.content, {
+                httpMetadata: { contentType: "text/plain" },
+                customMetadata: { filename: attachment.filename }
+            });
+        }
+
+        await env.DB.prepare(SAVE_PENDING_SQL).bind(
+            token,
+            reference,
+            formType,
+            JSON.stringify(values),
+            attachment ? attachment.filename : null,
+            cvKey,
+            source.channel,
+            source.detail,
+            source.landing,
+            submittedAt,
+            fee,
+            Date.now()
+        ).run();
+
+        await env.DB.prepare(SAVE_LEAD_SQL).bind(
+            reference, formType, values.fullName, values.email, values.package || null, fee, submittedAt
+        ).run();
+    } catch (error) {
+        console.error("Could not hold the registration.", error instanceof Error ? error.message : "Unknown error");
+        await discardPending(env, token, cvKey);
+
+        return respond({
+            success: false,
+            message: "We could not start your registration right now. Please try again shortly or email askus@dystil.ai."
+        }, 503);
+    }
+
+    const paymentUrl = await createCheckoutSession(env, reference, values, fee, token);
+
+    // Without a payment page there is nothing for the held registration to be
+    // waiting on, so it is thrown away rather than left to expire quietly.
+    if (!paymentUrl) {
+        await discardPending(env, token, cvKey);
+
+        return respond({
+            success: false,
+            message: "We could not open the payment page just now. Please try again shortly, or email askus@dystil.ai and we will send you a payment link."
+        }, 502);
+    }
+
+    await recordSubmission(rateLimit);
+    await purgeStalePending(env);
+
+    return respond({
+        success: true,
+        reference,
+        paymentUrl,
+        // Read on the page that redirects to Stripe, and on the result page a
+        // visitor without JavaScript is left looking at with a button under it.
+        message: `Your place is held under reference ${reference}. Your registration is completed once the programme fee is paid.`
+    }, 200);
+}
+
+// Stripe has confirmed the fee, so the held registration becomes a record and
+// the emails finally go out.
+async function completePaidRegistration(env, session) {
+    const token = session.metadata?.token || "";
+    const reference = session.client_reference_id || session.metadata?.reference || "";
+
+    if (!token || !env.DB) {
+        console.error("A completed payment carried nothing to match.", { reference });
+        return true;
+    }
+
+    const pending = await env.DB.prepare(READ_PENDING_SQL).bind(token).first();
+
+    // Already dealt with, or expired. Either way there is nothing to do and
+    // Stripe should not be asked to try again.
+    if (!pending) return true;
+
+    const values = JSON.parse(pending.details);
+    const schema = FORM_SCHEMAS[pending.form_type];
+
+    const saved = await env.DB.prepare(SAVE_PAID_SUBMISSION_SQL).bind(
+        pending.reference,
+        pending.form_type,
+        values.fullName,
+        values.email,
+        pending.details,
+        pending.cv_filename,
+        pending.submitted_at,
+        pending.source_channel,
+        pending.source_detail,
+        pending.source_landing,
+        session.amount_total ?? pending.fee,
+        session.id || null
+    ).run();
+
+    // A repeated delivery inserts nothing. The record and the emails already
+    // exist, so this one only clears up after itself.
+    if (!saved.meta || saved.meta.changes === 0) {
+        await discardPending(env, token, pending.cv_key);
+        return true;
+    }
+
+    await env.DB.prepare(MARK_LEAD_PAID_SQL).bind(new Date().toISOString(), pending.reference).run();
+
+    const attachment = await readPendingCv(env, pending);
+
+    await deliverSubmission(env, {
+        reference: pending.reference,
+        formType: pending.form_type,
+        schema,
+        values,
+        attachment,
+        submittedAt: pending.submitted_at
+    });
+
+    // The record exists whether or not the emails did, so the hold is released
+    // either way. A failed email is visible on the submissions page as its
+    // delivery status; asking Stripe to retry would only write it twice.
+    await discardPending(env, token, pending.cv_key);
+
+    return true;
+}
+
+// The CV comes back out of R2 as the base64 the email needs. A file that has
+// gone missing is worth reporting, but not worth losing the registration over.
+async function readPendingCv(env, pending) {
+    if (!pending.cv_key || !env.CV_STORE) return null;
+
+    try {
+        const object = await env.CV_STORE.get(pending.cv_key);
+        if (!object) throw new Error("The held CV was not in the bucket.");
+
+        return { filename: pending.cv_filename, content: await object.text() };
+    } catch (error) {
+        console.error("Could not read the held CV.", {
+            reference: pending.reference,
+            message: error instanceof Error ? error.message : "Unknown error"
+        });
+
+        return null;
+    }
+}
+
+async function discardPending(env, token, cvKey) {
+    try {
+        if (cvKey && env.CV_STORE) await env.CV_STORE.delete(cvKey);
+        if (env.DB) await env.DB.prepare(DELETE_PENDING_SQL).bind(token).run();
+    } catch (error) {
+        console.error("Could not clear a held registration.", {
+            token,
+            message: error instanceof Error ? error.message : "Unknown error"
+        });
+    }
+}
+
+// Anything still waiting a day later was never paid for. Clearing it here costs
+// one query per registration and saves keeping a scheduled job alive.
+async function purgeStalePending(env) {
+    try {
+        const { results } = await env.DB.prepare(STALE_PENDING_SQL)
+            .bind(Date.now() - PENDING_LIFETIME_MS)
+            .all();
+
+        for (const row of results || []) {
+            await discardPending(env, row.token, row.cv_key);
+        }
+    } catch (error) {
+        console.error("Could not clear the expired registrations.",
+            error instanceof Error ? error.message : "Unknown error");
+    }
+}
+
 // Opens a Stripe-hosted payment page. Card details are typed on Stripe's own
 // page and never reach this Worker or the website. The reference travels as the
-// client reference, which is what ties the payment back to the D1 row when the
-// webhook arrives.
-async function createCheckoutSession(env, reference, values, fee) {
+// client reference, and the token as metadata, which is what ties the payment
+// back to the held registration when the webhook arrives.
+async function createCheckoutSession(env, reference, values, fee, token) {
     const home = siteUrl(env);
     const body = new URLSearchParams({
         mode: "payment",
@@ -1094,7 +1341,8 @@ async function createCheckoutSession(env, reference, values, fee) {
         "line_items[0][price_data][product_data][name]": `Dystil Launchpad — ${values.package}`,
         "line_items[0][price_data][product_data][description]": `Programme fee, reference ${reference}`,
         "metadata[reference]": reference,
-        "metadata[package]": values.package
+        "metadata[package]": values.package,
+        "metadata[token]": token
     });
 
     try {
@@ -1154,26 +1402,30 @@ async function handleStripeWebhook(request, env) {
     // have it retried for days over an event we were never interested in.
     if (event?.type === "checkout.session.completed") {
         const session = event.data?.object || {};
-        const reference = session.client_reference_id || session.metadata?.reference || "";
 
-        if (!reference || !env.DB) {
-            console.error("A completed payment could not be recorded.", { reference });
-        } else {
-            try {
+        try {
+            // A registration held for payment becomes a record here. A row that
+            // predates payment-first still exists as unpaid, so it is marked
+            // instead: both kinds of payment end up recorded the same way.
+            if (session.metadata?.token) {
+                await completePaidRegistration(env, session);
+            } else if (session.client_reference_id && env.DB) {
                 await env.DB.prepare(MARK_PAID_SQL)
-                    .bind(session.amount_total ?? null, session.id || null, reference)
+                    .bind(session.amount_total ?? null, session.id || null, session.client_reference_id)
                     .run();
-            } catch (error) {
-                // Stripe retries a webhook that did not return 200, so a failure
-                // here is worth reporting rather than swallowing: the next
-                // attempt is how the row eventually gets marked paid.
-                console.error("Could not mark the registration paid.", {
-                    reference,
-                    message: error instanceof Error ? error.message : "Unknown error"
-                });
-
-                return new Response("Could not record the payment.", { status: 500 });
+            } else {
+                console.error("A completed payment carried nothing to match.", { session: session.id });
             }
+        } catch (error) {
+            // Stripe retries a webhook that did not return 200, so a failure
+            // here is worth reporting rather than swallowing: the next attempt
+            // is how the registration eventually gets recorded.
+            console.error("Could not record the payment.", {
+                session: session.id,
+                message: error instanceof Error ? error.message : "Unknown error"
+            });
+
+            return new Response("Could not record the payment.", { status: 500 });
         }
     }
 

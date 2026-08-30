@@ -2,75 +2,200 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "./server.js";
 
-// Enough of the D1 binding for the three statements the Worker runs. Counters
-// carry across tests, so assertions compare consecutive numbers rather than
-// expecting any particular one.
+// Enough of the D1 binding for the statements the Worker runs. Counters carry
+// across tests, so assertions compare consecutive numbers rather than expecting
+// any particular one.
 function makeFakeDatabase() {
     const counters = new Map();
     const rows = [];
+    const pending = [];
+    const leads = [];
+
+    function run(sql, args) {
+        if (sql.includes("INSERT OR IGNORE INTO submissions")) {
+            // The reference is the primary key, so a repeat inserts nothing.
+            if (rows.some((row) => row.reference === args[0])) {
+                return { success: true, meta: { changes: 0 } };
+            }
+
+            rows.push({
+                reference: args[0],
+                form_type: args[1],
+                full_name: args[2],
+                email: args[3],
+                details: args[4],
+                cv_filename: args[5],
+                submitted_at: args[6],
+                delivery_status: "pending",
+                source_channel: args[7],
+                source_detail: args[8],
+                source_landing: args[9],
+                payment_status: "paid",
+                payment_amount: args[10],
+                stripe_session_id: args[11]
+            });
+
+            return { success: true, meta: { changes: 1 } };
+        }
+
+        if (sql.includes("INSERT INTO submissions")) {
+            rows.push({
+                reference: args[0],
+                form_type: args[1],
+                full_name: args[2],
+                email: args[3],
+                details: args[4],
+                cv_filename: args[5],
+                submitted_at: args[6],
+                delivery_status: "pending",
+                source_channel: args[7],
+                source_detail: args[8],
+                source_landing: args[9],
+                payment_status: args[10],
+                payment_amount: args[11]
+            });
+
+            return { success: true, meta: { changes: 1 } };
+        }
+
+        if (sql.includes("INSERT INTO pending_registrations")) {
+            pending.push({
+                token: args[0],
+                reference: args[1],
+                form_type: args[2],
+                details: args[3],
+                cv_filename: args[4],
+                cv_key: args[5],
+                source_channel: args[6],
+                source_detail: args[7],
+                source_landing: args[8],
+                submitted_at: args[9],
+                fee: args[10],
+                created_at: args[11]
+            });
+
+            return { success: true, meta: { changes: 1 } };
+        }
+
+        if (sql.includes("DELETE FROM pending_registrations")) {
+            const index = pending.findIndex((row) => row.token === args[0]);
+            if (index !== -1) pending.splice(index, 1);
+
+            return { success: true, meta: { changes: index === -1 ? 0 : 1 } };
+        }
+
+        if (sql.includes("INSERT INTO registration_leads")) {
+            if (!leads.some((lead) => lead.reference === args[0])) {
+                leads.push({
+                    reference: args[0],
+                    form_type: args[1],
+                    full_name: args[2],
+                    email: args[3],
+                    package: args[4],
+                    fee: args[5],
+                    started_at: args[6],
+                    paid_at: null
+                });
+            }
+
+            return { success: true, meta: { changes: 1 } };
+        }
+
+        if (sql.includes("UPDATE registration_leads")) {
+            const lead = leads.find((candidate) => candidate.reference === args[1]);
+            if (lead) lead.paid_at = args[0];
+
+            return { success: true, meta: { changes: lead ? 1 : 0 } };
+        }
+
+        if (sql.includes("payment_status = 'paid'")) {
+            const row = rows.find((candidate) => candidate.reference === args[2]);
+
+            // The statement only touches a row that was expecting a fee.
+            if (row && row.payment_status) {
+                row.payment_status = "paid";
+                row.payment_amount = args[0];
+                row.stripe_session_id = args[1];
+            }
+
+            return { success: true, meta: { changes: row ? 1 : 0 } };
+        }
+
+        if (sql.includes("UPDATE submissions")) {
+            const row = rows.find((candidate) => candidate.reference === args[1]);
+            if (row) row.delivery_status = args[0];
+
+            return { success: true, meta: { changes: row ? 1 : 0 } };
+        }
+
+        throw new Error(`Unexpected statement: ${sql}`);
+    }
 
     return {
         rows,
+        pending,
+        leads,
         prepare(sql) {
             return {
                 bind(...args) {
                     return {
                         async first() {
-                            if (!sql.includes("reference_counters")) throw new Error(`Unexpected statement: ${sql}`);
+                            if (sql.includes("reference_counters")) {
+                                const key = `${args[0]}|${args[1]}`;
+                                const next = (counters.get(key) || 0) + 1;
+                                counters.set(key, next);
 
-                            const key = `${args[0]}|${args[1]}`;
-                            const next = (counters.get(key) || 0) + 1;
-                            counters.set(key, next);
-
-                            return { next_number: next };
-                        },
-                        async run() {
-                            if (sql.includes("INSERT INTO submissions")) {
-                                rows.push({
-                                    reference: args[0],
-                                    form_type: args[1],
-                                    full_name: args[2],
-                                    email: args[3],
-                                    details: args[4],
-                                    cv_filename: args[5],
-                                    submitted_at: args[6],
-                                    delivery_status: "pending",
-                                    source_channel: args[7],
-                                    source_detail: args[8],
-                                    source_landing: args[9],
-                                    payment_status: args[10],
-                                    payment_amount: args[11]
-                                });
-
-                                return { success: true };
+                                return { next_number: next };
                             }
 
-                            if (sql.includes("payment_status = 'paid'")) {
-                                const row = rows.find((candidate) => candidate.reference === args[2]);
-
-                                // The statement only touches a row that was
-                                // expecting a fee, and the fake honours that.
-                                if (row && row.payment_status) {
-                                    row.payment_status = "paid";
-                                    row.payment_amount = args[0];
-                                    row.stripe_session_id = args[1];
-                                }
-
-                                return { success: true };
-                            }
-
-                            if (sql.includes("UPDATE submissions")) {
-                                const row = rows.find((candidate) => candidate.reference === args[1]);
-                                if (row) row.delivery_status = args[0];
-
-                                return { success: true };
+                            if (sql.includes("FROM pending_registrations")) {
+                                return pending.find((row) => row.token === args[0]) || null;
                             }
 
                             throw new Error(`Unexpected statement: ${sql}`);
+                        },
+                        async all() {
+                            if (sql.includes("SELECT token, cv_key")) {
+                                return { results: pending.filter((row) => row.created_at < args[0]) };
+                            }
+
+                            if (sql.includes("FROM registration_leads")) {
+                                return { results: leads.filter((lead) => !lead.paid_at) };
+                            }
+
+                            if (sql.includes("FROM submissions")) {
+                                return { results: rows.slice(0, args[0]) };
+                            }
+
+                            throw new Error(`Unexpected statement: ${sql}`);
+                        },
+                        async run() {
+                            return run(sql, args);
                         }
                     };
                 }
             };
+        }
+    };
+}
+
+// The CV waits in R2 between the form and the payment.
+function makeFakeBucket() {
+    const objects = new Map();
+
+    return {
+        objects,
+        async put(key, value) {
+            objects.set(key, value);
+        },
+        async get(key) {
+            if (!objects.has(key)) return null;
+
+            const value = objects.get(key);
+            return { async text() { return value; } };
+        },
+        async delete(key) {
+            objects.delete(key);
         }
     };
 }
@@ -1186,12 +1311,17 @@ test("does not cry sampling over a directly measured window", async function() {
 
 const STRIPE_WEBHOOK_SECRET = "whsec_test_secret";
 
-const paidEnv = {
-    ...env,
-    DB: makeFakeDatabase(),
-    STRIPE_SECRET_KEY: "sk_test_key",
-    STRIPE_WEBHOOK_SECRET
-};
+function makePaidEnv() {
+    return {
+        ...env,
+        DB: makeFakeDatabase(),
+        CV_STORE: makeFakeBucket(),
+        STRIPE_SECRET_KEY: "sk_test_key",
+        STRIPE_WEBHOOK_SECRET
+    };
+}
+
+let paidEnv = makePaidEnv();
 
 const bootcampRegistration = {
     formType: "Bootcamp Registration",
@@ -1207,11 +1337,12 @@ const bootcampRegistration = {
 };
 
 // Brevo and Stripe are both reached with fetch, so the stub answers each by the
-// address it was called on. The Stripe calls are collected separately because
-// every payment assertion is about that one request.
-async function withMockedStripe(callback, options = {}) {
+// address it was called on and keeps the two apart. Almost every assertion here
+// is about which of them was called, and when.
+async function withMockedApis(callback, options = {}) {
     const originalFetch = globalThis.fetch;
     const stripeCalls = [];
+    const emailCalls = [];
 
     globalThis.fetch = async function(url, requestOptions) {
         if (String(url).startsWith("https://api.stripe.com/")) {
@@ -1231,11 +1362,12 @@ async function withMockedStripe(callback, options = {}) {
             }, { status: 200 });
         }
 
+        emailCalls.push({ url: String(url), body: JSON.parse(requestOptions.body) });
         return Response.json({ id: crypto.randomUUID() }, { status: 201 });
     };
 
     try {
-        await callback(stripeCalls);
+        await callback({ stripeCalls, emailCalls });
     } finally {
         globalThis.fetch = originalFetch;
     }
@@ -1262,7 +1394,9 @@ async function signedWebhook(event, { secret = STRIPE_WEBHOOK_SECRET, timestamp 
     });
 }
 
-function completedEvent(reference, amount = 39900) {
+// The event Stripe sends for the session the Worker just opened. The token is
+// what ties it back to the held registration.
+function completedEvent(token, reference, amount = 39900) {
     return {
         type: "checkout.session.completed",
         data: {
@@ -1270,7 +1404,7 @@ function completedEvent(reference, amount = 39900) {
                 id: "cs_test_123",
                 client_reference_id: reference,
                 amount_total: amount,
-                metadata: { reference }
+                metadata: { reference, token }
             }
         }
     };
@@ -1280,59 +1414,180 @@ function rowFor(database, reference) {
     return database.rows.find((row) => row.reference === reference);
 }
 
-async function registerAndGetReference(fields = bootcampRegistration) {
-    let reference = "";
+// Fills in the form and stops at the payment page, which is as far as a
+// registration gets on its own.
+async function startRegistration(fields = bootcampRegistration) {
+    let started;
 
-    await withMockedStripe(async function() {
+    await withMockedApis(async function(calls) {
         const response = await worker.fetch(makeRequest(fields), paidEnv);
-        reference = (await response.json()).reference;
+        const result = await response.json();
+
+        started = {
+            result,
+            status: response.status,
+            token: calls.stripeCalls[0]?.fields.get("metadata[token]") || "",
+            stripeCalls: calls.stripeCalls,
+            emailCalls: calls.emailCalls
+        };
     });
 
-    return reference;
+    return started;
 }
 
-test("opens a payment page for a bootcamp registration", async function() {
-    await withMockedStripe(async function(stripeCalls) {
+// Stripe confirming the fee is what turns a held registration into a record.
+async function payFor(started, amount = 39900) {
+    let calls;
+
+    await withMockedApis(async function(mocked) {
+        const request = await signedWebhook(completedEvent(started.token, started.result.reference, amount));
+        calls = { ...mocked, response: await worker.fetch(request, paidEnv) };
+    });
+
+    return calls;
+}
+
+test("holds a bootcamp registration instead of recording it", async function() {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+
+    assert.equal(started.status, 200);
+    assert.equal(started.result.success, true);
+    assert.equal(started.result.paymentUrl, "https://checkout.stripe.com/c/pay/cs_test_123");
+
+    // Nothing recorded, nothing emailed. Only the hold and the lead exist.
+    assert.equal(paidEnv.DB.rows.length, 0);
+    assert.equal(started.emailCalls.length, 0);
+    assert.equal(paidEnv.DB.pending.length, 1);
+    assert.equal(paidEnv.DB.pending[0].reference, started.result.reference);
+    assert.equal(paidEnv.DB.leads.length, 1);
+    assert.equal(paidEnv.DB.leads[0].email, "priya@example.com");
+    assert.equal(paidEnv.DB.leads[0].paid_at, null);
+
+    assert.equal(started.stripeCalls.length, 1);
+    assert.equal(started.stripeCalls[0].fields.get("client_reference_id"), started.result.reference);
+    assert.equal(started.stripeCalls[0].fields.get("line_items[0][price_data][unit_amount]"), "39900");
+});
+
+test("records the registration and sends the emails once the fee is paid", async function() {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+    const paid = await payFor(started);
+
+    assert.equal(paid.response.status, 200);
+
+    const row = rowFor(paidEnv.DB, started.result.reference);
+    assert.equal(row.payment_status, "paid");
+    assert.equal(row.payment_amount, 39900);
+    assert.equal(row.stripe_session_id, "cs_test_123");
+    assert.equal(row.full_name, "Priya Graduate");
+    assert.equal(row.delivery_status, "sent");
+
+    // The notification and the confirmation, neither of which was sent earlier.
+    assert.equal(paid.emailCalls.length, 2);
+    assert.equal(paid.emailCalls[0].body.to[0].email, "askus@dystil.ai");
+    assert.equal(paid.emailCalls[1].body.to[0].email, "priya@example.com");
+
+    // The hold is released and the lead is no longer waiting on anybody.
+    assert.equal(paidEnv.DB.pending.length, 0);
+    assert.ok(paidEnv.DB.leads[0].paid_at);
+});
+
+test("keeps the CV until the fee is paid, then attaches it", async function() {
+    paidEnv = makePaidEnv();
+
+    const started = await startRegistration({
+        ...bootcampRegistration,
+        cv: new File(["a sample cv"], "Priya CV.pdf", { type: "application/pdf" })
+    });
+
+    // Waiting in the bucket, not in the database and not in anybody's inbox.
+    assert.equal(paidEnv.CV_STORE.objects.size, 1);
+    assert.equal(started.emailCalls.length, 0);
+
+    const paid = await payFor(started);
+    const attachment = paid.emailCalls[0].body.attachment;
+
+    assert.equal(attachment.length, 1);
+    assert.equal(attachment[0].name, "Priya CV.pdf");
+    assert.equal(atob(attachment[0].content), "a sample cv");
+
+    // And it does not linger once it has been sent.
+    assert.equal(paidEnv.CV_STORE.objects.size, 0);
+});
+
+// The whole point of the change: an unpaid registration is not a registration.
+test("never records a registration that was not paid for", async function() {
+    paidEnv = makePaidEnv();
+    await startRegistration();
+
+    assert.equal(paidEnv.DB.rows.length, 0);
+    assert.equal(paidEnv.DB.pending.length, 1);
+});
+
+test("keeps the name and email of somebody who stopped at the payment page", async function() {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+
+    assert.deepEqual(paidEnv.DB.leads.map((lead) => [lead.full_name, lead.email, lead.paid_at]), [
+        ["Priya Graduate", "priya@example.com", null]
+    ]);
+    assert.equal(paidEnv.DB.leads[0].reference, started.result.reference);
+});
+
+// Stripe retries anything it did not get a 200 for, and a retry must not mean a
+// second record or a second pair of emails.
+test("ignores a webhook it has already acted on", async function() {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+
+    await payFor(started);
+    const again = await payFor(started);
+
+    assert.equal(again.response.status, 200);
+    assert.equal(again.emailCalls.length, 0);
+    assert.equal(paidEnv.DB.rows.length, 1);
+});
+
+test("prices the package on the server, not from the form", async function() {
+    paidEnv = makePaidEnv();
+
+    const started = await startRegistration({
+        ...bootcampRegistration,
+        package: "Advanced Bootcamp",
+        unit_amount: "1",
+        amount: "1"
+    });
+
+    assert.equal(started.stripeCalls[0].fields.get("line_items[0][price_data][unit_amount]"), "89900");
+
+    await payFor(started, 89900);
+    assert.equal(rowFor(paidEnv.DB, started.result.reference).payment_amount, 89900);
+});
+
+// A hold with no payment page to wait on is worse than no hold at all.
+test("throws the hold away when Stripe cannot be reached", async function() {
+    paidEnv = makePaidEnv();
+
+    await withMockedApis(async function(calls) {
         const response = await worker.fetch(makeRequest(bootcampRegistration), paidEnv);
         const result = await response.json();
 
-        assert.equal(response.status, 200);
-        assert.equal(result.success, true);
-        assert.equal(result.paymentUrl, "https://checkout.stripe.com/c/pay/cs_test_123");
+        assert.equal(response.status, 502);
+        assert.equal(result.success, false);
+        assert.match(result.message, /payment link/i);
+        assert.equal(calls.emailCalls.length, 0);
+    }, { stripeFails: true });
 
-        assert.equal(stripeCalls.length, 1);
-        assert.equal(stripeCalls[0].url, "https://api.stripe.com/v1/checkout/sessions");
-        assert.equal(stripeCalls[0].headers.Authorization, "Bearer sk_test_key");
-        assert.equal(stripeCalls[0].fields.get("client_reference_id"), result.reference);
-        assert.equal(stripeCalls[0].fields.get("customer_email"), "priya@example.com");
-        assert.equal(stripeCalls[0].fields.get("line_items[0][price_data][currency]"), "gbp");
-
-        const row = rowFor(paidEnv.DB, result.reference);
-        assert.equal(row.payment_status, "unpaid");
-        assert.equal(row.payment_amount, 39900);
-    });
-});
-
-// The only thing the form sends is which package was chosen. If the amount came
-// from the browser, the Advanced bootcamp would be worth whatever a buyer typed.
-test("prices the package on the server, not from the form", async function() {
-    await withMockedStripe(async function(stripeCalls) {
-        const response = await worker.fetch(makeRequest({
-            ...bootcampRegistration,
-            package: "Advanced Bootcamp",
-            unit_amount: "1",
-            amount: "1"
-        }), paidEnv);
-
-        const result = await response.json();
-
-        assert.equal(stripeCalls[0].fields.get("line_items[0][price_data][unit_amount]"), "89900");
-        assert.equal(rowFor(paidEnv.DB, result.reference).payment_amount, 89900);
-    });
+    assert.equal(paidEnv.DB.pending.length, 0);
+    assert.equal(paidEnv.DB.rows.length, 0);
+    assert.equal(paidEnv.CV_STORE.objects.size, 0);
 });
 
 test("charges nothing for a package it does not recognise", async function() {
-    await withMockedStripe(async function(stripeCalls) {
+    paidEnv = makePaidEnv();
+
+    await withMockedApis(async function(calls) {
         const response = await worker.fetch(makeRequest({
             ...bootcampRegistration,
             package: "Free Bootcamp"
@@ -1340,90 +1595,82 @@ test("charges nothing for a package it does not recognise", async function() {
 
         const result = await response.json();
 
-        assert.equal(stripeCalls.length, 0);
+        assert.equal(calls.stripeCalls.length, 0);
         assert.equal(result.paymentUrl, undefined);
-        assert.equal(rowFor(paidEnv.DB, result.reference).payment_status, null);
+
+        // No fee to wait for, so it is recorded and emailed straight away.
+        assert.equal(paidEnv.DB.rows.length, 1);
+        assert.equal(calls.emailCalls.length, 2);
     });
 });
 
 test("leaves the enquiry forms alone when Stripe is configured", async function() {
-    await withMockedStripe(async function(stripeCalls) {
+    paidEnv = makePaidEnv();
+
+    await withMockedApis(async function(calls) {
         const response = await worker.fetch(makeRequest(studentEnquiry), paidEnv);
         const result = await response.json();
 
-        assert.equal(stripeCalls.length, 0);
+        assert.equal(calls.stripeCalls.length, 0);
         assert.equal(result.paymentUrl, undefined);
+        assert.equal(calls.emailCalls.length, 2);
+        assert.equal(paidEnv.DB.rows.length, 1);
+        assert.equal(paidEnv.DB.pending.length, 0);
     });
 });
 
-// Without the secret the site has to behave exactly as it did before payments
-// existed. That is what makes this safe to deploy before Stripe is ready.
+// Without the secret the site behaves exactly as it did before payments
+// existed, which is what makes this safe to deploy before Stripe is ready.
 test("takes no payment until Stripe is configured", async function() {
-    await withMockedStripe(async function(stripeCalls) {
+    await withMockedApis(async function(calls) {
         const response = await worker.fetch(makeRequest(bootcampRegistration), env);
         const result = await response.json();
 
         assert.equal(result.success, true);
         assert.equal(result.paymentUrl, undefined);
-        assert.equal(stripeCalls.length, 0);
+        assert.equal(calls.stripeCalls.length, 0);
+        assert.equal(calls.emailCalls.length, 2);
         assert.match(result.message, /check your inbox/i);
     });
 });
 
-// A registration is worth more than a payment page: somebody we can still reach
-// can still be invoiced, but a failed submission is gone for good.
-test("keeps the registration when Stripe cannot be reached", async function() {
-    await withMockedStripe(async function() {
-        const response = await worker.fetch(makeRequest(bootcampRegistration), paidEnv);
-        const result = await response.json();
-
-        assert.equal(response.status, 200);
-        assert.equal(result.success, true);
-        assert.equal(result.paymentUrl, undefined);
-        assert.match(result.message, /payment link/i);
-        assert.equal(rowFor(paidEnv.DB, result.reference).payment_status, "unpaid");
-    }, { stripeFails: true });
-});
-
-test("marks the registration paid on a signed webhook", async function() {
-    const reference = await registerAndGetReference();
-    const response = await worker.fetch(await signedWebhook(completedEvent(reference)), paidEnv);
-
-    assert.equal(response.status, 200);
-
-    const row = rowFor(paidEnv.DB, reference);
-    assert.equal(row.payment_status, "paid");
-    assert.equal(row.payment_amount, 39900);
-    assert.equal(row.stripe_session_id, "cs_test_123");
-});
-
 test("refuses a webhook signed with the wrong secret", async function() {
-    const reference = await registerAndGetReference();
-    const request = await signedWebhook(completedEvent(reference), { secret: "whsec_not_the_secret" });
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+
+    const request = await signedWebhook(completedEvent(started.token, started.result.reference), {
+        secret: "whsec_not_the_secret"
+    });
+
     const response = await worker.fetch(request, paidEnv);
 
     assert.equal(response.status, 400);
-    assert.equal(rowFor(paidEnv.DB, reference).payment_status, "unpaid");
+    assert.equal(paidEnv.DB.rows.length, 0);
+    assert.equal(paidEnv.DB.pending.length, 1);
 });
 
 // A signature stays valid forever unless the timestamp it covers is checked, so
 // a captured webhook could otherwise be replayed months later.
 test("refuses a webhook whose signature is stale", async function() {
-    const reference = await registerAndGetReference();
-    const request = await signedWebhook(completedEvent(reference), {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+
+    const request = await signedWebhook(completedEvent(started.token, started.result.reference), {
         timestamp: Math.floor(Date.now() / 1000) - 3600
     });
 
     const response = await worker.fetch(request, paidEnv);
 
     assert.equal(response.status, 400);
-    assert.equal(rowFor(paidEnv.DB, reference).payment_status, "unpaid");
+    assert.equal(paidEnv.DB.rows.length, 0);
 });
 
 test("refuses a webhook carrying no signature at all", async function() {
+    paidEnv = makePaidEnv();
+
     const request = new Request("https://dystil-contact.example/api/stripe-webhook", {
         method: "POST",
-        body: JSON.stringify(completedEvent("DYS-BOT-26-0001"))
+        body: JSON.stringify(completedEvent("some-token", "DYS-BOT-26-0001"))
     });
 
     assert.equal((await worker.fetch(request, paidEnv)).status, 400);
@@ -1432,15 +1679,44 @@ test("refuses a webhook carrying no signature at all", async function() {
 // Stripe sends far more than the one event we act on, and retries for days
 // anything that does not answer 200.
 test("acknowledges an event it does not act on", async function() {
+    paidEnv = makePaidEnv();
     const request = await signedWebhook({ type: "payment_intent.created", data: { object: {} } });
 
     assert.equal((await worker.fetch(request, paidEnv)).status, 200);
 });
 
-test("ignores a webhook naming a form that never owed a fee", async function() {
-    const reference = await registerAndGetReference(studentEnquiry);
-    const response = await worker.fetch(await signedWebhook(completedEvent(reference)), paidEnv);
+test("acknowledges a payment for a hold that has already expired", async function() {
+    paidEnv = makePaidEnv();
+    const request = await signedWebhook(completedEvent("a-token-nobody-held", "DYS-BOT-26-9999"));
+    const response = await worker.fetch(request, paidEnv);
 
     assert.equal(response.status, 200);
-    assert.equal(rowFor(paidEnv.DB, reference).payment_status, null);
+    assert.equal(paidEnv.DB.rows.length, 0);
+});
+
+test("shows the unpaid starts to the submissions page", async function() {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+
+    const response = await worker.fetch(
+        makeListRequest("correct horse battery"),
+        { ...paidEnv, ADMIN_KEY: "correct horse battery" }
+    );
+
+    const result = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(result.leads.length, 1);
+    assert.equal(result.leads[0].email, "priya@example.com");
+    assert.equal(result.submissions.length, 0);
+
+    // And it drops off the list once the fee is paid.
+    await payFor(started);
+
+    const after = await worker.fetch(
+        makeListRequest("correct horse battery"),
+        { ...paidEnv, ADMIN_KEY: "correct horse battery" }
+    );
+
+    assert.equal((await after.json()).leads.length, 0);
 });

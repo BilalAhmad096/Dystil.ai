@@ -49,9 +49,9 @@
                 document.getElementById("payment-reference").classList.remove("form-status-success");
                 document.getElementById("payment-heading").textContent = "Payment not completed";
                 document.getElementById("payment-message").textContent =
-                    "Your registration is saved, but the programme fee has not been paid yet, so your place is not confirmed.";
+                    "Nothing has been charged, and your registration has not been completed, because a place is only held once the programme fee is paid.";
                 document.getElementById("payment-next").innerHTML =
-                    "Email <a href=\"mailto:askus@dystil.ai\">askus@dystil.ai</a> quoting your reference and we will send you a payment link, or register again to start the payment over.";
+                    "<a href=\"/students/register\">Register again</a> to complete it, or email <a href=\"mailto:askus@dystil.ai\">askus@dystil.ai</a> quoting your reference and we will send you a payment link.";
             } else {
                 document.getElementById("payment-message").textContent =
                     "Thank you — your programme fee has been received and your place is being confirmed.";

@@ -200,6 +200,9 @@
         .details .value { white-space: pre-wrap; }
 
         .empty { padding: 40px; text-align: center; color: var(--light-text); font-size: 14px; }
+        .leads { margin-top: 24px; }
+        .leads h2 { font-size: 15px; margin: 0 0 4px; }
+        .leads .note { margin: 0 0 12px; color: var(--light-text); font-size: 13px; max-width: 70ch; }
 
         /* ---------- TESTING ---------- */
         .blank {
@@ -484,6 +487,27 @@
             </table>
             <p class="empty" id="empty" hidden>Nothing to show.</p>
         </div>
+
+        <div class="leads" id="leads-panel" hidden>
+            <h2>Started, not paid</h2>
+            <p class="note">Reached the payment page and did not pay, so there is no registration. Name and email
+                only: the details and the CV of an unpaid registration are not kept.</p>
+            <div class="scroller">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Package</th>
+                            <th>Fee</th>
+                            <th>Started</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lead-rows"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -531,6 +555,7 @@
         // laptop never carries the password forward.
         let key = "";
         let all = [];
+        let leads = [];
         let formFilter = "";
 
         // Which page of the board is open. The panels below are built once and
@@ -587,7 +612,8 @@
             try {
                 const data = await load(entered);
                 key = entered;
-                all = data;
+                all = data.submissions;
+                leads = data.leads;
                 lock.hidden = true;
                 board.hidden = false;
                 render();
@@ -618,7 +644,7 @@
                 throw new Error(body.message || "Could not load the submissions.");
             }
 
-            return body.submissions || [];
+            return { submissions: body.submissions || [], leads: body.leads || [] };
         }
 
         document.getElementById("refresh").addEventListener("click", async function () {
@@ -627,7 +653,9 @@
             button.textContent = "Refreshing…";
 
             try {
-                all = await load(key);
+                const refreshed = await load(key);
+                all = refreshed.submissions;
+                leads = refreshed.leads;
                 render();
                 reminderRefresh();
                 testRefresh();
@@ -645,12 +673,15 @@
         document.getElementById("lockout").addEventListener("click", function () {
             key = "";
             all = [];
+            leads = [];
             formFilter = "";
             ready.analytics = false;
             ready.reminders = false;
             ready.test = false;
             showView("all");
             rows.innerHTML = "";
+            document.getElementById("lead-rows").innerHTML = "";
+            document.getElementById("leads-panel").hidden = true;
             counts.innerHTML = "";
             meta.textContent = "";
             search.value = "";
@@ -702,6 +733,7 @@
             const scroller = document.getElementById("scroller");
 
             document.getElementById("csv").hidden = !isTable;
+            if (!isTable) document.getElementById("leads-panel").hidden = true;
             document.getElementById("tools").hidden = !isTable;
             scroller.hidden = !isTable;
 
@@ -777,6 +809,8 @@
                 tr.appendChild(paymentCell(row));
                 rows.appendChild(tr);
             });
+
+            renderLeads();
 
             empty.hidden = list.length > 0;
             meta.textContent = list.length === all.length
@@ -1139,6 +1173,29 @@
             span.textContent = status === "sent" ? "Sent" : (status || "—");
             td.appendChild(span);
             return td;
+        }
+
+        // Somebody who filled the form in and stopped at the payment page. Worth
+        // seeing on the bootcamp view and the full list, and nowhere else.
+        function renderLeads() {
+            const panel = document.getElementById("leads-panel");
+            const body = document.getElementById("lead-rows");
+            const wanted = !formFilter || formFilter === "Bootcamp Registration";
+            const list = wanted ? leads : [];
+
+            body.innerHTML = "";
+            panel.hidden = list.length === 0;
+
+            list.forEach(function (lead) {
+                const tr = document.createElement("tr");
+                tr.appendChild(cell(lead.reference, "ref"));
+                tr.appendChild(cell(lead.full_name));
+                tr.appendChild(mailCell(lead.email));
+                tr.appendChild(cell(lead.package || "—"));
+                tr.appendChild(cell(lead.fee ? "£" + (lead.fee / 100).toFixed(2) : "—"));
+                tr.appendChild(cell(formatDate(lead.started_at), "when"));
+                body.appendChild(tr);
+            });
         }
 
         // Forms nobody pays for have no payment status at all, so the column

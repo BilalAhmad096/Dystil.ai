@@ -116,29 +116,41 @@ The bootcamp registration form takes the programme fee through Stripe Checkout.
 Card details are typed on Stripe's own page and never reach this Worker, the
 website, or the database.
 
+**A bootcamp registration is not recorded until the fee is paid.** Everything
+else on the site still records first and emails immediately; only the paid form
+waits.
+
 Nothing about payments happens until `STRIPE_SECRET_KEY` is set. Without it the
-registration form behaves exactly as it did before payments existed, so this can
-be deployed while the Stripe account is still being verified.
+registration form records and emails straight away, exactly as it did before
+payments existed, so this can be deployed while the Stripe account is still
+being verified.
 
 ### What happens when somebody registers
 
-1. The Worker records the submission in D1 and allocates the reference, exactly
-   as it always has.
-2. The notification and the confirmation emails go out, with the CV attached.
-3. The Worker asks Stripe to open a payment page for the chosen package and
-   sends its address back to the browser, which goes there.
-4. Stripe collects the fee and returns the visitor to
+1. The Worker validates the form, allocates the reference, and puts the whole
+   submission in `pending_registrations`. The CV goes into the R2 bucket. No row
+   is written to `submissions` and no email is sent.
+2. The name and email are written to `registration_leads`, so somebody who stops
+   at the payment page can still be followed up.
+3. The visitor is sent to a Stripe payment page for the chosen package.
+4. Stripe collects the fee and returns them to
    `https://dystil.ai/students/payment-complete`.
-5. Stripe calls `POST /api/stripe-webhook`, which checks the signature and marks
-   the row paid.
+5. Stripe calls `POST /api/stripe-webhook`. The Worker checks the signature,
+   moves the held registration into `submissions` as paid, sends the
+   notification and the confirmation with the CV attached, marks the lead paid,
+   and deletes the hold and the file.
 
-The registration is complete and recorded by step 2. If Stripe cannot be reached
-the submission still succeeds and the visitor is asked to email
-`askus@dystil.ai` for a payment link, because somebody we can still reach can
-still be invoiced.
+If Stripe cannot be reached at step 3 the hold is thrown away and the visitor is
+asked to try again, because a registration waiting on a payment page that never
+opened is worse than none at all.
 
-**Only the webhook marks a registration paid.** Coming back from the payment
-page proves nothing, since anybody can open that address.
+**Only the webhook records a registration.** Coming back from the payment page
+proves nothing, since anybody can type that address. A repeated webhook is
+harmless: the reference is a primary key, so the second delivery inserts
+nothing, sends nothing, and answers 200.
+
+Anything still held 24 hours later was never paid for. It is deleted, along with
+its CV, by the next registration that comes through.
 
 ### The prices
 
@@ -156,14 +168,16 @@ price there and on `students/services.html` together.
 
 1. Create a Stripe account and complete business verification. Payouts do not
    run until that finishes, which usually takes one to three working days.
-2. In the Stripe dashboard open **Developers > Webhooks** and add an endpoint
+2. In the Stripe dashboard open **Developers > Webhooks** and add a destination
    for `https://dystil-contact.dystil-ai.workers.dev/api/stripe-webhook`,
-   subscribed to `checkout.session.completed`. Stripe then shows a signing
-   secret beginning `whsec_`.
+   subscribed to `checkout.session.completed`, payload style **Snapshot**.
+   Stripe then shows a signing secret beginning `whsec_`.
 3. From the `backend` directory:
 
 ```powershell
+npx wrangler r2 bucket create dystil-pending-cvs
 npx wrangler d1 execute dystil-submissions --remote --file=migrations/0002-add-payment-columns.sql
+npx wrangler d1 execute dystil-submissions --remote --file=migrations/0003-pay-before-record.sql
 npx wrangler secret put STRIPE_SECRET_KEY
 npx wrangler secret put STRIPE_WEBHOOK_SECRET
 npm run deploy
@@ -172,18 +186,19 @@ npm run deploy
 Paste the keys when prompted. Do not put either one in `wrangler.toml`, a
 commit, or a chat message.
 
-Start with the test keys (`sk_test_…` and the test-mode webhook secret) and
-register with card `4242 4242 4242 4242`, any future expiry and any CVC. Then
-run the same two `secret put` commands with the live values and redeploy.
+A sandbox has its own keys and its own webhook destination, so the test pair and
+the live pair are different values. Test with card `4242 4242 4242 4242`, any
+future expiry and any CVC, then run the two `secret put` commands again with the
+live values and redeploy.
 
 ### Reading who has paid
 
-`https://dystil.ai/students/database` shows a **Fee** column: paid, unpaid, or
-empty for the forms nobody pays for. The CSV download carries the same two
-columns.
+`https://dystil.ai/students/database` shows a **Fee** column on the submissions
+table, and a **Started, not paid** panel underneath listing everybody who
+reached the payment page and did not pay.
 
 ```powershell
-npx wrangler d1 execute dystil-submissions --remote --command "SELECT reference, full_name, email, payment_status, payment_amount FROM submissions WHERE payment_status = 'unpaid' ORDER BY submitted_at DESC"
+npx wrangler d1 execute dystil-submissions --remote --command "SELECT reference, full_name, email, package, started_at FROM registration_leads WHERE paid_at IS NULL ORDER BY started_at DESC"
 ```
 
 Refunds are made in the Stripe dashboard. Nothing here reverses a row
@@ -193,6 +208,10 @@ automatically, so update the record by hand if you refund somebody:
 npx wrangler d1 execute dystil-submissions --remote --command "UPDATE submissions SET payment_status = 'refunded' WHERE reference = 'DYS-BOT-26-0001'"
 ```
 
+Reference numbers skip a number whenever somebody starts a registration and does
+not pay. The gap is not a lost record: the reference it was given is in
+`registration_leads`.
+
 ### Before taking real money
 
 - Publish a refund and cancellation policy. Stripe disputes go badly without
@@ -200,7 +219,8 @@ npx wrangler d1 execute dystil-submissions --remote --command "UPDATE submission
 - Get VAT advice on whether the training is exempt or standard-rated. If it is
   standard-rated, £399 has to be £399 including VAT or the price on the site is
   wrong.
-- Say in the privacy policy that Stripe processes payments.
+- Say in the privacy policy that Stripe processes payments, and that the details
+  of an unpaid registration are deleted within 24 hours.
 
 ## Submission records and reference numbers
 
