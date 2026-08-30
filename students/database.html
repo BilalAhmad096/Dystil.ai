@@ -190,6 +190,8 @@
         .status { font-size: 11px; font-weight: bold; letter-spacing: 0.6px; }
         .status.sent { color: #8fe0b6; }
         .status.pending, .status.failed { color: #ffb4a8; }
+        .status.paid { color: #8fe0b6; }
+        .status.unpaid { color: #ffd39a; }
 
         .details { color: var(--light-text); font-size: 12.5px; max-width: 460px; }
         .details .field { margin-bottom: 3px; }
@@ -475,6 +477,7 @@
                         <th>Submitted</th>
                         <th>Details</th>
                         <th>Email sent</th>
+                        <th>Fee</th>
                     </tr>
                 </thead>
                 <tbody id="rows"></tbody>
@@ -771,6 +774,7 @@
                 tr.appendChild(cell(formatDate(row.submitted_at), "when"));
                 tr.appendChild(detailsCell(row.details, row.cv_filename));
                 tr.appendChild(statusCell(row.delivery_status));
+                tr.appendChild(paymentCell(row));
                 rows.appendChild(tr);
             });
 
@@ -852,8 +856,33 @@
             // A page is measured in views: a visit only counts where the session
             // began, so inner pages would otherwise all read as zero.
             drawLines("visitor-pages", data.pages, function (row) { return row.path; }, function (row) { return row.views; });
-            drawLines("visitor-countries", data.countries, function (row) { return row.country; });
+            drawLines("visitor-countries", data.countries, function (row) { return countryName(row.country); });
             sampledNote.hidden = !data.sampled;
+        }
+
+        // Cloudflare reports countries as two-letter codes. The browser already
+        // knows what they are called, so there is no table to keep up to date.
+        // Anything it does not recognise - Tor exits arrive as T1, unknowns as
+        // XX - is shown as it came.
+        const countryNames = (function () {
+            try {
+                return new Intl.DisplayNames(["en-GB"], { type: "region" });
+            } catch {
+                return null;
+            }
+        })();
+
+        function countryName(code) {
+            const clean = String(code || "").trim().toUpperCase();
+
+            if (!clean) return "Unknown";
+            if (!countryNames || !/^[A-Z]{2}$/.test(clean)) return clean;
+
+            try {
+                return countryNames.of(clean) || clean;
+            } catch {
+                return clean;
+            }
         }
 
         function totalCard(label, value) {
@@ -1112,6 +1141,24 @@
             return td;
         }
 
+        // Forms nobody pays for have no payment status at all, so the column
+        // stays empty for them rather than claiming they owe nothing.
+        function paymentCell(row) {
+            const td = document.createElement("td");
+
+            if (!row.payment_status) {
+                td.textContent = "—";
+                return td;
+            }
+
+            const span = document.createElement("span");
+            span.className = "status " + row.payment_status;
+            span.textContent = (row.payment_status === "paid" ? "Paid" : "Unpaid")
+                + (row.payment_amount ? " £" + (row.payment_amount / 100).toFixed(2) : "");
+            td.appendChild(span);
+            return td;
+        }
+
         function formatDate(value) {
             const date = new Date(value);
             if (isNaN(date)) return value || "—";
@@ -1133,10 +1180,11 @@
 
         document.getElementById("csv").addEventListener("click", function () {
             const list = visible();
-            const header = ["Reference", "Form", "Source", "Came from", "Landed on", "Name", "Email", "Submitted", "Details", "Email sent"];
+            const header = ["Reference", "Form", "Source", "Came from", "Landed on", "Name", "Email", "Submitted", "Details", "Email sent", "Fee", "Amount"];
             const lines = [header].concat(list.map(function (row) {
                 return [row.reference, row.form_type, row.source_channel, row.source_detail, row.source_landing,
-                    row.full_name, row.email, row.submitted_at, detailsText(row.details), row.delivery_status];
+                    row.full_name, row.email, row.submitted_at, detailsText(row.details), row.delivery_status,
+                    row.payment_status || "", row.payment_amount ? (row.payment_amount / 100).toFixed(2) : ""];
             }));
 
             const csv = lines.map(function (line) {
