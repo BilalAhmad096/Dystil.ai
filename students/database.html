@@ -1221,6 +1221,23 @@
         // choosing one leaves the other with nobody:
         //   { label: "Reminder", buttons: [["campaign-key-frank", "from Frank"]] }
         const REMINDERS = [
+            // No HTML part at all, so no pixel and no link: the plainest thing
+            // we can send. Shares the ledger with the designed row below it, so
+            // a person can have one or the other, never both.
+            {
+                label: "Plain note · first taster",
+                buttons: [
+                    ["bootcamp-2026-09-26-note-taster1-frank", "from Frank"],
+                    ["bootcamp-2026-09-26-note-taster1-askus", "from Dystil"]
+                ]
+            },
+            {
+                label: "Plain note · second taster",
+                buttons: [
+                    ["bootcamp-2026-09-26-note-taster2-frank", "from Frank"],
+                    ["bootcamp-2026-09-26-note-taster2-askus", "from Dystil"]
+                ]
+            },
             {
                 label: "Bootcamp invitation · first taster",
                 buttons: [
@@ -1435,6 +1452,8 @@
         // What the test panel offers, as { campaign, label }. A test goes to one
         // person on the team list and is never written to the ledger.
         const TESTABLE = [
+            { campaign: "bootcamp-2026-09-26-note-taster1-frank", label: "Plain note · Frank" },
+            { campaign: "bootcamp-2026-09-26-note-taster1-askus", label: "Plain note · Dystil" },
             { campaign: "bootcamp-2026-09-26-invite-taster1-frank", label: "Bootcamp invitation · Frank" },
             { campaign: "bootcamp-2026-09-26-invite-taster1-askus", label: "Bootcamp invitation · Dystil" }
         ];

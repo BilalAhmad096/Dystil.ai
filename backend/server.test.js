@@ -37,8 +37,24 @@ function makeFakeDatabase() {
                                     delivery_status: "pending",
                                     source_channel: args[7],
                                     source_detail: args[8],
-                                    source_landing: args[9]
+                                    source_landing: args[9],
+                                    payment_status: args[10],
+                                    payment_amount: args[11]
                                 });
+
+                                return { success: true };
+                            }
+
+                            if (sql.includes("payment_status = 'paid'")) {
+                                const row = rows.find((candidate) => candidate.reference === args[2]);
+
+                                // The statement only touches a row that was
+                                // expecting a fee, and the fake honours that.
+                                if (row && row.payment_status) {
+                                    row.payment_status = "paid";
+                                    row.payment_amount = args[0];
+                                    row.stripe_session_id = args[1];
+                                }
 
                                 return { success: true };
                             }
@@ -1164,4 +1180,267 @@ test("does not cry sampling over a directly measured window", async function() {
 
         assert.equal((await response.json()).sampled, false);
     });
+});
+
+// ---------- PAYMENTS ----------
+
+const STRIPE_WEBHOOK_SECRET = "whsec_test_secret";
+
+const paidEnv = {
+    ...env,
+    DB: makeFakeDatabase(),
+    STRIPE_SECRET_KEY: "sk_test_key",
+    STRIPE_WEBHOOK_SECRET
+};
+
+const bootcampRegistration = {
+    formType: "Bootcamp Registration",
+    fullName: "Priya Graduate",
+    email: "priya@example.com",
+    phone: "07000 111222",
+    universityDegree: "Example University",
+    careerGoal: "Data analyst",
+    techSkills: "Python",
+    experience: "Placement year",
+    package: "Foundation Bootcamp",
+    website: ""
+};
+
+// Brevo and Stripe are both reached with fetch, so the stub answers each by the
+// address it was called on. The Stripe calls are collected separately because
+// every payment assertion is about that one request.
+async function withMockedStripe(callback, options = {}) {
+    const originalFetch = globalThis.fetch;
+    const stripeCalls = [];
+
+    globalThis.fetch = async function(url, requestOptions) {
+        if (String(url).startsWith("https://api.stripe.com/")) {
+            stripeCalls.push({
+                url: String(url),
+                headers: requestOptions.headers,
+                fields: new URLSearchParams(requestOptions.body)
+            });
+
+            if (options.stripeFails) {
+                return Response.json({ error: { message: "no" } }, { status: 402 });
+            }
+
+            return Response.json({
+                id: "cs_test_123",
+                url: "https://checkout.stripe.com/c/pay/cs_test_123"
+            }, { status: 200 });
+        }
+
+        return Response.json({ id: crypto.randomUUID() }, { status: 201 });
+    };
+
+    try {
+        await callback(stripeCalls);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+}
+
+async function signedWebhook(event, { secret = STRIPE_WEBHOOK_SECRET, timestamp = Math.floor(Date.now() / 1000) } = {}) {
+    const payload = JSON.stringify(event);
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(secret),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"]
+    );
+
+    const signed = await crypto.subtle.sign("HMAC", key, encoder.encode(`${timestamp}.${payload}`));
+    const signature = [...new Uint8Array(signed)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+
+    return new Request("https://dystil-contact.example/api/stripe-webhook", {
+        method: "POST",
+        headers: { "Stripe-Signature": `t=${timestamp},v1=${signature}` },
+        body: payload
+    });
+}
+
+function completedEvent(reference, amount = 39900) {
+    return {
+        type: "checkout.session.completed",
+        data: {
+            object: {
+                id: "cs_test_123",
+                client_reference_id: reference,
+                amount_total: amount,
+                metadata: { reference }
+            }
+        }
+    };
+}
+
+function rowFor(database, reference) {
+    return database.rows.find((row) => row.reference === reference);
+}
+
+async function registerAndGetReference(fields = bootcampRegistration) {
+    let reference = "";
+
+    await withMockedStripe(async function() {
+        const response = await worker.fetch(makeRequest(fields), paidEnv);
+        reference = (await response.json()).reference;
+    });
+
+    return reference;
+}
+
+test("opens a payment page for a bootcamp registration", async function() {
+    await withMockedStripe(async function(stripeCalls) {
+        const response = await worker.fetch(makeRequest(bootcampRegistration), paidEnv);
+        const result = await response.json();
+
+        assert.equal(response.status, 200);
+        assert.equal(result.success, true);
+        assert.equal(result.paymentUrl, "https://checkout.stripe.com/c/pay/cs_test_123");
+
+        assert.equal(stripeCalls.length, 1);
+        assert.equal(stripeCalls[0].url, "https://api.stripe.com/v1/checkout/sessions");
+        assert.equal(stripeCalls[0].headers.Authorization, "Bearer sk_test_key");
+        assert.equal(stripeCalls[0].fields.get("client_reference_id"), result.reference);
+        assert.equal(stripeCalls[0].fields.get("customer_email"), "priya@example.com");
+        assert.equal(stripeCalls[0].fields.get("line_items[0][price_data][currency]"), "gbp");
+
+        const row = rowFor(paidEnv.DB, result.reference);
+        assert.equal(row.payment_status, "unpaid");
+        assert.equal(row.payment_amount, 39900);
+    });
+});
+
+// The only thing the form sends is which package was chosen. If the amount came
+// from the browser, the Advanced bootcamp would be worth whatever a buyer typed.
+test("prices the package on the server, not from the form", async function() {
+    await withMockedStripe(async function(stripeCalls) {
+        const response = await worker.fetch(makeRequest({
+            ...bootcampRegistration,
+            package: "Advanced Bootcamp",
+            unit_amount: "1",
+            amount: "1"
+        }), paidEnv);
+
+        const result = await response.json();
+
+        assert.equal(stripeCalls[0].fields.get("line_items[0][price_data][unit_amount]"), "89900");
+        assert.equal(rowFor(paidEnv.DB, result.reference).payment_amount, 89900);
+    });
+});
+
+test("charges nothing for a package it does not recognise", async function() {
+    await withMockedStripe(async function(stripeCalls) {
+        const response = await worker.fetch(makeRequest({
+            ...bootcampRegistration,
+            package: "Free Bootcamp"
+        }), paidEnv);
+
+        const result = await response.json();
+
+        assert.equal(stripeCalls.length, 0);
+        assert.equal(result.paymentUrl, undefined);
+        assert.equal(rowFor(paidEnv.DB, result.reference).payment_status, null);
+    });
+});
+
+test("leaves the enquiry forms alone when Stripe is configured", async function() {
+    await withMockedStripe(async function(stripeCalls) {
+        const response = await worker.fetch(makeRequest(studentEnquiry), paidEnv);
+        const result = await response.json();
+
+        assert.equal(stripeCalls.length, 0);
+        assert.equal(result.paymentUrl, undefined);
+    });
+});
+
+// Without the secret the site has to behave exactly as it did before payments
+// existed. That is what makes this safe to deploy before Stripe is ready.
+test("takes no payment until Stripe is configured", async function() {
+    await withMockedStripe(async function(stripeCalls) {
+        const response = await worker.fetch(makeRequest(bootcampRegistration), env);
+        const result = await response.json();
+
+        assert.equal(result.success, true);
+        assert.equal(result.paymentUrl, undefined);
+        assert.equal(stripeCalls.length, 0);
+        assert.match(result.message, /check your inbox/i);
+    });
+});
+
+// A registration is worth more than a payment page: somebody we can still reach
+// can still be invoiced, but a failed submission is gone for good.
+test("keeps the registration when Stripe cannot be reached", async function() {
+    await withMockedStripe(async function() {
+        const response = await worker.fetch(makeRequest(bootcampRegistration), paidEnv);
+        const result = await response.json();
+
+        assert.equal(response.status, 200);
+        assert.equal(result.success, true);
+        assert.equal(result.paymentUrl, undefined);
+        assert.match(result.message, /payment link/i);
+        assert.equal(rowFor(paidEnv.DB, result.reference).payment_status, "unpaid");
+    }, { stripeFails: true });
+});
+
+test("marks the registration paid on a signed webhook", async function() {
+    const reference = await registerAndGetReference();
+    const response = await worker.fetch(await signedWebhook(completedEvent(reference)), paidEnv);
+
+    assert.equal(response.status, 200);
+
+    const row = rowFor(paidEnv.DB, reference);
+    assert.equal(row.payment_status, "paid");
+    assert.equal(row.payment_amount, 39900);
+    assert.equal(row.stripe_session_id, "cs_test_123");
+});
+
+test("refuses a webhook signed with the wrong secret", async function() {
+    const reference = await registerAndGetReference();
+    const request = await signedWebhook(completedEvent(reference), { secret: "whsec_not_the_secret" });
+    const response = await worker.fetch(request, paidEnv);
+
+    assert.equal(response.status, 400);
+    assert.equal(rowFor(paidEnv.DB, reference).payment_status, "unpaid");
+});
+
+// A signature stays valid forever unless the timestamp it covers is checked, so
+// a captured webhook could otherwise be replayed months later.
+test("refuses a webhook whose signature is stale", async function() {
+    const reference = await registerAndGetReference();
+    const request = await signedWebhook(completedEvent(reference), {
+        timestamp: Math.floor(Date.now() / 1000) - 3600
+    });
+
+    const response = await worker.fetch(request, paidEnv);
+
+    assert.equal(response.status, 400);
+    assert.equal(rowFor(paidEnv.DB, reference).payment_status, "unpaid");
+});
+
+test("refuses a webhook carrying no signature at all", async function() {
+    const request = new Request("https://dystil-contact.example/api/stripe-webhook", {
+        method: "POST",
+        body: JSON.stringify(completedEvent("DYS-BOT-26-0001"))
+    });
+
+    assert.equal((await worker.fetch(request, paidEnv)).status, 400);
+});
+
+// Stripe sends far more than the one event we act on, and retries for days
+// anything that does not answer 200.
+test("acknowledges an event it does not act on", async function() {
+    const request = await signedWebhook({ type: "payment_intent.created", data: { object: {} } });
+
+    assert.equal((await worker.fetch(request, paidEnv)).status, 200);
+});
+
+test("ignores a webhook naming a form that never owed a fee", async function() {
+    const reference = await registerAndGetReference(studentEnquiry);
+    const response = await worker.fetch(await signedWebhook(completedEvent(reference)), paidEnv);
+
+    assert.equal(response.status, 200);
+    assert.equal(rowFor(paidEnv.DB, reference).payment_status, null);
 });

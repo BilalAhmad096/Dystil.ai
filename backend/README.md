@@ -110,6 +110,98 @@ students/taster.html
 corporate/contact.html
 ```
 
+## Bootcamp payments
+
+The bootcamp registration form takes the programme fee through Stripe Checkout.
+Card details are typed on Stripe's own page and never reach this Worker, the
+website, or the database.
+
+Nothing about payments happens until `STRIPE_SECRET_KEY` is set. Without it the
+registration form behaves exactly as it did before payments existed, so this can
+be deployed while the Stripe account is still being verified.
+
+### What happens when somebody registers
+
+1. The Worker records the submission in D1 and allocates the reference, exactly
+   as it always has.
+2. The notification and the confirmation emails go out, with the CV attached.
+3. The Worker asks Stripe to open a payment page for the chosen package and
+   sends its address back to the browser, which goes there.
+4. Stripe collects the fee and returns the visitor to
+   `https://dystil.ai/students/payment-complete`.
+5. Stripe calls `POST /api/stripe-webhook`, which checks the signature and marks
+   the row paid.
+
+The registration is complete and recorded by step 2. If Stripe cannot be reached
+the submission still succeeds and the visitor is asked to email
+`askus@dystil.ai` for a payment link, because somebody we can still reach can
+still be invoiced.
+
+**Only the webhook marks a registration paid.** Coming back from the payment
+page proves nothing, since anybody can open that address.
+
+### The prices
+
+| Package | Fee |
+| --- | --- |
+| Foundation Bootcamp | £399 |
+| Advanced Bootcamp | £899 |
+
+They are set in `BOOTCAMP_PRICES` in `server.js`, in pence. The form sends only
+which package was chosen; the amount is never taken from the browser, because a
+figure that arrives from a browser is a figure anybody can change. Change a
+price there and on `students/services.html` together.
+
+### One-time setup
+
+1. Create a Stripe account and complete business verification. Payouts do not
+   run until that finishes, which usually takes one to three working days.
+2. In the Stripe dashboard open **Developers > Webhooks** and add an endpoint
+   for `https://dystil-contact.dystil-ai.workers.dev/api/stripe-webhook`,
+   subscribed to `checkout.session.completed`. Stripe then shows a signing
+   secret beginning `whsec_`.
+3. From the `backend` directory:
+
+```powershell
+npx wrangler d1 execute dystil-submissions --remote --file=migrations/0002-add-payment-columns.sql
+npx wrangler secret put STRIPE_SECRET_KEY
+npx wrangler secret put STRIPE_WEBHOOK_SECRET
+npm run deploy
+```
+
+Paste the keys when prompted. Do not put either one in `wrangler.toml`, a
+commit, or a chat message.
+
+Start with the test keys (`sk_test_…` and the test-mode webhook secret) and
+register with card `4242 4242 4242 4242`, any future expiry and any CVC. Then
+run the same two `secret put` commands with the live values and redeploy.
+
+### Reading who has paid
+
+`https://dystil.ai/students/database` shows a **Fee** column: paid, unpaid, or
+empty for the forms nobody pays for. The CSV download carries the same two
+columns.
+
+```powershell
+npx wrangler d1 execute dystil-submissions --remote --command "SELECT reference, full_name, email, payment_status, payment_amount FROM submissions WHERE payment_status = 'unpaid' ORDER BY submitted_at DESC"
+```
+
+Refunds are made in the Stripe dashboard. Nothing here reverses a row
+automatically, so update the record by hand if you refund somebody:
+
+```powershell
+npx wrangler d1 execute dystil-submissions --remote --command "UPDATE submissions SET payment_status = 'refunded' WHERE reference = 'DYS-BOT-26-0001'"
+```
+
+### Before taking real money
+
+- Publish a refund and cancellation policy. Stripe disputes go badly without
+  one, and a disputed payment costs about £20 whichever way it ends.
+- Get VAT advice on whether the training is exempt or standard-rated. If it is
+  standard-rated, £399 has to be £399 including VAT or the price on the site is
+  wrong.
+- Say in the privacy policy that Stripe processes payments.
+
 ## Submission records and reference numbers
 
 Every submission is written to the `dystil-submissions` D1 database before the

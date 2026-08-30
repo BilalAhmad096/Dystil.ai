@@ -1,4 +1,5 @@
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
+const STRIPE_SESSIONS_API = "https://api.stripe.com/v1/checkout/sessions";
 const MAX_CV_SIZE = 4 * 1024 * 1024;
 const DUPLICATE_WINDOW_SECONDS = 60;
 const BURST_WINDOW_SECONDS = 600;
@@ -10,6 +11,21 @@ const BURST_LIMIT = 10;
 const ADMIN_ATTEMPT_LIMIT = 5;
 const ADMIN_ATTEMPT_WINDOW_SECONDS = 900;
 const ADMIN_PAGE_SIZE = 500;
+
+// Programme fees in pence. They are priced here rather than in the form because
+// the page may say which package somebody chose, but never what it costs: a
+// figure that arrives from a browser is a figure anybody can change.
+const BOOTCAMP_PRICES = {
+    "Foundation Bootcamp": 39900,
+    "Advanced Bootcamp": 89900
+};
+
+// The bootcamp is the only form anybody pays for. The rest are enquiries.
+const PAID_FORM = "Bootcamp Registration";
+
+// Stripe retries a webhook it never got a 200 from, so an old signature has to
+// be refused rather than trusted. Five minutes is Stripe's own tolerance.
+const STRIPE_SIGNATURE_TOLERANCE_SECONDS = 300;
 
 // The reference number tells us at a glance which form was filled in, and each
 // form counts from 0001 again every January: DYS-TAS-26-0001.
@@ -105,14 +121,21 @@ const NEXT_REFERENCE_SQL = `
 const SAVE_SUBMISSION_SQL = `
     INSERT INTO submissions
         (reference, form_type, full_name, email, details, cv_filename, submitted_at, delivery_status,
-         source_channel, source_detail, source_landing)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`;
+         source_channel, source_detail, source_landing, payment_status, payment_amount)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`;
 
 const MARK_DELIVERY_SQL = "UPDATE submissions SET delivery_status = ? WHERE reference = ?";
 
+// Only a row that was expecting a fee can be marked paid, so a webhook naming a
+// reference that never owed anything changes nothing.
+const MARK_PAID_SQL = `
+    UPDATE submissions
+    SET payment_status = 'paid', payment_amount = ?, stripe_session_id = ?
+    WHERE reference = ? AND payment_status IS NOT NULL`;
+
 const LIST_SUBMISSIONS_SQL = `
     SELECT reference, form_type, full_name, email, details, cv_filename, submitted_at, delivery_status,
-           source_channel, source_detail, source_landing
+           source_channel, source_detail, source_landing, payment_status, payment_amount
     FROM submissions
     ORDER BY submitted_at DESC
     LIMIT ?`;
@@ -211,6 +234,13 @@ export default {
         const corsHeaders = buildCorsHeaders(origin, allowedOrigins);
         const respond = buildResponder(request, corsHeaders);
         const url = new URL(request.url);
+
+        // Stripe is not a browser and sends no Origin header, so this route is
+        // checked before the origin rules the website's own calls go through.
+        // Its own signature is what proves the caller is Stripe.
+        if (request.method === "POST" && url.pathname === "/api/stripe-webhook") {
+            return handleStripeWebhook(request, env);
+        }
 
         if (request.method === "OPTIONS") {
             if (!allowedOrigins.has(origin)) {
@@ -321,10 +351,15 @@ export default {
         // Every enquiry is recorded before it is sent, so nothing is lost if the
         // email provider fails. Without that record there is no reference number
         // to quote, so a storage failure stops the submission.
+        // What this registration owes, if anything. Working it out before the
+        // row is written means the record says "unpaid" from the moment it
+        // exists, rather than only once somebody reaches the payment page.
+        const fee = feeFor(env, formType, values);
+
         let reference;
         try {
             reference = await allocateReference(env.DB, formType);
-            await saveSubmission(env.DB, reference, formType, values, cvResult.attachment, submittedAt, source);
+            await saveSubmission(env.DB, reference, formType, values, cvResult.attachment, submittedAt, source, fee);
         } catch (error) {
             console.error("Could not record the submission.", error instanceof Error ? error.message : "Unknown error");
 
@@ -382,10 +417,29 @@ export default {
 
         await recordSubmission(rateLimit);
 
+        // The registration is complete and recorded whatever happens next. A
+        // payment page that cannot be opened leaves somebody we can still reach
+        // and still invoice, which is worth far more than a failed submission.
+        const paymentUrl = fee ? await createCheckoutSession(env, reference, values, fee) : "";
+
+        if (fee && !paymentUrl) {
+            return respond({
+                success: true,
+                reference,
+                message: `Thanks — your details have been sent and your reference is ${reference}. We could not open the payment page just now, so please email askus@dystil.ai and we will send you a payment link.`
+            }, 200);
+        }
+
         return respond({
             success: true,
             reference,
-            message: `Thanks — your details have been sent. Your reference is ${reference}. Please check your inbox for confirmation.`
+            paymentUrl: paymentUrl || undefined,
+            // The same sentence has to read correctly in two places: on the page
+            // that redirects to Stripe, and on the result page somebody without
+            // JavaScript is left looking at with a payment button under it.
+            message: paymentUrl
+                ? `Thanks — your registration is recorded under reference ${reference}. The last step is the programme fee, paid securely through Stripe.`
+                : `Thanks — your details have been sent. Your reference is ${reference}. Please check your inbox for confirmation.`
         }, 200);
     }
 };
@@ -442,6 +496,12 @@ function htmlResponse(body, status, extraHeaders = {}) {
 function buildResultPage(body) {
     const heading = body.success ? "Thank you" : "We could not send your details";
 
+    // Somebody whose JavaScript never loaded lands on this page instead of
+    // being redirected, so the payment page has to be reachable from it.
+    const payButton = body.paymentUrl
+        ? `<p><a href="${escapeHtml(body.paymentUrl)}" style="display:inline-block;background:#147a59;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:bold;">Pay the programme fee</a></p>`
+        : "";
+
     return `<!doctype html>
 <html lang="en">
 <head>
@@ -456,6 +516,7 @@ function buildResultPage(body) {
         </div>
         <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
             <p style="margin-top:0;">${escapeHtml(body.message)}</p>
+            ${payButton}
             <p style="margin-bottom:0;"><a href="https://dystil.ai" style="color:#147a59;">Return to dystil.ai</a></p>
         </div>
     </div>
@@ -980,7 +1041,7 @@ function labelForSource(detail) {
 
 // The CV is kept out of the database and stays an email attachment, so only its
 // filename is recorded here.
-async function saveSubmission(db, reference, formType, values, attachment, submittedAt, source) {
+async function saveSubmission(db, reference, formType, values, attachment, submittedAt, source, fee = 0) {
     await db.prepare(SAVE_SUBMISSION_SQL).bind(
         reference,
         formType,
@@ -991,8 +1052,178 @@ async function saveSubmission(db, reference, formType, values, attachment, submi
         submittedAt,
         source.channel,
         source.detail,
-        source.landing
+        source.landing,
+        // Forms nobody pays for leave this empty, so "unpaid" on the
+        // submissions page always means somebody still owes money.
+        fee ? "unpaid" : null,
+        fee || null
     ).run();
+}
+
+// What a submission owes, in pence. Nothing is owed unless Stripe is
+// configured, so the site behaves exactly as it did before payments existed
+// until the secret is in place, and an unrecognised package is treated as no
+// price rather than a guess at one.
+function feeFor(env, formType, values) {
+    if (!env.STRIPE_SECRET_KEY || formType !== PAID_FORM) return 0;
+
+    return BOOTCAMP_PRICES[values.package] || 0;
+}
+
+// The first allowed origin is the canonical address of the website, so Stripe
+// sends people back to the same place the form was posted from.
+function siteUrl(env) {
+    return [...getAllowedOrigins(env)][0] || "https://dystil.ai";
+}
+
+// Opens a Stripe-hosted payment page. Card details are typed on Stripe's own
+// page and never reach this Worker or the website. The reference travels as the
+// client reference, which is what ties the payment back to the D1 row when the
+// webhook arrives.
+async function createCheckoutSession(env, reference, values, fee) {
+    const home = siteUrl(env);
+    const body = new URLSearchParams({
+        mode: "payment",
+        client_reference_id: reference,
+        customer_email: values.email,
+        success_url: `${home}/students/payment-complete?ref=${encodeURIComponent(reference)}`,
+        cancel_url: `${home}/students/payment-complete?ref=${encodeURIComponent(reference)}&cancelled=1`,
+        "line_items[0][quantity]": "1",
+        "line_items[0][price_data][currency]": "gbp",
+        "line_items[0][price_data][unit_amount]": String(fee),
+        "line_items[0][price_data][product_data][name]": `Dystil Launchpad — ${values.package}`,
+        "line_items[0][price_data][product_data][description]": `Programme fee, reference ${reference}`,
+        "metadata[reference]": reference,
+        "metadata[package]": values.package
+    });
+
+    try {
+        const response = await fetch(STRIPE_SESSIONS_API, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${env.STRIPE_SECRET_KEY}`,
+                "Content-Type": "application/x-www-form-urlencoded",
+                // The same registration retried must not become a second
+                // payment page, and so a second chance to be charged twice.
+                "Idempotency-Key": `checkout-${reference}`
+            },
+            body
+        });
+
+        const session = await response.json();
+
+        if (!response.ok || !session.url) {
+            console.error("Could not open a payment page.", { reference, status: response.status });
+            return "";
+        }
+
+        return session.url;
+    } catch (error) {
+        console.error("Could not reach Stripe.", {
+            reference,
+            message: error instanceof Error ? error.message : "Unknown error"
+        });
+
+        return "";
+    }
+}
+
+// Stripe tells us a payment succeeded here, and nowhere else. The browser
+// coming back from the payment page proves nothing — anybody can open that
+// address — so this is the only thing that marks a registration paid.
+async function handleStripeWebhook(request, env) {
+    if (!env.STRIPE_WEBHOOK_SECRET) {
+        console.error("STRIPE_WEBHOOK_SECRET is not configured.");
+        return new Response("Not configured.", { status: 503 });
+    }
+
+    const payload = await request.text();
+
+    if (!(await stripeSignatureValid(request.headers.get("Stripe-Signature"), payload, env.STRIPE_WEBHOOK_SECRET))) {
+        return new Response("Invalid signature.", { status: 400 });
+    }
+
+    let event;
+    try {
+        event = JSON.parse(payload);
+    } catch {
+        return new Response("Unreadable event.", { status: 400 });
+    }
+
+    // Anything else Stripe sends is acknowledged and ignored. A non-200 would
+    // have it retried for days over an event we were never interested in.
+    if (event?.type === "checkout.session.completed") {
+        const session = event.data?.object || {};
+        const reference = session.client_reference_id || session.metadata?.reference || "";
+
+        if (!reference || !env.DB) {
+            console.error("A completed payment could not be recorded.", { reference });
+        } else {
+            try {
+                await env.DB.prepare(MARK_PAID_SQL)
+                    .bind(session.amount_total ?? null, session.id || null, reference)
+                    .run();
+            } catch (error) {
+                // Stripe retries a webhook that did not return 200, so a failure
+                // here is worth reporting rather than swallowing: the next
+                // attempt is how the row eventually gets marked paid.
+                console.error("Could not mark the registration paid.", {
+                    reference,
+                    message: error instanceof Error ? error.message : "Unknown error"
+                });
+
+                return new Response("Could not record the payment.", { status: 500 });
+            }
+        }
+    }
+
+    return new Response("ok", { status: 200 });
+}
+
+// Stripe signs the timestamp and the raw body together. During a secret
+// rotation it sends more than one signature, and any one of them matching is
+// enough, so every v1 value in the header is checked.
+async function stripeSignatureValid(header, payload, secret) {
+    if (typeof header !== "string" || !header) return false;
+
+    let timestamp = "";
+    const signatures = [];
+
+    for (const part of header.split(",")) {
+        const separator = part.indexOf("=");
+        if (separator === -1) continue;
+
+        const name = part.slice(0, separator).trim();
+        const value = part.slice(separator + 1).trim();
+
+        if (name === "t") timestamp = value;
+        if (name === "v1") signatures.push(value);
+    }
+
+    if (!timestamp || !signatures.length) return false;
+
+    const age = Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp));
+    if (!Number.isFinite(age) || age > STRIPE_SIGNATURE_TOLERANCE_SECONDS) return false;
+
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(secret),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"]
+    );
+
+    const signed = await crypto.subtle.sign("HMAC", key, encoder.encode(`${timestamp}.${payload}`));
+    const expected = [...new Uint8Array(signed)].map(function (byte) {
+        return byte.toString(16).padStart(2, "0");
+    }).join("");
+
+    for (const candidate of signatures) {
+        if (await secretsMatch(candidate, expected)) return true;
+    }
+
+    return false;
 }
 
 // A failure here leaves the row saying "pending" while the emails are already
@@ -1223,6 +1454,7 @@ const BOOTCAMP_REGISTERS = {
 
 // The same shape as the reminder subjects that reached Primary: what it is,
 // a pipe, and when.
+const BOOTCAMP_NOTE_SUBJECT = "Carrying on after the taster session?";
 const BOOTCAMP_SUBJECT = `${BOOTCAMP.starts} | Dystil ${BOOTCAMP.name}`;
 
 /* What reaches Primary, measured rather than guessed.
@@ -1372,7 +1604,9 @@ async function handleBroadcast(request, env, corsHeaders) {
             to: [{ email: person.email, name: person.fullName }],
             replyTo: campaign.replyTo || { email: env.ADMIN_EMAIL, name: "Dystil" },
             subject: campaign.subject,
-            htmlContent: campaign.buildHtml(person.firstName),
+            // A text-only email cannot carry Brevo's tracking pixel, because
+            // the pixel is an image and there is no HTML for it to sit in.
+            htmlContent: campaign.plainOnly ? undefined : campaign.buildHtml(person.firstName),
             textContent: campaign.buildText(person.firstName)
         };
 
@@ -1381,6 +1615,8 @@ async function handleBroadcast(request, env, corsHeaders) {
         if (campaign.attachUrl) {
             payload.attachment = [{ url: campaign.attachUrl, name: campaign.attachName }];
         }
+
+        if (campaign.plainOnly) delete payload.htmlContent;
 
         const sent = campaign.route === "graph"
             ? await sendViaGraph(graphToken, campaign.sender.email, buildGraphMessage(campaign, person, person.firstName))
@@ -1455,7 +1691,9 @@ async function sendBroadcastTest(env, campaign, corsHeaders, onlyEmail) {
             to: [{ email: person.email, name: person.fullName }],
             replyTo: campaign.replyTo || { email: env.ADMIN_EMAIL, name: "Dystil" },
             subject: campaign.subject,
-            htmlContent: campaign.buildHtml(firstNameOf(person.fullName)),
+            // A text-only email cannot carry Brevo's tracking pixel, because
+            // the pixel is an image and there is no HTML for it to sit in.
+            htmlContent: campaign.plainOnly ? undefined : campaign.buildHtml(firstNameOf(person.fullName)),
             textContent: campaign.buildText(firstNameOf(person.fullName))
         };
 
@@ -1464,6 +1702,8 @@ async function sendBroadcastTest(env, campaign, corsHeaders, onlyEmail) {
         if (campaign.attachUrl) {
             payload.attachment = [{ url: campaign.attachUrl, name: campaign.attachName }];
         }
+
+        if (campaign.plainOnly) delete payload.htmlContent;
 
         const sent = campaign.route === "graph"
             ? await sendViaGraph(graphToken, campaign.sender.email, buildGraphMessage(campaign, person, firstNameOf(person.fullName)))
@@ -1667,6 +1907,27 @@ function buildBootcampText(firstName) {
     ].join("\n");
 }
 
+// No HTML, no URL, no image, ninety words. There is nothing here for a filter
+// to read as an advertisement: no link to score, no pixel to find, and a
+// question at the end that asks for a reply rather than a click. That reply is
+// also the thing Gmail weighs most heavily in favour of Primary next time.
+function buildBootcampNoteText(firstName) {
+    return [
+        firstName ? `Hi ${firstName},` : "Hi,",
+        "",
+        "You came to our taster session in August, so I thought I would let you know what is next.",
+        "",
+        `The ${BOOTCAMP.name} runs from ${BOOTCAMP.starts}, and registration closes on ${BOOTCAMP.closes}.`,
+        "",
+        "There are two pathways. Foundation is for building the basics; Advanced is for harder projects and a stronger profile. You would pick one when you register.",
+        "",
+        "If you would like the details, just reply to this email and I will send them over. Or call me on " + DYSTIL_PHONE + " and we can talk it through.",
+        "",
+        "Frank M",
+        "Dystil"
+    ].join("\n");
+}
+
 // One campaign per register per name. Both names on a register share a ledger,
 // so asking as Frank cannot ask again as Dystil; the two registers do not, so
 // the same email reaches each of them once.
@@ -1675,6 +1936,23 @@ function buildBootcampCampaigns() {
 
     for (const [register, target] of Object.entries(BOOTCAMP_REGISTERS)) {
         for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
+            // The same offer as a plain note: no HTML part, so no pixel, and
+            // no URL to score. Shares the register's ledger with the designed
+            // one, so a person gets one or the other and never both.
+            campaigns[`bootcamp-2026-09-26-note-${register}-${who}`] = {
+                formType: target.formType,
+                subject: BOOTCAMP_NOTE_SUBJECT,
+                // Never called on a plainOnly campaign, but the payload is
+                // built before that is known, so it has to be here.
+                buildHtml: buildBootcampNoteText,
+                buildText: buildBootcampNoteText,
+                plainOnly: true,
+                sender,
+                replyTo: sender,
+                dedupeKey: `bootcamp-2026-09-26-invite-${register}`,
+                testRecipients: TEST_TEAM
+            };
+
             campaigns[`bootcamp-2026-09-26-invite-${register}-${who}`] = {
                 formType: target.formType,
                 subject: BOOTCAMP_SUBJECT,

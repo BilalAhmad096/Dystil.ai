@@ -266,6 +266,15 @@ async function submitEnquiryForm(event) {
 
         form.reset();
         showFormStatus(status, "success", result.message || "Thanks — your details have been sent.");
+
+        // A registration that owes a fee comes back with a Stripe payment page
+        // to go to. The details are already saved and emailed by this point, so
+        // leaving the page loses nothing if somebody changes their mind.
+        if (result.paymentUrl) {
+            showFormStatus(status, "success", (result.message || "") + " Taking you to the payment page…");
+            window.location.assign(result.paymentUrl);
+            return;
+        }
     } catch (error) {
         const message = error.name === "AbortError"
             ? "The request took too long. Please try again or email askus@dystil.ai."
