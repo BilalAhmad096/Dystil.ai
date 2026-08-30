@@ -1197,6 +1197,7 @@ const SOCIAL_ICONS = "https://dystil.ai/assets/images/social/";
 const BOOTCAMP = {
     name: "Career Accelerator",
     starts: "Saturday 26 September 2026",
+    startsShort: "26 September",
     closes: "Tuesday 15 September 2026",
     pathways: [
         ["\u{1F331}", "Foundation", "Build your foundations and develop practical, future-ready skills.", "https://dystil.ai/students/register?package=foundation"],
@@ -1218,7 +1219,9 @@ const BOOTCAMP_REGISTERS = {
     taster2: { label: "second taster", formType: "Second Taster Registration" }
 };
 
-const BOOTCAMP_SUBJECT = `Your place on the ${BOOTCAMP.name}, starting ${BOOTCAMP.starts}`;
+// Gmail reads the subject before anything else. A question about a date is a
+// note between two people; "Your place on X" is a mailshot.
+const BOOTCAMP_SUBJECT = `Are you joining us on ${BOOTCAMP.startsShort}?`;
 
 // Anything CAMPAIGNS reads has to be declared above it: the map is built when
 // the module loads, so a const further down the file is still in its dead zone
@@ -1594,13 +1597,13 @@ function graphIsConfigured(env) {
 --------------------------------------------------------------------------- */
 
 function buildBootcampHtml(firstName) {
-    const heading = firstName ? `Ready for the next step, ${escapeHtml(firstName)}?` : "Ready for the next step?";
+    const heading = firstName ? `Hello ${escapeHtml(firstName)},` : "Hello,";
 
     const pathways = BOOTCAMP.pathways.map(([icon, name, detail, href]) => `
                     <div style="background:#f4f7f6;border-left:4px solid #147a59;padding:14px 16px;margin:0 0 12px;">
-                        <strong style="color:#123f31;">${icon} ${escapeHtml(name.toUpperCase())}</strong><br>
+                        <strong style="color:#123f31;">${escapeHtml(name)}</strong><br>
                         <span style="color:#4c5a54;">${escapeHtml(detail)}</span><br>
-                        <a href="${escapeHtml(href)}" style="color:#147a59;font-weight:bold;">Register for ${escapeHtml(name)}</a>
+                        <a href="${escapeHtml(href)}" style="color:#147a59;font-weight:bold;">${escapeHtml(name)} details and sign-up</a>
                     </div>`).join("");
 
     const socials = DYSTIL_SOCIALS.map(([, name, href]) =>
@@ -1617,21 +1620,21 @@ function buildBootcampHtml(firstName) {
                     <h1 style="font-size:26px;margin:0;">${heading}</h1>
                 </div>
                 <div style="background:#fff;padding:24px;line-height:1.6;">
-                    <p style="margin-top:0;">The taster session was an hour of what the work looks like. The Bootcamp is where you do it: real projects, in your own field, finished and in your portfolio.</p>
+                    <p style="margin-top:0;">You came to the taster session, which was an hour of what the work looks like. The ${escapeHtml(BOOTCAMP.name)} is the longer version of it: you work on real projects in your own field, and you finish with them in your portfolio.</p>
+                    <p style="margin:0 0 18px;">I wanted to let you know the dates, in case you are thinking about it.</p>
                     <p style="background:#123f31;color:#fff;padding:14px 16px;margin:0 0 18px;border-radius:8px;">
-                        \u{1F4C5} <strong>Starts ${escapeHtml(BOOTCAMP.starts)}</strong><br>
-                        ⏳ Registration closes ${escapeHtml(BOOTCAMP.closes)}<br>
-                        \u{1F39F}️ Seats are limited
+                        <strong>It starts ${escapeHtml(BOOTCAMP.starts)}</strong><br>
+                        Registration closes ${escapeHtml(BOOTCAMP.closes)}
                     </p>
-                    <p style="margin:0 0 14px;">Two pathways, one goal. Pick the one that matches where you are now:</p>
+                    <p style="margin:0 0 14px;">There are two pathways, and which one suits you depends on where you are now.</p>
                     ${pathways}
-                    <p style="margin:0;">Places are held in the order registrations arrive, so the closing date is the last day to register rather than the day to decide.</p>
+                    <p style="margin:0;">Places are held in the order applications arrive, so the closing date is the last day to reply rather than the day to decide.</p>
                 </div>
                 <div style="background:#fff;border-top:1px solid #e4ebe8;padding:20px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;font-size:14px;color:#4c5a54;">
-                    <p style="margin:0 0 6px;">Not sure which pathway is yours? Call or write, and one of us will talk it through.</p>
+                    <p style="margin:0 0 6px;">If you are not sure which pathway is yours, reply to this email or call me and we can talk it through.</p>
                     <p style="margin:0 0 16px;">☎ <a href="${escapeHtml(DYSTIL_PHONE_LINK)}" style="color:#147a59;">${escapeHtml(DYSTIL_PHONE)}</a> &nbsp;·&nbsp; ✉ <a href="mailto:askus@dystil.ai" style="color:#147a59;">askus@dystil.ai</a></p>
                     <p style="margin:0 0 16px;">${socials}</p>
-                    <p style="margin:0;color:#16221d;">Kind regards,<br><strong>The Dystil Team</strong></p>
+                    <p style="margin:0;color:#16221d;">Kind regards,<br><strong>Frank M</strong><br>Executive Partner, Dystil</p>
                 </div>
             </div>
         </body></html>`;
@@ -1639,29 +1642,31 @@ function buildBootcampHtml(firstName) {
 
 function buildBootcampText(firstName) {
     return [
-        firstName ? `Ready for the next step, ${firstName}?` : "Ready for the next step?",
+        firstName ? `Hello ${firstName},` : "Hello,",
         "",
-        "The taster session was an hour of what the work looks like. The Bootcamp is where you do it: real projects, in your own field, finished and in your portfolio.",
+        `You came to the taster session, which was an hour of what the work looks like. The ${BOOTCAMP.name} is the longer version of it: you work on real projects in your own field, and you finish with them in your portfolio.`,
         "",
-        `\u{1F4C5} Starts ${BOOTCAMP.starts}`,
-        `⏳ Registration closes ${BOOTCAMP.closes}`,
-        "\u{1F39F}️ Seats are limited",
+        "I wanted to let you know the dates, in case you are thinking about it.",
         "",
-        "Two pathways, one goal. Pick the one that matches where you are now:",
+        `It starts ${BOOTCAMP.starts}.`,
+        `Registration closes ${BOOTCAMP.closes}.`,
         "",
-        ...BOOTCAMP.pathways.flatMap(([icon, name, detail, href]) => [
-            `${icon} ${name.toUpperCase()} - ${detail}`,
-            `Register: ${href}`,
+        "There are two pathways, and which one suits you depends on where you are now.",
+        "",
+        ...BOOTCAMP.pathways.flatMap(([, name, detail, href]) => [
+            `${name} - ${detail}`,
+            href,
             ""
         ]),
-        "Places are held in the order registrations arrive, so the closing date is the last day to register rather than the day to decide.",
+        "Places are held in the order applications arrive, so the closing date is the last day to reply rather than the day to decide.",
         "",
-        "Not sure which pathway is yours? Call " + DYSTIL_PHONE + " or write to askus@dystil.ai, and one of us will talk it through.",
+        "If you are not sure which pathway is yours, reply to this email or call me on " + DYSTIL_PHONE + " and we can talk it through.",
         "",
         ...DYSTIL_SOCIALS.map(([icon, name, href]) => `${icon} ${name}: ${href}`),
         "",
         "Kind regards,",
-        "The Dystil Team"
+        "Frank M",
+        "Executive Partner, Dystil"
     ].join("\n");
 }
 
