@@ -231,6 +231,86 @@ img {
     font-size: 16px;
 }
 
+/* POLICY PAGES — privacy, terms and anything else that is mostly prose. Set for
+   reading: one column, a measure that does not run away, and headings that break
+   the wall of text up rather than shouting. */
+.policy {
+    max-width: 78ch;
+    margin: 0 auto;
+    padding: 56px 6% 72px;
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.7;
+}
+
+.policy h1 {
+    font-size: 34px;
+    line-height: 1.2;
+    margin: 0 0 6px;
+}
+
+.policy-updated {
+    margin: 0 0 26px;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.policy-lead {
+    font-size: 17.5px;
+    line-height: 1.65;
+    padding-bottom: 6px;
+}
+
+.policy h2 {
+    font-size: 22px;
+    margin: 38px 0 10px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line, #e3e6ef);
+}
+
+.policy h3 {
+    font-size: 17px;
+    margin: 24px 0 8px;
+}
+
+.policy p { margin: 0 0 14px; }
+
+.policy ul {
+    margin: 0 0 16px;
+    padding-left: 22px;
+}
+
+.policy li { margin-bottom: 8px; }
+
+.policy a { color: var(--primary); }
+
+@media screen and (max-width: 700px) {
+    .policy { padding: 36px 6% 56px; font-size: 15.5px; }
+    .policy h1 { font-size: 27px; }
+    .policy h2 { font-size: 19px; }
+}
+
+.footer-links {
+    margin: 4px 0 0;
+    font-size: 14px;
+}
+
+.footer-links a {
+    color: inherit;
+    text-decoration: underline;
+    opacity: 0.85;
+}
+
+/* The company details a limited company has to show. Deliberately quiet: it is
+   required reading, not something anyone came for. */
+.footer-legal {
+    max-width: 70ch;
+    margin: 14px auto 0;
+    font-size: 12.5px;
+    line-height: 1.6;
+    opacity: 0.62;
+}
+
 /* STUDENT FOOTER STYLE */
 .student-footer {
     background: rgba(7, 17, 31, 0.96);
