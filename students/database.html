@@ -488,6 +488,28 @@
             <p class="empty" id="empty" hidden>Nothing to show.</p>
         </div>
 
+        <div class="leads" id="paid-panel" hidden>
+            <h2>Paid registrations</h2>
+            <p class="note">Everyone who has paid a programme fee. These carry the paid reference, which
+                is numbered on the day the money arrived: DYS-BOT-26-3108001 is the first payment taken
+                on 31 August.</p>
+            <div class="scroller">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Package</th>
+                            <th>Paid</th>
+                            <th>Registered</th>
+                        </tr>
+                    </thead>
+                    <tbody id="paid-rows"></tbody>
+                </table>
+            </div>
+        </div>
+
         <div class="leads" id="leads-panel" hidden>
             <h2>Started, not paid</h2>
             <p class="note">Reached the payment page and did not pay, so there is no registration. Name and email
@@ -556,6 +578,7 @@
         let key = "";
         let all = [];
         let leads = [];
+        let paid = [];
         let formFilter = "";
 
         // Which page of the board is open. The panels below are built once and
@@ -579,7 +602,7 @@
             },
             bootcamp: {
                 title: "Bootcamp registration",
-                note: "Everyone who has registered for a Career Accelerator bootcamp, with the pathway they chose and their CV filename.",
+                note: "Everyone who has registered for a Career Accelerator bootcamp, with the pathway they chose. Paid registrations are listed separately below, under the reference they were given on the day they paid.",
                 form: "Bootcamp Registration"
             },
             analytics: {
@@ -614,6 +637,7 @@
                 key = entered;
                 all = data.submissions;
                 leads = data.leads;
+                paid = data.paid;
                 lock.hidden = true;
                 board.hidden = false;
                 render();
@@ -644,7 +668,11 @@
                 throw new Error(body.message || "Could not load the submissions.");
             }
 
-            return { submissions: body.submissions || [], leads: body.leads || [] };
+            return {
+                submissions: body.submissions || [],
+                leads: body.leads || [],
+                paid: body.paid || []
+            };
         }
 
         document.getElementById("refresh").addEventListener("click", async function () {
@@ -656,6 +684,7 @@
                 const refreshed = await load(key);
                 all = refreshed.submissions;
                 leads = refreshed.leads;
+                paid = refreshed.paid;
                 render();
                 reminderRefresh();
                 testRefresh();
@@ -674,6 +703,7 @@
             key = "";
             all = [];
             leads = [];
+            paid = [];
             formFilter = "";
             ready.analytics = false;
             ready.reminders = false;
@@ -682,6 +712,8 @@
             rows.innerHTML = "";
             document.getElementById("lead-rows").innerHTML = "";
             document.getElementById("leads-panel").hidden = true;
+            document.getElementById("paid-rows").innerHTML = "";
+            document.getElementById("paid-panel").hidden = true;
             counts.innerHTML = "";
             meta.textContent = "";
             search.value = "";
@@ -733,7 +765,10 @@
             const scroller = document.getElementById("scroller");
 
             document.getElementById("csv").hidden = !isTable;
-            if (!isTable) document.getElementById("leads-panel").hidden = true;
+            if (!isTable) {
+                document.getElementById("leads-panel").hidden = true;
+                document.getElementById("paid-panel").hidden = true;
+            }
             document.getElementById("tools").hidden = !isTable;
             scroller.hidden = !isTable;
 
@@ -810,6 +845,7 @@
                 rows.appendChild(tr);
             });
 
+            renderPaid();
             renderLeads();
 
             empty.hidden = list.length > 0;
@@ -1173,6 +1209,35 @@
             span.textContent = status === "sent" ? "Sent" : (status || "—");
             td.appendChild(span);
             return td;
+        }
+
+        // The people who actually paid. Only shown where a payment could have
+        // happened, which is the bootcamp view and the full list.
+        function renderPaid() {
+            const panel = document.getElementById("paid-panel");
+            const body = document.getElementById("paid-rows");
+            const wanted = !formFilter || formFilter === "Bootcamp Registration";
+            const list = wanted ? paid : [];
+
+            body.innerHTML = "";
+            panel.hidden = list.length === 0;
+
+            list.forEach(function (row) {
+                const tr = document.createElement("tr");
+                let chosen = "—";
+
+                try {
+                    chosen = JSON.parse(row.details).package || "—";
+                } catch { /* an older row without readable details */ }
+
+                tr.appendChild(cell(row.reference, "ref"));
+                tr.appendChild(cell(row.full_name));
+                tr.appendChild(mailCell(row.email));
+                tr.appendChild(cell(chosen));
+                tr.appendChild(cell(row.payment_amount ? "£" + (row.payment_amount / 100).toFixed(2) : "—"));
+                tr.appendChild(cell(formatDate(row.submitted_at), "when"));
+                body.appendChild(tr);
+            });
         }
 
         // Somebody who filled the form in and stopped at the payment page. Worth

@@ -190,6 +190,7 @@ price there and on `students/services.html` together.
 ```powershell
 npx wrangler d1 execute dystil-submissions --remote --file=migrations/0002-add-payment-columns.sql
 npx wrangler d1 execute dystil-submissions --remote --file=migrations/0003-pay-before-record.sql
+npx wrangler d1 execute dystil-submissions --remote --file=migrations/0004-paid-references.sql
 npx wrangler secret put STRIPE_SECRET_KEY
 npx wrangler secret put STRIPE_WEBHOOK_SECRET
 npm run deploy
@@ -206,8 +207,10 @@ live values and redeploy.
 ### Reading who has paid
 
 `https://dystil.ai/students/database` shows a **Fee** column on the submissions
-table, and a **Started, not paid** panel underneath listing everybody who
-reached the payment page and did not pay.
+table. Under it, on the bootcamp view and the full list, are two more panels:
+**Paid registrations**, everybody who paid and the reference they were given on
+the day, and **Started, not paid**, everybody who reached the payment page and
+did not.
 
 ```powershell
 npx wrangler d1 execute dystil-submissions --remote --command "SELECT reference, full_name, email, package, started_at FROM registration_leads WHERE paid_at IS NULL ORDER BY started_at DESC"
@@ -220,8 +223,28 @@ automatically, so update the record by hand if you refund somebody:
 npx wrangler d1 execute dystil-submissions --remote --command "UPDATE submissions SET payment_status = 'refunded' WHERE reference = 'DYS-BOT-26-0001'"
 ```
 
-Reference numbers skip a number whenever somebody starts a registration and does
-not pay. The gap is not a lost record: the reference it was given is in
+### Two kinds of reference
+
+A registration is **held** under the ordinary four-digit reference,
+`DYS-BOT-26-0007`, which is what Stripe is given and what the admin page shows
+under **Started, not paid**.
+
+When the fee arrives it is **renumbered** by the day the money came in:
+`DYS-BOT-26-3108001` is the first payment taken on 31 August, `3108002` the
+second, and the count starts again at 001 the next morning. That is the number
+in both emails and in the **Paid registrations** table, so a reference says when
+somebody actually joined rather than when they filled a form in.
+
+The two are linked by `registration_leads.paid_reference`, and a payment can be
+traced from Stripe by its session id, which is stored on the row.
+
+Because a paid registration draws a fresh number, the reference can no longer be
+what stops a retried webhook writing the record twice. The Stripe session does
+that job instead: it is unique per payment, it is checked before anything is
+allocated, and a unique index on `stripe_session_id` is the backstop.
+
+Holding references skip a number whenever somebody starts a registration and
+does not pay. The gap is not a lost record: the reference it was given is in
 `registration_leads`.
 
 ### Before taking real money

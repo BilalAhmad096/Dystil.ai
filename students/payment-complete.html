@@ -54,10 +54,16 @@
                     "<a href=\"/students/register\">Register again</a> to complete it, or email <a href=\"mailto:askus@dystil.ai\">askus@dystil.ai</a> quoting your reference and we will send you a payment link.";
             } else {
                 document.getElementById("payment-message").textContent =
-                    "Thank you — your programme fee has been received and your place is being confirmed.";
+                    "Thank you — your programme fee has been received and your place is confirmed. Your registration reference is in the confirmation email we have just sent you.";
             }
 
-            if (reference) {
+            /* A paid registration is renumbered on the day the money arrives, so
+               the reference carried here is the one it was held under and not
+               the one the confirmation email will quote. Showing it to somebody
+               who has just paid would hand them the wrong number, so it appears
+               only when they did not pay, where it is still what our inbox
+               knows them by. */
+            if (reference && cancelled) {
                 var line = document.getElementById("payment-reference");
                 line.textContent = "Your reference is " + reference;
                 line.hidden = false;

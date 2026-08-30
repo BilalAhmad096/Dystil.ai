@@ -100,8 +100,12 @@ function makeFakeDatabase() {
         }
 
         if (sql.includes("UPDATE registration_leads")) {
-            const lead = leads.find((candidate) => candidate.reference === args[1]);
-            if (lead) lead.paid_at = args[0];
+            const lead = leads.find((candidate) => candidate.reference === args[2]);
+
+            if (lead) {
+                lead.paid_at = args[0];
+                lead.paid_reference = args[1];
+            }
 
             return { success: true, meta: { changes: lead ? 1 : 0 } };
         }
@@ -150,6 +154,10 @@ function makeFakeDatabase() {
                                 return pending.find((row) => row.token === args[0]) || null;
                             }
 
+                            if (sql.includes("WHERE stripe_session_id")) {
+                                return rows.find((row) => row.stripe_session_id === args[0]) || null;
+                            }
+
                             throw new Error(`Unexpected statement: ${sql}`);
                         },
                         async all() {
@@ -159,6 +167,10 @@ function makeFakeDatabase() {
 
                             if (sql.includes("FROM registration_leads")) {
                                 return { results: leads.filter((lead) => !lead.paid_at) };
+                            }
+
+                            if (sql.includes("WHERE payment_status = 'paid'")) {
+                                return { results: rows.filter((row) => row.payment_status === "paid") };
                             }
 
                             if (sql.includes("FROM submissions")) {
@@ -1377,7 +1389,10 @@ function completedEvent(token, reference, amount = 39900, overrides = {}) {
         type: overrides.type || "checkout.session.completed",
         data: {
             object: {
-                id: "cs_test_123",
+                // One session per registration, as Stripe would send. Reusing an
+                // id across two registrations is what a retry looks like, and
+                // the Worker is right to refuse the second.
+                id: overrides.id || `cs_test_${token.slice(0, 8)}`,
                 client_reference_id: reference,
                 amount_total: amount,
                 // Stripe's own verdict on whether the money arrived. A session
@@ -1393,6 +1408,15 @@ function completedEvent(token, reference, amount = 39900, overrides = {}) {
 function rowFor(database, reference) {
     return database.rows.find((row) => row.reference === reference);
 }
+
+// A paid registration is renumbered on arrival, so it can no longer be found by
+// the reference it was held under.
+function paidRowFor(database, email) {
+    return database.rows.find((row) => row.email === email && row.payment_status === "paid");
+}
+
+// DYS-BOT-26-3108001: the day the money arrived, then that day's count.
+const PAID_REFERENCE = /^DYS-BOT-\d{2}-\d{7}$/;
 
 // Fills in the form and stops at the payment page, which is as far as a
 // registration gets on its own.
@@ -1422,6 +1446,7 @@ async function payFor(started, amount = 39900) {
     await withMockedApis(async function(mocked) {
         const request = await signedWebhook(completedEvent(started.token, started.result.reference, amount));
         calls = { ...mocked, response: await worker.fetch(request, paidEnv) };
+        calls.sessionId = `cs_test_${started.token.slice(0, 8)}`;
     });
 
     return calls;
@@ -1456,12 +1481,17 @@ test("records the registration and sends the emails once the fee is paid", async
 
     assert.equal(paid.response.status, 200);
 
-    const row = rowFor(paidEnv.DB, started.result.reference);
+    const row = paidRowFor(paidEnv.DB, "priya@example.com");
     assert.equal(row.payment_status, "paid");
     assert.equal(row.payment_amount, 39900);
-    assert.equal(row.stripe_session_id, "cs_test_123");
+    assert.equal(row.stripe_session_id, `cs_test_${started.token.slice(0, 8)}`);
     assert.equal(row.full_name, "Priya Graduate");
     assert.equal(row.delivery_status, "sent");
+
+    // Renumbered on payment, and no longer the number it was held under.
+    assert.match(row.reference, PAID_REFERENCE);
+    assert.notEqual(row.reference, started.result.reference);
+    assert.equal(paidEnv.DB.leads[0].paid_reference, row.reference);
 
     // The notification and the confirmation, neither of which was sent earlier.
     assert.equal(paid.emailCalls.length, 2);
@@ -1489,7 +1519,7 @@ test("ignores a CV sent to a paid registration", async function() {
 
     const paid = await payFor(started);
 
-    assert.equal(rowFor(paidEnv.DB, started.result.reference).cv_filename, null);
+    assert.equal(paidRowFor(paidEnv.DB, "priya@example.com").cv_filename, null);
     assert.equal(paid.emailCalls[0].body.attachment, undefined);
 });
 
@@ -1539,7 +1569,7 @@ test("prices the package on the server, not from the form", async function() {
     assert.equal(started.stripeCalls[0].fields.get("line_items[0][price_data][unit_amount]"), "89900");
 
     await payFor(started, 89900);
-    assert.equal(rowFor(paidEnv.DB, started.result.reference).payment_amount, 89900);
+    assert.equal(paidRowFor(paidEnv.DB, "priya@example.com").payment_amount, 89900);
 });
 
 // A hold with no payment page to wait on is worse than no hold at all.
@@ -1707,14 +1737,14 @@ test("says the payment was received in both emails", async function() {
     const [notification, confirmation] = paid.emailCalls;
 
     // What lands in the Dystil inbox.
-    assert.match(notification.body.subject, /^\[DYS-BOT-26-\d{4}\] PAID £399\.00 — Bootcamp Registration — Priya Graduate$/);
+    assert.match(notification.body.subject, /^\[DYS-BOT-26-\d{7}\] PAID £399\.00 — Bootcamp Registration — Priya Graduate$/);
     assert.match(notification.body.htmlContent, /Payment received/);
     assert.match(notification.body.htmlContent, /£399\.00 received/);
     assert.match(notification.body.textContent, /^Payment received — Bootcamp Registration/);
     assert.match(notification.body.textContent, /Payment: £399\.00 received on /);
 
     // What lands in the student's inbox.
-    assert.match(confirmation.body.subject, /^Payment received \| DYS-BOT-26-\d{4}$/);
+    assert.match(confirmation.body.subject, /^Payment received \| DYS-BOT-26-\d{7}$/);
     assert.match(confirmation.body.htmlContent, /Payment received\. Your bootcamp registration is complete and your place is confirmed\./);
     assert.match(confirmation.body.htmlContent, /Amount paid: <strong>£399\.00<\/strong>/);
     assert.match(confirmation.body.htmlContent, /joining details before the programme starts/);
@@ -1791,7 +1821,7 @@ test("finishes the registration when a delayed payment finally settles", async f
     });
 
     assert.equal(calls.response.status, 200);
-    assert.equal(rowFor(paidEnv.DB, started.result.reference).payment_status, "paid");
+    assert.equal(paidRowFor(paidEnv.DB, "priya@example.com").payment_status, "paid");
     assert.equal(calls.emailCalls.length, 2);
     assert.match(calls.emailCalls[1].body.subject, /^Payment received \| /);
     assert.equal(paidEnv.DB.pending.length, 0);
@@ -1842,4 +1872,80 @@ test("does not mark an older row paid on an unpaid checkout", async function() {
 
     assert.equal(response.status, 200);
     assert.equal(paidEnv.DB.rows.length, 0);
+});
+
+// DYS-BOT-26-3108001 is the first payment taken on 31 August. The day comes
+// from the clock, so the test works out what it should be rather than hard
+// coding a date that would rot overnight.
+test("numbers paid registrations by the day the money arrived", async function() {
+    paidEnv = makePaidEnv();
+
+    const now = new Date();
+    const year = now.toLocaleDateString("en-GB", { year: "2-digit", timeZone: "Europe/London" });
+    const day = now.toLocaleDateString("en-GB", {
+        day: "2-digit", month: "2-digit", timeZone: "Europe/London"
+    }).replace(/\D/g, "");
+
+    const first = await startRegistration();
+    await payFor(first);
+
+    const second = await startRegistration({ ...bootcampRegistration, email: "sam@example.com" });
+    await payFor(second);
+
+    const references = paidEnv.DB.rows.map((row) => row.reference);
+
+    assert.deepEqual(references, [
+        `DYS-BOT-${year}-${day}001`,
+        `DYS-BOT-${year}-${day}002`
+    ]);
+});
+
+// The hold keeps the old four-digit numbering, so an unpaid start still reads
+// as one and cannot be mistaken for somebody who paid.
+test("leaves the holding reference in the old format", async function() {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+
+    assert.match(started.result.reference, /^DYS-BOT-\d{2}-\d{4}$/);
+    assert.equal(paidEnv.DB.leads[0].reference, started.result.reference);
+    assert.equal(paidEnv.DB.leads[0].paid_reference, undefined);
+});
+
+// Without this, a retried webhook would draw a second reference and write the
+// registration twice, since the reference can no longer be the thing that stops
+// it.
+test("draws no second reference when a webhook is retried", async function() {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+
+    await payFor(started);
+    const firstReference = paidEnv.DB.rows[0].reference;
+
+    const again = await payFor(started);
+
+    assert.equal(again.response.status, 200);
+    assert.equal(paidEnv.DB.rows.length, 1);
+    assert.equal(paidEnv.DB.rows[0].reference, firstReference);
+    assert.equal(again.emailCalls.length, 0);
+});
+
+test("gives the submissions page the paid registrations", async function() {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+    await payFor(started);
+
+    const response = await worker.fetch(
+        makeListRequest("correct horse battery"),
+        { ...paidEnv, ADMIN_KEY: "correct horse battery" }
+    );
+
+    const result = await response.json();
+
+    assert.equal(result.paid.length, 1);
+    assert.match(result.paid[0].reference, PAID_REFERENCE);
+    assert.equal(result.paid[0].email, "priya@example.com");
+    assert.equal(result.paid[0].payment_amount, 39900);
+
+    // And they are no longer waiting on anybody.
+    assert.equal(result.leads.length, 0);
 });

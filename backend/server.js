@@ -166,7 +166,13 @@ const SAVE_LEAD_SQL = `
     VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (reference) DO NOTHING`;
 
-const MARK_LEAD_PAID_SQL = "UPDATE registration_leads SET paid_at = ? WHERE reference = ?";
+const MARK_LEAD_PAID_SQL =
+    "UPDATE registration_leads SET paid_at = ?, paid_reference = ? WHERE reference = ?";
+
+// The Stripe session is once per payment, so it is what tells us a webhook has
+// already been acted on. The reference cannot do that job any more: a paid
+// registration is renumbered on arrival, so a retry would draw a fresh number.
+const PAID_ALREADY_SQL = "SELECT reference FROM submissions WHERE stripe_session_id = ?";
 
 // The people who reached the payment page and never came back.
 const LIST_LEADS_SQL = `
@@ -174,6 +180,15 @@ const LIST_LEADS_SQL = `
     FROM registration_leads
     WHERE paid_at IS NULL
     ORDER BY started_at DESC
+    LIMIT ?`;
+
+// Every payment, newest first, for the paid table on the submissions page.
+const LIST_PAID_SQL = `
+    SELECT reference, form_type, full_name, email, details, submitted_at,
+           payment_amount, stripe_session_id
+    FROM submissions
+    WHERE payment_status = 'paid'
+    ORDER BY reference DESC
     LIMIT ?`;
 
 const LIST_SUBMISSIONS_SQL = `
@@ -888,10 +903,12 @@ async function listSubmissions(request, env, corsHeaders) {
     try {
         const { results } = await env.DB.prepare(LIST_SUBMISSIONS_SQL).bind(ADMIN_PAGE_SIZE).all();
 
-        // Everybody who reached the payment page and never paid. A missing table
-        // is not worth failing the whole page over, so the list is simply empty
-        // until the migration has run.
+        // Who paid, and who reached the payment page and did not. Neither is
+        // worth failing the whole page over, so each is simply empty if its
+        // table is not there yet.
         let leads = [];
+        let paid = [];
+
         try {
             const started = await env.DB.prepare(LIST_LEADS_SQL).bind(ADMIN_PAGE_SIZE).all();
             leads = started.results || [];
@@ -900,7 +917,15 @@ async function listSubmissions(request, env, corsHeaders) {
                 error instanceof Error ? error.message : "Unknown error");
         }
 
-        return jsonResponse({ success: true, submissions: results || [], leads }, 200, corsHeaders);
+        try {
+            const settled = await env.DB.prepare(LIST_PAID_SQL).bind(ADMIN_PAGE_SIZE).all();
+            paid = settled.results || [];
+        } catch (error) {
+            console.error("Could not read the paid registrations.",
+                error instanceof Error ? error.message : "Unknown error");
+        }
+
+        return jsonResponse({ success: true, submissions: results || [], leads, paid }, 200, corsHeaders);
     } catch (error) {
         console.error("Could not read the submissions.", error);
         return jsonResponse({ success: false, message: "Could not read the submissions." }, 500, corsHeaders);
@@ -992,6 +1017,30 @@ async function allocateReference(db, formType) {
     if (!row) throw new Error("The reference counter returned nothing.");
 
     return `DYS-${FORM_CODES[formType]}-${year}-${String(row.next_number).padStart(4, "0")}`;
+}
+
+// A paid registration is renumbered the day the money arrives, so the reference
+// says when somebody actually joined rather than when they filled the form in:
+// DYS-BOT-26-3108001 is the first payment taken on 31 August. The counter starts
+// again every day, which is why three digits is enough.
+async function allocatePaidReference(db, formType) {
+    if (!db) throw new Error("No database binding is configured.");
+
+    const today = new Date();
+    const year = today.toLocaleDateString("en-GB", { year: "2-digit", timeZone: "Europe/London" });
+    const day = today.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        timeZone: "Europe/London"
+    }).replace(/\D/g, "");
+
+    // The counter is keyed by day as well as year, so it shares the existing
+    // table without ever colliding with the counter that numbers the holds.
+    const row = await db.prepare(NEXT_REFERENCE_SQL).bind(`${formType}:paid`, `${year}-${day}`).first();
+
+    if (!row) throw new Error("The paid reference counter returned nothing.");
+
+    return `DYS-${FORM_CODES[formType]}-${year}-${day}${String(row.next_number).padStart(3, "0")}`;
 }
 
 // The browser remembers how somebody first reached the site and sends it back
@@ -1236,11 +1285,23 @@ async function completePaidRegistration(env, session) {
     // Stripe should not be asked to try again.
     if (!pending) return true;
 
+    // A retried delivery must not draw a second reference, so the session is
+    // checked before anything is allocated.
+    if (session.id) {
+        const already = await env.DB.prepare(PAID_ALREADY_SQL).bind(session.id).first();
+
+        if (already) {
+            await discardPending(env, token);
+            return true;
+        }
+    }
+
     const values = JSON.parse(pending.details);
     const schema = FORM_SCHEMAS[pending.form_type];
+    const paidReference = await allocatePaidReference(env.DB, pending.form_type);
 
     const saved = await env.DB.prepare(SAVE_PAID_SUBMISSION_SQL).bind(
-        pending.reference,
+        paidReference,
         pending.form_type,
         values.fullName,
         values.email,
@@ -1261,10 +1322,12 @@ async function completePaidRegistration(env, session) {
         return true;
     }
 
-    await env.DB.prepare(MARK_LEAD_PAID_SQL).bind(new Date().toISOString(), pending.reference).run();
+    await env.DB.prepare(MARK_LEAD_PAID_SQL)
+        .bind(new Date().toISOString(), paidReference, pending.reference)
+        .run();
 
     await deliverSubmission(env, {
-        reference: pending.reference,
+        reference: paidReference,
         formType: pending.form_type,
         schema,
         values,
