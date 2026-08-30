@@ -1198,6 +1198,9 @@ const BOOTCAMP = {
     name: "Career Accelerator",
     starts: "Saturday 26 September 2026",
     closes: "Tuesday 15 September 2026",
+    // One link, so no ?package= to preselect with: the form asks for the
+    // pathway itself, which is one link fewer in the email.
+    register: "https://dystil.ai/students/register",
     pathways: [
         ["\u{1F331}", "Foundation", "Build your foundations and develop practical, future-ready skills.", "https://dystil.ai/students/register?package=foundation"],
         ["\u{26A1}", "Advanced", "Go further with more advanced projects and build a stronger career profile.", "https://dystil.ai/students/register?package=advanced"]
@@ -1218,7 +1221,26 @@ const BOOTCAMP_REGISTERS = {
     taster2: { label: "second taster", formType: "Second Taster Registration" }
 };
 
-const BOOTCAMP_SUBJECT = `Your place on the ${BOOTCAMP.name}, starting ${BOOTCAMP.starts}`;
+// The same shape as the reminder subjects that reached Primary: what it is,
+// a pipe, and when.
+const BOOTCAMP_SUBJECT = `${BOOTCAMP.starts} | Dystil ${BOOTCAMP.name}`;
+
+/* What reaches Primary, measured rather than guessed.
+   ---------------------------------------------------------------------------
+   Sent through Brevo, all carrying its pixel:
+
+     Primary     three reminders and the calendar invitation. No images, one
+                 link each, a factual subject in the form
+                 "Tomorrow | Dystil Free Taster Session, Saturday 11am", and a
+                 footer that is one line of Kind regards.
+     Promotions  the bootcamp invitation. Three hosted images, seven links, a
+                 row of social accounts, and a subject offering a place on a
+                 programme.
+
+   So the template is not the problem, and neither is Brevo. Keep a campaign to
+   no images, one link, a subject that states a fact, and a plain sign-off, and
+   it goes where the reminders went.
+--------------------------------------------------------------------------- */
 
 // Anything CAMPAIGNS reads has to be declared above it: the map is built when
 // the module loads, so a const further down the file is still in its dead zone
@@ -1491,15 +1513,15 @@ const DYSTIL_SOCIALS = [
    Microsoft Graph
    ---------------------------------------------------------------------------
    Brevo staples a tracking pixel and a rewritten link onto everything it sends
-   and offers no way to stop it on transactional mail. Paired with copy that
-   markets a programme, that is enough for Gmail to file the email under
-   Promotions, which eleven sends across nine mailboxes have now shown. The same
-   copy sent by hand from the same tenant reached Primary, because none of those
-   bulk markers were on it.
+   and offers no way to stop it on transactional mail. That was blamed for the
+   Promotions filing, and it was wrong: the three reminders and the calendar
+   invitation went through Brevo carrying the same pixel and reached Primary.
+   What went to Promotions was the email with three hosted images, seven links
+   and a subject that sold something. See the rule above CAMPAIGNS.
 
-   So the branded email goes out through Microsoft 365 instead: real links, no
-   pixel, and the tenant's own reputation. Brevo still carries the enquiry
-   confirmations, which reach Primary already and have no reason to move.
+   This route stays because a mailbox of our own is still worth having, and
+   because it is the one lever left if the content rule ever stops being
+   enough. It needs MS_CLIENT_ID and MS_CLIENT_SECRET, which are not set.
 --------------------------------------------------------------------------- */
 
 const GRAPH_SEND_URL = "https://graph.microsoft.com/v1.0/users";
@@ -1593,45 +1615,32 @@ function graphIsConfigured(env) {
    three lines rather than a search through the copy.
 --------------------------------------------------------------------------- */
 
+// Built to the reminder that reached Primary, deliberately and exactly: dark
+// header, one panel, one accent block of details, one link, no image anywhere,
+// and Kind regards on the end. The pathway choice moved onto the registration
+// page, which already asks for it, so this can carry a single link.
 function buildBootcampHtml(firstName) {
-    const heading = firstName ? `Ready for the next step, ${escapeHtml(firstName)}?` : "Ready for the next step?";
+    const heading = firstName
+        ? `The ${escapeHtml(BOOTCAMP.name)}, ${escapeHtml(firstName)}.`
+        : `The ${escapeHtml(BOOTCAMP.name)}.`;
 
-    const pathways = BOOTCAMP.pathways.map(([icon, name, detail, href]) => `
-                    <div style="background:#f4f7f6;border-left:4px solid #147a59;padding:14px 16px;margin:0 0 12px;">
-                        <strong style="color:#123f31;">${icon} ${escapeHtml(name.toUpperCase())}</strong><br>
-                        <span style="color:#4c5a54;">${escapeHtml(detail)}</span><br>
-                        <a href="${escapeHtml(href)}" style="color:#147a59;font-weight:bold;">Register for ${escapeHtml(name)}</a>
-                    </div>`).join("");
-
-    const socials = DYSTIL_SOCIALS.map(([, name, href]) =>
-        `<a href="${escapeHtml(href)}" style="color:#147a59;text-decoration:none;white-space:nowrap;">`
-        + `<img src="${SOCIAL_ICONS}${name.toLowerCase()}.png" width="18" height="18" alt=""`
-        + ` style="border:0;vertical-align:-3px;margin-right:6px;"><span style="text-decoration:underline;">${escapeHtml(name)}</span></a>`
-    ).join(" &nbsp;&nbsp; ");
+    const pathways = BOOTCAMP.pathways
+        .map(([, name, detail]) => `<p><strong>${escapeHtml(name)}.</strong> ${escapeHtml(detail)}</p>`)
+        .join("\n                    ");
 
     return `<!doctype html>
         <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
             <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
-                <div style="background:#123f31;color:#fff;padding:28px 24px;border-radius:12px 12px 0 0;">
-                    <p style="margin:0 0 6px;font-size:12px;letter-spacing:1.6px;color:#8fd3b8;">${escapeHtml(BOOTCAMP.name.toUpperCase())}</p>
-                    <h1 style="font-size:26px;margin:0;">${heading}</h1>
+                <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
+                    <h1 style="font-size:24px;margin:0;">${heading}</h1>
                 </div>
-                <div style="background:#fff;padding:24px;line-height:1.6;">
-                    <p style="margin-top:0;">The taster session was an hour of what the work looks like. The Bootcamp is where you do it: real projects, in your own field, finished and in your portfolio.</p>
-                    <p style="background:#123f31;color:#fff;padding:14px 16px;margin:0 0 18px;border-radius:8px;">
-                        \u{1F4C5} <strong>Starts ${escapeHtml(BOOTCAMP.starts)}</strong><br>
-                        ⏳ Registration closes ${escapeHtml(BOOTCAMP.closes)}<br>
-                        \u{1F39F}️ Seats are limited
-                    </p>
-                    <p style="margin:0 0 14px;">Two pathways, one goal. Pick the one that matches where you are now:</p>
+                <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
+                    <p style="margin-top:0;">You came to the taster session, which was an hour of what the work looks like. The ${escapeHtml(BOOTCAMP.name)} is the longer version: real projects in your own field, finished, and in your portfolio at the end.</p>
+                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>Starts ${escapeHtml(BOOTCAMP.starts)}</strong><br>Registration closes ${escapeHtml(BOOTCAMP.closes)}<br>Online, in two pathways.</p>
                     ${pathways}
-                    <p style="margin:0;">Places are held in the order registrations arrive, so the closing date is the last day to register rather than the day to decide.</p>
-                </div>
-                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:20px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;font-size:14px;color:#4c5a54;">
-                    <p style="margin:0 0 6px;">Not sure which pathway is yours? Call or write, and one of us will talk it through.</p>
-                    <p style="margin:0 0 16px;">☎ <a href="${escapeHtml(DYSTIL_PHONE_LINK)}" style="color:#147a59;">${escapeHtml(DYSTIL_PHONE)}</a> &nbsp;·&nbsp; ✉ <a href="mailto:askus@dystil.ai" style="color:#147a59;">askus@dystil.ai</a></p>
-                    <p style="margin:0 0 16px;">${socials}</p>
-                    <p style="margin:0;color:#16221d;">Kind regards,<br><strong>The Dystil Team</strong></p>
+                    <p>You choose the pathway on the registration form, and if you are not sure which is yours, reply to this email or call ${escapeHtml(DYSTIL_PHONE)} and we will talk it through.</p>
+                    <p><a href="${escapeHtml(BOOTCAMP.register)}" style="color:#147a59;">Register for the ${escapeHtml(BOOTCAMP.name)}</a></p>
+                    <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
                 </div>
             </div>
         </body></html>`;
@@ -1639,26 +1648,19 @@ function buildBootcampHtml(firstName) {
 
 function buildBootcampText(firstName) {
     return [
-        firstName ? `Ready for the next step, ${firstName}?` : "Ready for the next step?",
+        firstName ? `The ${BOOTCAMP.name}, ${firstName}.` : `The ${BOOTCAMP.name}.`,
         "",
-        "The taster session was an hour of what the work looks like. The Bootcamp is where you do it: real projects, in your own field, finished and in your portfolio.",
+        `You came to the taster session, which was an hour of what the work looks like. The ${BOOTCAMP.name} is the longer version: real projects in your own field, finished, and in your portfolio at the end.`,
         "",
-        `\u{1F4C5} Starts ${BOOTCAMP.starts}`,
-        `⏳ Registration closes ${BOOTCAMP.closes}`,
-        "\u{1F39F}️ Seats are limited",
+        `Starts ${BOOTCAMP.starts}`,
+        `Registration closes ${BOOTCAMP.closes}`,
+        "Online, in two pathways.",
         "",
-        "Two pathways, one goal. Pick the one that matches where you are now:",
+        ...BOOTCAMP.pathways.map(([, name, detail]) => `${name}. ${detail}`),
         "",
-        ...BOOTCAMP.pathways.flatMap(([icon, name, detail, href]) => [
-            `${icon} ${name.toUpperCase()} - ${detail}`,
-            `Register: ${href}`,
-            ""
-        ]),
-        "Places are held in the order registrations arrive, so the closing date is the last day to register rather than the day to decide.",
+        `You choose the pathway on the registration form, and if you are not sure which is yours, reply to this email or call ${DYSTIL_PHONE} and we will talk it through.`,
         "",
-        "Not sure which pathway is yours? Call " + DYSTIL_PHONE + " or write to askus@dystil.ai, and one of us will talk it through.",
-        "",
-        ...DYSTIL_SOCIALS.map(([icon, name, href]) => `${icon} ${name}: ${href}`),
+        "Register: " + BOOTCAMP.register,
         "",
         "Kind regards,",
         "The Dystil Team"
