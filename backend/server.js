@@ -18,6 +18,7 @@ const FORM_CODES = {
     "Corporate Enquiry": "COR",
     "Bootcamp Registration": "BOT",
     "Free Taster Registration": "TAS",
+    "Second Taster Registration": "TS2",
     "Taster Session Feedback": "FBK"
 };
 
@@ -149,6 +150,16 @@ const FORM_SCHEMAS = {
         ["areaOfInterest", "Area of interest"],
         ["message", "Message"]
     ],
+    // The same questions as the first session, so a row from either reads the
+    // same way in the table and in the notification email.
+    "Second Taster Registration": [
+        ["fullName", "Full name"],
+        ["email", "Email"],
+        ["phone", "Phone"],
+        ["currentStatus", "Current status"],
+        ["areaOfInterest", "Area of interest"],
+        ["message", "Message"]
+    ],
     "Taster Session Feedback": [
         ["fullName", "Full name"],
         ["email", "Email"],
@@ -166,6 +177,7 @@ const REQUIRED_FIELDS = {
     "Corporate Enquiry": ["fullName", "email", "company", "focusArea"],
     "Bootcamp Registration": ["fullName", "email", "phone", "package"],
     "Free Taster Registration": ["fullName", "email", "currentStatus", "areaOfInterest"],
+    "Second Taster Registration": ["fullName", "email", "currentStatus", "areaOfInterest"],
     "Taster Session Feedback": ["fullName", "email", "attended", "rating", "nextStep"]
 };
 

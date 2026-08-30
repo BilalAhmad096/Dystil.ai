@@ -371,6 +371,27 @@ test("does not promise a feedback sender that somebody will be in touch", async 
     });
 });
 
+// The two sessions have to stay apart in the record, or a broadcast aimed at
+// the first register would reach people who signed up for the second.
+test("gives the second taster session its own reference series", async function() {
+    await withMockedEmailApi(async function() {
+        const response = await worker.fetch(makeRequest({
+            formType: "Second Taster Registration",
+            fullName: "Nadia Second",
+            email: "nadia@example.com",
+            currentStatus: "Student",
+            areaOfInterest: "Engineering"
+        }), env);
+
+        const { reference } = await response.json();
+        const row = env.DB.rows.find((candidate) => candidate.reference === reference);
+
+        assert.ok(reference.startsWith("DYS-TS2-"));
+        assert.equal(row.form_type, "Second Taster Registration");
+        assert.equal(row.delivery_status, "sent");
+    });
+});
+
 test("puts the reference in both emails", async function() {
     await withMockedEmailApi(async function(calls) {
         const response = await worker.fetch(makeRequest(studentEnquiry), env);

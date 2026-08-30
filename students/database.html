@@ -185,6 +185,7 @@
         .tag.STU { background: rgba(120, 200, 160, 0.2); color: #9fdcc0; }
         .tag.COR { background: rgba(255, 255, 255, 0.14); color: #d6dceb; }
         .tag.FBK { background: rgba(180, 140, 240, 0.22); color: #d3bcff; }
+        .tag.TS2 { background: rgba(90, 200, 220, 0.2); color: #a7e4ef; }
 
         .status { font-size: 11px; font-weight: bold; letter-spacing: 0.6px; }
         .status.sent { color: #8fe0b6; }
@@ -363,6 +364,7 @@
         <nav class="views" id="views">
             <button type="button" class="on" data-view="all">All submissions <span class="badge" data-badge="">0</span></button>
             <button type="button" data-view="taster">First taster session <span class="badge" data-badge="Free Taster Registration">0</span></button>
+            <button type="button" data-view="taster2">Second taster session <span class="badge" data-badge="Second Taster Registration">0</span></button>
             <button type="button" data-view="bootcamp">Bootcamp registration <span class="badge" data-badge="Bootcamp Registration">0</span></button>
             <button type="button" data-view="analytics">Analytics</button>
             <button type="button" data-view="emails">Emails</button>
@@ -503,7 +505,7 @@
     <script>
         const API = "https://dystil-contact.dystil-ai.workers.dev/api/submissions";
         const ANALYTICS_API = "https://dystil-contact.dystil-ai.workers.dev/api/analytics";
-        const CODES = { "Free Taster Registration": "TAS", "Taster Session Feedback": "FBK", "Bootcamp Registration": "BOT", "Student Enquiry": "STU", "Corporate Enquiry": "COR" };
+        const CODES = { "Free Taster Registration": "TAS", "Second Taster Registration": "TS2", "Taster Session Feedback": "FBK", "Bootcamp Registration": "BOT", "Student Enquiry": "STU", "Corporate Enquiry": "COR" };
 
         // The labels the forms and the notification emails use, so a record reads
         // the same here as it does in the inbox.
@@ -561,6 +563,11 @@
                 note: "Everyone who registered for the free taster session on Saturday 29 August 2026, no-shows included.",
                 form: "Free Taster Registration"
             },
+            taster2: {
+                title: "Second taster session",
+                note: "Everyone who has registered since the taster form was pointed at the second session. The emails for the first session cannot reach these people.",
+                form: "Second Taster Registration"
+            },
             bootcamp: {
                 title: "Bootcamp registration",
                 note: "Everyone who has registered for a Career Accelerator bootcamp, with the pathway they chose and their CV filename.",
@@ -576,7 +583,7 @@
             }
         };
 
-        const TABLE_VIEWS = ["all", "taster", "bootcamp"];
+        const TABLE_VIEWS = ["all", "taster", "taster2", "bootcamp"];
 
         // A panel is only shown once its own refresh has run, so switching to a
         // view never puts an empty box on screen.
