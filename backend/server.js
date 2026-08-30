@@ -1159,59 +1159,14 @@ function formatFileSize(bytes) {
 
 const BROADCAST_BATCH_LIMIT = 20;
 
-const TASTER_REMINDERS = [
-    {
-        key: "2-days",
-        subject: "Saturday 29 August | Dystil Free Taster Session, 11am",
-        heading: "Saturday 29 August",
-        opening: "Your Dystil free taster session is on Saturday 29 August.",
-        when: "Saturday 29 August 2026",
-        closing: [
-            "Please add it to your calendar now, so the time is held.",
-            "If you can no longer attend, reply to this email and let us know, so we can offer your place to someone else."
-        ]
-    },
-    {
-        key: "1-day",
-        subject: "Tomorrow | Dystil Free Taster Session, Saturday 11am",
-        heading: "Tomorrow",
-        opening: "Your Dystil free taster session is tomorrow morning.",
-        when: "Tomorrow, Saturday 29 August 2026",
-        closing: [
-            "It is worth saving this email now, so you are not searching for the link on Saturday morning.",
-            "If you can no longer attend, reply to this email and let us know, so we can offer your place to someone else."
-        ]
-    },
-    {
-        key: "final",
-        subject: "We start at 11:00 | Dystil Free Taster Session",
-        heading: "We start at 11:00",
-        opening: "Your Dystil free taster session starts shortly.",
-        when: "Today, Saturday 29 August 2026",
-        closing: [
-            "The link opens in your browser, so there is nothing to install.",
-            "See you shortly."
-        ]
-    },
-    {
-        key: "hours",
-        subject: "Starting at 11:00 today | Dystil Free Taster Session",
-        heading: "This morning",
-        opening: "Your Dystil free taster session starts at 11:00 this morning.",
-        when: "Today, Saturday 29 August 2026",
-        closing: [
-            "Please join a few minutes early so we can start on time. The link opens in your browser, so there is nothing to install.",
-            "See you shortly."
-        ]
-    }
-];
-
-const TASTER_SENDERS = {
+// The two names a campaign can go out under, and the only people a test may
+// reach. Both outlive any one session.
+const CAMPAIGN_SENDERS = {
     frank: { email: "frank@dystil.ai", name: "Frank M" },
     askus: { email: "askus@dystil.ai", name: "Dystil" }
 };
 
-const TASTER_TEST_TEAM = [
+const TEST_TEAM = [
     { email: "fayazkhadir78@gmail.com", fullName: "Fayyaz Khadir" },
     { email: "aman.kaleeur@gmail.com", fullName: "Aman Kaleeur" },
     { email: "makki.arsalan07@gmail.com", fullName: "Arsalan Makki" },
@@ -1232,192 +1187,45 @@ const TASTER_TEST_TEAM = [
     { email: "aman@dystil.ai", fullName: "Aman" }
 ];
 
-const TASTER_FEEDBACK_SUBJECT = "Thank you for Saturday | Your feedback, and the next cohort";
-
-// The short link redirects to /students/feedback, and the form writes the
-// answers to the same table the registrations are in. A reply still works for
-// anyone who would rather not open a form, which is why the email says so.
-const TASTER_FEEDBACK_URL = "https://dystil.ai/feedback";
-const TASTER_REGISTER_URL = "https://dystil.ai/students/register";
-
-// The cohort the taster session was the front door to. Written out here so the
-// two dates are stated once and cannot drift apart between the HTML and the
-// plain text.
-const NEXT_COHORT = {
-    name: "Foundation Career Accelerator",
-    starts: "Saturday 26 September 2026",
-    closes: "Tuesday 15 September 2026"
-};
-
-// The brand marks, rendered from the same SVG paths the site footer uses and
-// hosted on the site, because mail clients strip inline SVG. They are decorative
-// here: the account name beside each one is the link text, so a client that
-// blocks images loses nothing but the picture.
 const SOCIAL_ICONS = "https://dystil.ai/assets/images/social/";
 
 // The pathway pages the two bootcamp buttons point at. The query is read by
 // the register page, which preselects the package, so a reader who picked
 // Foundation in the email does not have to pick it again on the form.
-const FOUNDATION_REGISTER_URL = "https://dystil.ai/students/register?package=foundation";
-const ADVANCED_REGISTER_URL = "https://dystil.ai/students/register?package=advanced";
-const TASTER_SHARE_URL = "https://dystil.ai/students/taster";
-
-// The taster deck. While this is empty the email leaves the whole "revisit the
-// session" block out, so the campaign can never go out pointing at a file that
-// is not there.
-const TASTER_DECK_URL = "https://dystil.ai/assets/files/Dystil_Taster_Session_Kickoff.pdf";
-const TASTER_DECK_NAME = "Dystil Taster Session.pdf";
+// Everything the bootcamp email says about when it runs. Change these three
+// lines and the subject, the panel, the HTML and the plain text all follow.
+const BOOTCAMP = {
+    name: "Career Accelerator",
+    starts: "Saturday 26 September 2026",
+    closes: "Tuesday 15 September 2026",
+    pathways: [
+        ["\u{1F331}", "Foundation", "Build your foundations and develop practical, future-ready skills.", "https://dystil.ai/students/register?package=foundation"],
+        ["\u{26A1}", "Advanced", "Go further with more advanced projects and build a stronger career profile.", "https://dystil.ai/students/register?package=advanced"]
+    ]
+};
 
 const DYSTIL_PHONE = "+44 7516 317705";
 const DYSTIL_PHONE_LINK = "tel:+447516317705";
 
-const TASTER_FEEDBACK_QUESTIONS = [
-    "If you joined us, what was the most useful part of the session? If you could not make it, what got in the way?",
-    "What was missing, or what would you change?",
-    "Where are you now: ready to start a pathway, thinking about it, or not for you?"
-];
+// Nothing is scheduled. Add a campaign here and it appears in the panel:
+// formType picks the register it goes to, buildHtml and buildText build the
+// email, sender and replyTo name it, dedupeKey is the ledger that stops a
+// second send, and testRecipients is who a test may reach. attachUrl and
+// attachName hang a file on it, fetched from the site rather than carried
+// here. See the git history for fifteen worked examples.
+const BOOTCAMP_REGISTERS = {
+    taster1: { label: "first taster", formType: "Free Taster Registration" },
+    taster2: { label: "second taster", formType: "Second Taster Registration" }
+};
 
-const MUAZ_SUBJECT = "You showed up. Now for the next step \u{1F680} | Dystil Career Accelerator";
+const BOOTCAMP_SUBJECT = `Your place on the ${BOOTCAMP.name}, starting ${BOOTCAMP.starts}`;
 
+// Anything CAMPAIGNS reads has to be declared above it: the map is built when
+// the module loads, so a const further down the file is still in its dead zone
+// and the Worker throws on the first request. Builders are fine — functions
+// hoist — but the constants they are given here are not.
 const CAMPAIGNS = {
-    "taster-2026-08-29-joining-link": {
-        formType: "Free Taster Registration",
-        subject: "🔥 Dystil: You’re In. This Saturday is Going to Be Different — Here’s What to Expect",
-        buildHtml: buildTasterJoiningHtml,
-        buildText: buildTasterJoiningText,
-        sender: { email: "frank@dystil.ai", name: "Frank M" },
-        replyTo: { email: "frank@dystil.ai", name: "Frank M" },
-        testRecipients: TASTER_TEST_TEAM
-    },
-    // Same email, plain packaging and a subject with no emoji or hype, so the
-    // two can be sent side by side and the tab they land in compared.
-    "taster-2026-08-29-joining-link-original": {
-        formType: "Free Taster Registration",
-        subject: "Your joining link — Dystil Free Taster Session, Saturday 11am",
-        buildHtml: buildTasterJoiningHtml,
-        buildText: buildTasterJoiningText,
-        sender: { email: "frank@dystil.ai", name: "Frank M" },
-        replyTo: { email: "frank@dystil.ai", name: "Frank M" },
-        testRecipients: TASTER_TEST_TEAM
-    },
-    "taster-2026-08-29-calendar-invite-frank": {
-        formType: "Free Taster Registration",
-        subject: "Calendar invitation | Dystil Free Taster Session, Saturday 29 August",
-        buildHtml: buildInviteHtml,
-        buildText: buildInviteText,
-        sender: { email: "frank@dystil.ai", name: "Frank M" },
-        replyTo: { email: "frank@dystil.ai", name: "Frank M" },
-        // Built per recipient, because the invitation names its attendee.
-        attachInvite: true,
-        dedupeKey: "taster-2026-08-29-calendar-invite",
-        testRecipients: TASTER_TEST_TEAM
-    },
-    "taster-2026-08-29-calendar-invite-askus": {
-        formType: "Free Taster Registration",
-        subject: "Calendar invitation | Dystil Free Taster Session, Saturday 29 August",
-        buildHtml: buildInviteHtml,
-        buildText: buildInviteText,
-        sender: { email: "askus@dystil.ai", name: "Dystil" },
-        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
-        // Built per recipient, because the invitation names its attendee.
-        attachInvite: true,
-        dedupeKey: "taster-2026-08-29-calendar-invite",
-        testRecipients: TASTER_TEST_TEAM
-    },
-    "taster-2026-08-29-joining-link-confirmstyle": {
-        formType: "Free Taster Registration",
-        subject: "Your joining details | Free Taster Session, Saturday 29 August",
-        buildHtml: buildTasterConfirmStyleHtml,
-        buildText: buildTasterConfirmStyleText,
-        sender: { email: "askus@dystil.ai", name: "Dystil" },
-        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
-        testRecipients: TASTER_TEST_TEAM
-    },
-    "taster-2026-08-29-joining-link-outlook": {
-        formType: "Free Taster Registration",
-        subject: "🔥 Dystil: You’re In. This Saturday is Going to Be Different — Here’s What to Expect",
-        buildHtml: buildTasterJoiningHtml,
-        buildText: buildTasterJoiningText,
-        sender: { email: "frank@dystil.ai", name: "Frank M" },
-        replyTo: { email: "frank@dystil.ai", name: "Frank M" },
-        route: "graph",
-        testRecipients: TASTER_TEST_TEAM
-    },
-    "taster-2026-08-29-joining-link-focused": {
-        formType: "Free Taster Registration",
-        subject: "Your joining link — Dystil Free Taster Session, Saturday 11am",
-        buildHtml: buildTasterFocusedHtml,
-        buildText: buildTasterFocusedText,
-        sender: { email: "askus@dystil.ai", name: "Dystil" },
-        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
-        testRecipients: TASTER_TEST_TEAM
-    },
-    "taster-2026-08-29-joining-link-focused-emoji": {
-        formType: "Free Taster Registration",
-        subject: "🔥 Dystil: You’re In. This Saturday is Going to Be Different — Here’s What to Expect",
-        buildHtml: buildTasterFocusedHtml,
-        buildText: buildTasterFocusedText,
-        sender: { email: "askus@dystil.ai", name: "Dystil" },
-        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
-        testRecipients: TASTER_TEST_TEAM
-    },
-    "taster-2026-08-29-joining-link-askus-branded": {
-        formType: "Free Taster Registration",
-        subject: "🔥 Dystil: You’re In. This Saturday is Going to Be Different — Here’s What to Expect",
-        buildHtml: buildTasterJoiningHtml,
-        buildText: buildTasterJoiningText,
-        sender: { email: "askus@dystil.ai", name: "Dystil" },
-        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
-        testRecipients: TASTER_TEST_TEAM
-    },
-    "taster-2026-08-29-joining-link-screenshot": {
-        formType: "Free Taster Registration",
-        subject: "Your joining link — Dystil Free Taster Session, Saturday 11am",
-        buildHtml: buildTasterJoiningHtml,
-        buildText: buildTasterJoiningText,
-        sender: { email: "askus@dystil.ai", name: "Dystil" },
-        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
-        testRecipients: TASTER_TEST_TEAM
-    },
-    "taster-2026-08-29-joining-link-plain": {
-        formType: "Free Taster Registration",
-        subject: "Your Saturday session details and joining link",
-        buildHtml: buildTasterPlainHtml,
-        buildText: buildTasterJoiningText,
-        sender: { email: "frank@dystil.ai", name: "Frank M" },
-        replyTo: { email: "frank@dystil.ai", name: "Frank M" },
-        testRecipients: TASTER_TEST_TEAM
-    },
-    "taster-2026-08-29-joining-link-askus": {
-        formType: "Free Taster Registration",
-        subject: "Your Saturday session details and joining link",
-        buildHtml: buildTasterPlainHtml,
-        buildText: buildTasterJoiningText,
-        sender: { email: "askus@dystil.ai", name: "Dystil" },
-        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
-        testRecipients: TASTER_TEST_TEAM
-    },
-    "taster-2026-08-29-joining-link-sober": {
-        formType: "Free Taster Registration",
-        subject: "Your Dystil taster session on Saturday 29 August",
-        buildHtml: buildTasterSoberHtml,
-        buildText: buildTasterSoberText,
-        sender: { email: "askus@dystil.ai", name: "Dystil" },
-        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
-        testRecipients: TASTER_TEST_TEAM
-    },
-    "taster-2026-08-29-joining-link-minimal": {
-        formType: "Free Taster Registration",
-        subject: "Your Saturday session details and joining link",
-        buildHtml: buildTasterMinimalHtml,
-        buildText: buildTasterJoiningText,
-        sender: { email: "askus@dystil.ai", name: "Dystil" },
-        replyTo: { email: "askus@dystil.ai", name: "Dystil" },
-        testRecipients: TASTER_TEST_TEAM
-    },
-    ...buildReminderCampaigns(),
-    ...buildFeedbackCampaigns(),
-    ...buildMuazCampaigns()
+    ...buildBootcampCampaigns()
 };
 
 const BROADCAST_ROSTER_SQL = `
@@ -1546,12 +1354,10 @@ async function handleBroadcast(request, env, corsHeaders) {
             textContent: campaign.buildText(person.firstName)
         };
 
-        if (campaign.attachInvite) {
-            payload.attachment = [buildInviteAttachment(person, campaign.sender)];
-        } else if (campaign.attachDeck && TASTER_DECK_URL) {
-            // Brevo fetches it from the site, so the file is named once, there,
-            // rather than carried through the Worker as base64 on every send.
-            payload.attachment = [{ url: TASTER_DECK_URL, name: TASTER_DECK_NAME }];
+        // Brevo fetches an attachment given as a URL, so the file lives on the
+        // site rather than being carried through the Worker on every send.
+        if (campaign.attachUrl) {
+            payload.attachment = [{ url: campaign.attachUrl, name: campaign.attachName }];
         }
 
         const sent = campaign.route === "graph"
@@ -1631,12 +1437,10 @@ async function sendBroadcastTest(env, campaign, corsHeaders, onlyEmail) {
             textContent: campaign.buildText(firstNameOf(person.fullName))
         };
 
-        if (campaign.attachInvite) {
-            payload.attachment = [buildInviteAttachment(person, campaign.sender)];
-        } else if (campaign.attachDeck && TASTER_DECK_URL) {
-            // Brevo fetches it from the site, so the file is named once, there,
-            // rather than carried through the Worker as base64 on every send.
-            payload.attachment = [{ url: TASTER_DECK_URL, name: TASTER_DECK_NAME }];
+        // Brevo fetches an attachment given as a URL, so the file lives on the
+        // site rather than being carried through the Worker on every send.
+        if (campaign.attachUrl) {
+            payload.attachment = [{ url: campaign.attachUrl, name: campaign.attachName }];
         }
 
         const sent = campaign.route === "graph"
@@ -1677,435 +1481,11 @@ function firstNameOf(fullName) {
     return cleaned.length > 1 ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : "";
 }
 
-const TASTER_MEETING_URL = "https://teams.microsoft.com/dl/launcher/launcher.html?url=%2F_%23%2Fmeet%2F229072838157592%3Fp%3DcAIRVOIkArp5srCvN5%26anon%3Dtrue&type=meet&deeplinkId=b1481443-9b4f-424f-b23b-02e70811caf7&directDl=true&msLaunch=true&enableMobilePage=true&suppressPrompt=true";
-
-const TASTER_AGENDA = [
-    ["\u{1F680}", "01 · Future of Work", "what's really happening in your industry right now"],
-    ["\u{1F916}", "02 · AI Role Impact Demo", "AI applied to real roles, live"],
-    ["\u{1F4C1}", "03 · Profile Preview", "the kind of work that makes employers take notice"],
-    ["\u{1F3AF}", "04 · Why Dystil? Pathways & Q&A", "where you could go next, and your questions answered"]
-];
-
-const TASTER_SOCIALS = [
+const DYSTIL_SOCIALS = [
     ["\u{1F4D8}", "Facebook", "https://www.facebook.com/profile.php?id=61593583825137"],
     ["\u{1F4F8}", "Instagram", "https://www.instagram.com/dystil.ai"],
     ["\u{1F3B5}", "TikTok", "https://www.tiktok.com/@dystil.ai"]
 ];
-
-function buildTasterJoiningHtml(firstName) {
-    const greeting = firstName ? `Hey ${escapeHtml(firstName)}!` : "Hey!";
-
-    const agenda = TASTER_AGENDA.map(([icon, title, detail]) => `
-        <tr>
-            <td style="padding:8px 0;vertical-align:top;width:34px;font-size:18px;">${icon}</td>
-            <td style="padding:8px 0;line-height:1.5;">
-                <strong style="color:#123f31;">${escapeHtml(title)}</strong>
-                <span style="color:#4c5a54;"> — ${escapeHtml(detail)}</span>
-            </td>
-        </tr>`).join("");
-
-    const socials = TASTER_SOCIALS.map(([icon, name, href]) =>
-        `<p style="margin:4px 0;">${icon} ${escapeHtml(name)}: <a href="${escapeHtml(href)}" style="color:#147a59;">${escapeHtml(href)}</a></p>`
-    ).join("");
-
-    return `<!doctype html>
-<html><body style="margin:0;background:#f4f7f6;font-family:Arial,Helvetica,sans-serif;color:#16221d;">
-    <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
-        <div style="background:#123f31;color:#ffffff;padding:28px 24px;border-radius:12px 12px 0 0;">
-            <p style="margin:0 0 6px;font-size:12px;letter-spacing:1.6px;color:#8fd3b8;">FREE TASTER SESSION</p>
-            <h1 style="font-size:26px;margin:0;">${greeting}</h1>
-            <p style="margin:8px 0 0;font-size:16px;color:#d8ede5;">You registered. Smart move.</p>
-        </div>
-
-        <div style="background:#ffffff;padding:24px;line-height:1.6;">
-            <p style="margin-top:0;">Now mark the calendar, set the alarm, and show up — because this Saturday is going to be worth every minute.</p>
-
-            <p>We're kicking off Dystil's very first Free Taster Session for the Career Accelerator Program, and you're one of the 100s who grabbed a spot.</p>
-
-            <table role="presentation" style="width:100%;border-collapse:collapse;background:#f4f7f6;border-left:4px solid #147a59;margin:20px 0;">
-                <tr><td style="padding:14px 16px 4px;">\u{1F4C5} <strong>Saturday, 29th August 2026</strong></td></tr>
-                <tr><td style="padding:4px 16px;">⏰ <strong>11:00 AM – 1:00 PM UK Time</strong></td></tr>
-                <tr><td style="padding:4px 16px 14px;">\u{1F4BB} <strong>Online – Live Session, <a href="${escapeHtml(TASTER_MEETING_URL)}" style="color:#147a59;">Meeting Link here</a>, calendar invite to follow.</strong></td></tr>
-            </table>
-
-            <p style="text-align:center;margin:24px 0;">
-                <a href="${escapeHtml(TASTER_MEETING_URL)}" style="display:inline-block;background:#147a59;color:#ffffff;text-decoration:none;font-weight:bold;font-size:16px;padding:14px 32px;border-radius:999px;">Join the session on Teams</a>
-            </p>
-
-            <p>You'll get a real look at what the Career Accelerator Program is all about — the skills, the projects, the confidence, and the career edge. Not a sales pitch. An actual session built to give you something useful from minute one.</p>
-
-            <p style="margin-bottom:4px;"><strong>Here's what's coming your way:</strong></p>
-            <table role="presentation" style="width:100%;border-collapse:collapse;margin-bottom:20px;">${agenda}
-            </table>
-
-            <p>This is our first session ever — and we're building something genuinely exciting. You're part of that from day one.</p>
-
-            <hr style="border:none;border-top:1px solid #e2e9e6;margin:24px 0;">
-
-            <p style="margin-bottom:4px;"><strong>Know someone who'd benefit? Share it.</strong></p>
-            <p style="margin-top:0;">If you have a friend, classmate, or colleague who's thinking about their career — send them this link and invite them to register before Friday night:</p>
-            <p style="font-size:17px;">\u{1F449} <a href="https://dystil.ai/students/taster" style="color:#147a59;font-weight:bold;">dystil.ai/students/taster</a></p>
-
-            <p style="margin-bottom:4px;"><strong>Follow us for updates before Saturday:</strong></p>
-            ${socials}
-
-            <hr style="border:none;border-top:1px solid #e2e9e6;margin:24px 0;">
-
-            <p>We'll see you Saturday at 11:00 AM sharp.</p>
-            <p style="margin-bottom:0;">Don't be the one who had a spot and didn't show up. \u{1F609}</p>
-        </div>
-
-        <div style="background:#ffffff;padding:20px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;">
-            <p style="margin:0 0 12px;"><strong>The Dystil Team</strong></p>
-            <p style="margin:0;font-size:14px;color:#4c5a54;">
-                <strong style="color:#16221d;">Frank M</strong><br>
-                Executive Partner<br>
-                <a href="mailto:askus@dystil.ai" style="color:#147a59;">askus@dystil.ai</a><br>
-                <a href="mailto:frank@dystil.ai" style="color:#147a59;">frank@dystil.ai</a><br>
-                <a href="https://www.dystil.ai" style="color:#147a59;">www.dystil.ai</a>
-            </p>
-        </div>
-
-        <p style="text-align:center;font-size:12px;color:#7c8a84;padding:16px 8px 0;">
-            You're getting this because you registered for the Dystil Free Taster Session.
-        </p>
-    </div>
-</body></html>`;
-}
-
-function buildTasterJoiningText(firstName) {
-    const agenda = TASTER_AGENDA.map(([icon, title, detail]) => `${icon} ${title} — ${detail}`);
-    const socials = TASTER_SOCIALS.map(([icon, name, href]) => `${icon} ${name}: ${href}`);
-
-    return [
-        firstName ? `Hey ${firstName}!` : "Hey!",
-        "You registered. Smart move.",
-        "",
-        "Now mark the calendar, set the alarm, and show up — because this Saturday is going to be worth every minute.",
-        "",
-        "We're kicking off Dystil's very first Free Taster Session for the Career Accelerator Program, and you're one of the 100s who grabbed a spot.",
-        "",
-        "\u{1F4C5} Saturday, 29th August 2026",
-        "⏰ 11:00 AM – 1:00 PM UK Time",
-        "\u{1F4BB} Online – Live Session, Meeting Link here, calendar invite to follow.",
-        "",
-        "Join the session on Teams:",
-        TASTER_MEETING_URL,
-        "",
-        "You'll get a real look at what the Career Accelerator Program is all about — the skills, the projects, the confidence, and the career edge. Not a sales pitch. An actual session built to give you something useful from minute one.",
-        "",
-        "Here's what's coming your way:",
-        ...agenda,
-        "",
-        "This is our first session ever — and we're building something genuinely exciting. You're part of that from day one.",
-        "",
-        "---",
-        "",
-        "Know someone who'd benefit? Share it.",
-        "If you have a friend, classmate, or colleague who's thinking about their career — send them this link and invite them to register before Friday night:",
-        "\u{1F449} https://dystil.ai/students/taster",
-        "",
-        "Follow us for updates before Saturday:",
-        ...socials,
-        "",
-        "---",
-        "",
-        "We'll see you Saturday at 11:00 AM sharp.",
-        "Don't be the one who had a spot and didn't show up. \u{1F609}",
-        "",
-        "The Dystil Team",
-        "",
-        "Frank M",
-        "Executive Partner",
-        "askus@dystil.ai",
-        "frank@dystil.ai",
-        "www.dystil.ai",
-        "",
-        "You're getting this because you registered for the Dystil Free Taster Session."
-    ].join("\n");
-}
-
-// Variant B. Same words, plain packaging: no banner, no pill button, no
-// coloured panels, no "why you are getting this" footer. Sent beside the
-// designed version so the team can see which tab each one lands in, rather
-// than us guessing which signal Gmail is reacting to.
-function buildTasterPlainHtml(firstName) {
-    const greeting = firstName ? `Hey ${escapeHtml(firstName)}!` : "Hey!";
-
-    const agenda = TASTER_AGENDA.map(([icon, title, detail]) =>
-        `<div style="margin:0 0 6px;">${icon} ${escapeHtml(title)} — ${escapeHtml(detail)}</div>`
-    ).join("");
-
-    const socials = TASTER_SOCIALS.map(([icon, name, href]) =>
-        `<div style="margin:0 0 4px;">${icon} ${escapeHtml(name)}: <a href="${escapeHtml(href)}">${escapeHtml(href)}</a></div>`
-    ).join("");
-
-    return `<!doctype html>
-<html><body style="margin:0;padding:0;background:#ffffff;">
-    <div style="max-width:600px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.6;color:#222222;padding:16px;">
-        <p style="margin:0 0 14px;">${greeting}<br>You registered. Smart move.</p>
-
-        <p style="margin:0 0 14px;">Now mark the calendar, set the alarm, and show up — because this Saturday is going to be worth every minute.</p>
-
-        <p style="margin:0 0 14px;">We're kicking off Dystil's very first Free Taster Session for the Career Accelerator Program, and you're one of the 100s who grabbed a spot.</p>
-
-        <div style="margin:0 0 14px;">
-            <div style="margin:0 0 4px;">\u{1F4C5} Saturday, 29th August 2026</div>
-            <div style="margin:0 0 4px;">⏰ 11:00 AM – 1:00 PM UK Time</div>
-            <div>\u{1F4BB} Online – Live Session, <a href="${escapeHtml(TASTER_MEETING_URL)}">Meeting Link here</a>, calendar invite to follow.</div>
-        </div>
-
-        <p style="margin:0 0 14px;">You'll get a real look at what the Career Accelerator Program is all about — the skills, the projects, the confidence, and the career edge. Not a sales pitch. An actual session built to give you something useful from minute one.</p>
-
-        <p style="margin:0 0 8px;">Here's what's coming your way:</p>
-        <div style="margin:0 0 14px;">${agenda}</div>
-
-        <p style="margin:0 0 14px;">This is our first session ever — and we're building something genuinely exciting. You're part of that from day one.</p>
-
-        <p style="margin:0 0 4px;">Know someone who'd benefit? Share it.</p>
-        <p style="margin:0 0 14px;">If you have a friend, classmate, or colleague who's thinking about their career — send them this link and invite them to register before Friday night:<br>
-        \u{1F449} <a href="https://dystil.ai/students/taster">dystil.ai/students/taster</a></p>
-
-        <p style="margin:0 0 8px;">Follow us for updates before Saturday:</p>
-        <div style="margin:0 0 14px;">${socials}</div>
-
-        <p style="margin:0 0 14px;">We'll see you Saturday at 11:00 AM sharp.</p>
-
-        <p style="margin:0 0 14px;">Don't be the one who had a spot and didn't show up. \u{1F609}</p>
-
-        <p style="margin:0 0 14px;">The Dystil Team</p>
-
-        <p style="margin:0;">
-            Frank M<br>
-            Executive Partner<br>
-            <a href="mailto:askus@dystil.ai">askus@dystil.ai</a><br>
-            <a href="mailto:frank@dystil.ai">frank@dystil.ai</a><br>
-            <a href="https://www.dystil.ai">www.dystil.ai</a>
-        </p>
-    </div>
-</body></html>`;
-}
-
-// Variant D. The confirmation emails that reach Primary carry no http links at
-// all, only a mailto, so Brevo has nothing to rewrite. This keeps every word
-// but prints the share and social addresses as text instead of links, leaving
-// the meeting the only thing Brevo can wrap.
-function buildTasterMinimalHtml(firstName) {
-    const greeting = firstName ? `Hey ${escapeHtml(firstName)}!` : "Hey!";
-
-    const agenda = TASTER_AGENDA.map(([icon, title, detail]) =>
-        `<div style="margin:0 0 6px;">${icon} ${escapeHtml(title)} — ${escapeHtml(detail)}</div>`
-    ).join("");
-
-    const socials = TASTER_SOCIALS.map(([icon, name, href]) =>
-        `<div style="margin:0 0 4px;">${icon} ${escapeHtml(name)}: ${escapeHtml(href)}</div>`
-    ).join("");
-
-    return `<!doctype html>
-<html><body style="margin:0;padding:0;background:#ffffff;">
-    <div style="max-width:600px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.6;color:#222222;padding:16px;">
-        <p style="margin:0 0 14px;">${greeting}<br>You registered. Smart move.</p>
-
-        <p style="margin:0 0 14px;">Now mark the calendar, set the alarm, and show up — because this Saturday is going to be worth every minute.</p>
-
-        <p style="margin:0 0 14px;">We're kicking off Dystil's very first Free Taster Session for the Career Accelerator Program, and you're one of the 100s who grabbed a spot.</p>
-
-        <div style="margin:0 0 14px;">
-            <div style="margin:0 0 4px;">\u{1F4C5} Saturday, 29th August 2026</div>
-            <div style="margin:0 0 4px;">⏰ 11:00 AM – 1:00 PM UK Time</div>
-            <div>\u{1F4BB} Online – Live Session, <a href="${escapeHtml(TASTER_MEETING_URL)}">Meeting Link here</a>, calendar invite to follow.</div>
-        </div>
-
-        <p style="margin:0 0 14px;">You'll get a real look at what the Career Accelerator Program is all about — the skills, the projects, the confidence, and the career edge. Not a sales pitch. An actual session built to give you something useful from minute one.</p>
-
-        <p style="margin:0 0 8px;">Here's what's coming your way:</p>
-        <div style="margin:0 0 14px;">${agenda}</div>
-
-        <p style="margin:0 0 14px;">This is our first session ever — and we're building something genuinely exciting. You're part of that from day one.</p>
-
-        <p style="margin:0 0 4px;">Know someone who'd benefit? Share it.</p>
-        <p style="margin:0 0 14px;">If you have a friend, classmate, or colleague who's thinking about their career — send them this link and invite them to register before Friday night:<br>
-        \u{1F449} dystil.ai/students/taster</p>
-
-        <p style="margin:0 0 8px;">Follow us for updates before Saturday:</p>
-        <div style="margin:0 0 14px;">${socials}</div>
-
-        <p style="margin:0 0 14px;">We'll see you Saturday at 11:00 AM sharp.</p>
-
-        <p style="margin:0 0 14px;">Don't be the one who had a spot and didn't show up. \u{1F609}</p>
-
-        <p style="margin:0 0 14px;">The Dystil Team</p>
-
-        <p style="margin:0;">
-            Frank M<br>
-            Executive Partner<br>
-            <a href="mailto:askus@dystil.ai">askus@dystil.ai</a><br>
-            <a href="mailto:frank@dystil.ai">frank@dystil.ai</a><br>
-            www.dystil.ai
-        </p>
-    </div>
-</body></html>`;
-}
-
-// Variant E. The one variable the other four never moved: the words. This says
-// the same practical things — you registered, here is when, here is the link,
-// here is what happens — in the register the confirmation emails use, which are
-// the ones that reach Primary. No emoji, no pitch, no share or follow section.
-// It is a diagnostic, not a redraft: if it lands in Primary, the copy is what
-// Gmail is reacting to, and that is a decision about the email, not the code.
-function buildTasterSoberHtml(firstName) {
-    const greeting = firstName ? `Hi ${escapeHtml(firstName)},` : "Hi,";
-
-    return `<!doctype html>
-<html><body style="margin:0;padding:0;background:#ffffff;">
-    <div style="max-width:600px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.6;color:#222222;padding:16px;">
-        <p style="margin:0 0 14px;">${greeting}</p>
-
-        <p style="margin:0 0 14px;">You registered for the Dystil free taster session. Here are your joining details.</p>
-
-        <p style="margin:0 0 14px;">
-            Date: Saturday 29 August 2026<br>
-            Time: 11:00 to 13:00 UK time<br>
-            Join: <a href="${escapeHtml(TASTER_MEETING_URL)}">Microsoft Teams</a>
-        </p>
-
-        <p style="margin:0 0 14px;">The session runs for two hours and covers the future of work in your industry, a live demonstration of AI applied to real job roles, a look at the kind of projects you would build, and a question and answer session at the end.</p>
-
-        <p style="margin:0 0 14px;">A calendar invitation will follow separately.</p>
-
-        <p style="margin:0 0 14px;">If you can no longer attend, please reply to this email and let us know.</p>
-
-        <p style="margin:0;">
-            Frank M<br>
-            Executive Partner, Dystil<br>
-            <a href="mailto:askus@dystil.ai">askus@dystil.ai</a>
-        </p>
-    </div>
-</body></html>`;
-}
-
-function buildTasterSoberText(firstName) {
-    return [
-        firstName ? `Hi ${firstName},` : "Hi,",
-        "",
-        "You registered for the Dystil free taster session. Here are your joining details.",
-        "",
-        "Date: Saturday 29 August 2026",
-        "Time: 11:00 to 13:00 UK time",
-        "Join: " + TASTER_MEETING_URL,
-        "",
-        "The session runs for two hours and covers the future of work in your industry, a live demonstration of AI applied to real job roles, a look at the kind of projects you would build, and a question and answer session at the end.",
-        "",
-        "A calendar invitation will follow separately.",
-        "",
-        "If you can no longer attend, please reply to this email and let us know.",
-        "",
-        "Frank M",
-        "Executive Partner, Dystil",
-        "askus@dystil.ai"
-    ].join("\n");
-}
-
-// The designed email with the two sections the measurement implicates taken
-// out: the referral ask and the follow-us block. The confirmation that reaches
-// Primary every time carries the same dark header and the same colour blocks,
-// so the template stays; what it does not carry is a request to share and a
-// list of social accounts. The pill button goes too, since it was never in the
-// copy and it is one more tracked link.
-function buildTasterFocusedHtml(firstName) {
-    const greeting = firstName ? `Hey ${escapeHtml(firstName)}!` : "Hey!";
-
-    const agenda = TASTER_AGENDA.map(([icon, title, detail]) => `
-        <tr>
-            <td style="padding:8px 0;vertical-align:top;width:34px;font-size:18px;">${icon}</td>
-            <td style="padding:8px 0;line-height:1.5;">
-                <strong style="color:#123f31;">${escapeHtml(title)}</strong>
-                <span style="color:#4c5a54;"> — ${escapeHtml(detail)}</span>
-            </td>
-        </tr>`).join("");
-
-    return `<!doctype html>
-<html><body style="margin:0;background:#f4f7f6;font-family:Arial,Helvetica,sans-serif;color:#16221d;">
-    <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
-        <div style="background:#123f31;color:#ffffff;padding:28px 24px;border-radius:12px 12px 0 0;">
-            <p style="margin:0 0 6px;font-size:12px;letter-spacing:1.6px;color:#8fd3b8;">FREE TASTER SESSION</p>
-            <h1 style="font-size:26px;margin:0;">${greeting}</h1>
-            <p style="margin:8px 0 0;font-size:16px;color:#d8ede5;">You registered. Smart move.</p>
-        </div>
-
-        <div style="background:#ffffff;padding:24px;line-height:1.6;">
-            <p style="margin-top:0;">Now mark the calendar, set the alarm, and show up — because this Saturday is going to be worth every minute.</p>
-
-            <p>We're kicking off Dystil's very first Free Taster Session for the Career Accelerator Program, and you're one of the 100s who grabbed a spot.</p>
-
-            <table role="presentation" style="width:100%;border-collapse:collapse;background:#f4f7f6;border-left:4px solid #147a59;margin:20px 0;">
-                <tr><td style="padding:14px 16px 4px;">\u{1F4C5} <strong>Saturday, 29th August 2026</strong></td></tr>
-                <tr><td style="padding:4px 16px;">⏰ <strong>11:00 AM – 1:00 PM UK Time</strong></td></tr>
-                <tr><td style="padding:4px 16px 14px;">\u{1F4BB} <strong>Online – Live Session, <a href="${escapeHtml(TASTER_MEETING_URL)}" style="color:#147a59;">Meeting Link here</a>, calendar invite to follow.</strong></td></tr>
-            </table>
-
-            <p>You'll get a real look at what the Career Accelerator Program is all about — the skills, the projects, the confidence, and the career edge. Not a sales pitch. An actual session built to give you something useful from minute one.</p>
-
-            <p style="margin-bottom:4px;"><strong>Here's what's coming your way:</strong></p>
-            <table role="presentation" style="width:100%;border-collapse:collapse;margin-bottom:20px;">${agenda}
-            </table>
-
-            <p>This is our first session ever — and we're building something genuinely exciting. You're part of that from day one.</p>
-
-            <p>We'll see you Saturday at 11:00 AM sharp.</p>
-
-            <p style="margin-bottom:0;">Don't be the one who had a spot and didn't show up. \u{1F609}</p>
-        </div>
-
-        <div style="background:#ffffff;padding:20px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;">
-            <p style="margin:0 0 12px;"><strong>The Dystil Team</strong></p>
-            <p style="margin:0;font-size:14px;color:#4c5a54;">
-                <strong style="color:#16221d;">Frank M</strong><br>
-                Executive Partner<br>
-                <a href="mailto:askus@dystil.ai" style="color:#147a59;">askus@dystil.ai</a><br>
-                <a href="mailto:frank@dystil.ai" style="color:#147a59;">frank@dystil.ai</a><br>
-                www.dystil.ai
-            </p>
-        </div>
-    </div>
-</body></html>`;
-}
-
-function buildTasterFocusedText(firstName) {
-    return [
-        firstName ? `Hey ${firstName}!` : "Hey!",
-        "You registered. Smart move.",
-        "",
-        "Now mark the calendar, set the alarm, and show up — because this Saturday is going to be worth every minute.",
-        "",
-        "We're kicking off Dystil's very first Free Taster Session for the Career Accelerator Program, and you're one of the 100s who grabbed a spot.",
-        "",
-        "\u{1F4C5} Saturday, 29th August 2026",
-        "⏰ 11:00 AM – 1:00 PM UK Time",
-        "\u{1F4BB} Online – Live Session, Meeting Link here, calendar invite to follow.",
-        "",
-        TASTER_MEETING_URL,
-        "",
-        "You'll get a real look at what the Career Accelerator Program is all about — the skills, the projects, the confidence, and the career edge. Not a sales pitch. An actual session built to give you something useful from minute one.",
-        "",
-        "Here's what's coming your way:",
-        ...TASTER_AGENDA.map(([icon, title, detail]) => `${icon} ${title} — ${detail}`),
-        "",
-        "This is our first session ever — and we're building something genuinely exciting. You're part of that from day one.",
-        "",
-        "We'll see you Saturday at 11:00 AM sharp.",
-        "",
-        "Don't be the one who had a spot and didn't show up. \u{1F609}",
-        "",
-        "The Dystil Team",
-        "",
-        "Frank M",
-        "Executive Partner",
-        "askus@dystil.ai",
-        "frank@dystil.ai",
-        "www.dystil.ai"
-    ].join("\n");
-}
 
 /* ---------------------------------------------------------------------------
    Microsoft Graph
@@ -2202,200 +1582,53 @@ function graphIsConfigured(env) {
 // eighty-nine. Same dark header, same panel, same plain register, and the
 // meeting is the only link in the message. What it does not carry is what the
 // confirmation does not carry — emoji, a pitch, a referral ask, social accounts.
-function buildTasterConfirmStyleHtml(firstName) {
-    const greeting = firstName ? `You’re registered, ${escapeHtml(firstName)}.` : "You’re registered.";
-
-    return `<!doctype html>
-        <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
-            <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
-                <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
-                    <h1 style="font-size:24px;margin:0;">${greeting}</h1>
-                </div>
-                <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
-                    <p style="margin-top:0;">Your place at the Dystil free taster session is confirmed. Here are the joining details.</p>
-                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>Saturday 29 August 2026</strong><br>11:00 to 13:00 UK time<br>Online, on <a href="${escapeHtml(TASTER_MEETING_URL)}" style="color:#147a59;">Microsoft Teams</a>.</p>
-                    <p>The session covers the future of work in your industry, a live demonstration of AI applied to real job roles, a look at the kind of projects you would build, and a question and answer session at the end.</p>
-                    <p>A calendar invitation will follow separately.</p>
-                    <p>If you can no longer attend, reply to this email and let us know.</p>
-                    <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
-                </div>
-            </div>
-        </body></html>`;
-}
-
-function buildTasterConfirmStyleText(firstName) {
-    return [
-        firstName ? `You’re registered, ${firstName}.` : "You’re registered.",
-        "",
-        "Your place at the Dystil free taster session is confirmed. Here are the joining details.",
-        "",
-        "Saturday 29 August 2026",
-        "11:00 to 13:00 UK time",
-        "Online, on Microsoft Teams: " + TASTER_MEETING_URL,
-        "",
-        "The session covers the future of work in your industry, a live demonstration of AI applied to real job roles, a look at the kind of projects you would build, and a question and answer session at the end.",
-        "",
-        "A calendar invitation will follow separately.",
-        "",
-        "If you can no longer attend, reply to this email and let us know.",
-        "",
-        "Kind regards,",
-        "The Dystil Team"
-    ].join("\n");
-}
-
 /* ---------------------------------------------------------------------------
-   Reminders
+   The bootcamp invitation
    ---------------------------------------------------------------------------
-   Built to the same shape as the joining email, which is the shape of the
-   registration confirmation: dark header, one panel, plain wording, and the
-   meeting as the only link. Each reminder can go out under either name, and
-   both share one ledger entry, so choosing Frank and then choosing Dystil
-   cannot mail the same person the same reminder twice.
+   One email, offered against either taster register. The two registers keep
+   separate ledgers, so the people who came in August and the people coming in
+   September can each be asked once, months apart, from the same campaign.
+
+   Every date it states comes from BOOTCAMP above, so moving the cohort is
+   three lines rather than a search through the copy.
 --------------------------------------------------------------------------- */
 
-function buildReminderHtml(reminder, firstName) {
-    const heading = firstName
-        ? `${reminder.heading}, ${escapeHtml(firstName)}.`
-        : `${reminder.heading}.`;
+function buildBootcampHtml(firstName) {
+    const heading = firstName ? `Ready for the next step, ${escapeHtml(firstName)}?` : "Ready for the next step?";
 
-    const closing = reminder.closing
-        .map((line) => `<p>${escapeHtml(line)}</p>`)
-        .join("\n                    ");
+    const pathways = BOOTCAMP.pathways.map(([icon, name, detail, href]) => `
+                    <div style="background:#f4f7f6;border-left:4px solid #147a59;padding:14px 16px;margin:0 0 12px;">
+                        <strong style="color:#123f31;">${icon} ${escapeHtml(name.toUpperCase())}</strong><br>
+                        <span style="color:#4c5a54;">${escapeHtml(detail)}</span><br>
+                        <a href="${escapeHtml(href)}" style="color:#147a59;font-weight:bold;">Register for ${escapeHtml(name)}</a>
+                    </div>`).join("");
 
-    return `<!doctype html>
-        <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
-            <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
-                <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
-                    <h1 style="font-size:24px;margin:0;">${heading}</h1>
-                </div>
-                <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
-                    <p style="margin-top:0;">${escapeHtml(reminder.opening)}</p>
-                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>${escapeHtml(reminder.when)}</strong><br>11:00 to 13:00 UK time<br>Online, on <a href="${escapeHtml(TASTER_MEETING_URL)}" style="color:#147a59;">Microsoft Teams</a>.</p>
-                    ${closing}
-                    <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
-                </div>
-            </div>
-        </body></html>`;
-}
-
-function buildReminderText(reminder, firstName) {
-    return [
-        firstName ? `${reminder.heading}, ${firstName}.` : `${reminder.heading}.`,
-        "",
-        reminder.opening,
-        "",
-        reminder.when,
-        "11:00 to 13:00 UK time",
-        "Online, on Microsoft Teams: " + TASTER_MEETING_URL,
-        "",
-        ...reminder.closing.flatMap((line) => [line, ""]),
-        "Kind regards,",
-        "The Dystil Team"
-    ].join("\n");
-}
-
-// Three reminders under two names is six campaigns, and writing them out by
-// hand would be six chances to change one and forget the other.
-function buildReminderCampaigns() {
-    const campaigns = {};
-
-    for (const reminder of TASTER_REMINDERS) {
-        for (const [who, sender] of Object.entries(TASTER_SENDERS)) {
-            campaigns[`taster-2026-08-29-reminder-${reminder.key}-${who}`] = {
-                formType: "Free Taster Registration",
-                subject: reminder.subject,
-                buildHtml: (firstName) => buildReminderHtml(reminder, firstName),
-                buildText: (firstName) => buildReminderText(reminder, firstName),
-                sender,
-                replyTo: sender,
-                // Both names share one ledger, so a reminder sent as Frank is
-                // not sent again as Dystil.
-                dedupeKey: `taster-2026-08-29-reminder-${reminder.key}`,
-                testRecipients: TASTER_TEST_TEAM
-            };
-        }
-    }
-
-    return campaigns;
-}
-
-/* ---------------------------------------------------------------------------
-   Feedback
-   ---------------------------------------------------------------------------
-   The one email that goes out after the session rather than before it. It asks
-   three short questions and takes the answers as a plain reply, because a form
-   is one more thing to open and the reply lands in the same mailbox anyway.
-
-   It goes to the whole register rather than to the people who turned up, so
-   nothing in it thanks the reader for attending; the first question asks a
-   no-show what got in the way instead, which is worth knowing on its own.
-
-   Built to the shape of the reminders, so someone who has had four emails from
-   us this week recognises the fifth. Sendable under either name, sharing one
-   ledger, so asking as Frank does not ask again as Dystil.
---------------------------------------------------------------------------- */
-
-function buildFeedbackHtml(firstName) {
-    const heading = firstName
-        ? `Thank you for joining us, ${escapeHtml(firstName)}.`
-        : "Thank you for joining us.";
-
-    const questions = TASTER_FEEDBACK_QUESTIONS
-        .map((question) => `<li style="margin-bottom:8px;">${escapeHtml(question)}</li>`)
-        .join("\n                        ");
-
-    const socials = TASTER_SOCIALS.map(([, name, href]) =>
+    const socials = DYSTIL_SOCIALS.map(([, name, href]) =>
         `<a href="${escapeHtml(href)}" style="color:#147a59;text-decoration:none;white-space:nowrap;">`
         + `<img src="${SOCIAL_ICONS}${name.toLowerCase()}.png" width="18" height="18" alt=""`
         + ` style="border:0;vertical-align:-3px;margin-right:6px;"><span style="text-decoration:underline;">${escapeHtml(name)}</span></a>`
     ).join(" &nbsp;&nbsp; ");
 
-    // The deck is the first of the three, so the other two shuffle up a number
-    // if it is ever taken away again.
-    const hasDeck = Boolean(TASTER_DECK_URL);
-    const step = (number) => (hasDeck ? number : number - 1);
-    const kicker = (text) => `<p style="margin:20px 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">${text}</p>`;
-
-    const deck = hasDeck
-        ? kicker("1 · THE SESSION DECK")
-            + `<p style="margin:0 0 12px;">The taster session presentation is attached, so you can go back through the ideas, the demonstrations and the pathways in your own time.</p>`
-            + `<p style="margin:0 0 4px;">👉 <a href="${escapeHtml(TASTER_DECK_URL)}" style="color:#147a59;font-weight:bold;">Download the presentation</a></p>`
-        : "";
-
     return `<!doctype html>
         <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
             <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
                 <div style="background:#123f31;color:#fff;padding:28px 24px;border-radius:12px 12px 0 0;">
-                    <p style="margin:0 0 6px;font-size:12px;letter-spacing:1.6px;color:#8fd3b8;">FREE TASTER SESSION · SATURDAY 29 AUGUST</p>
+                    <p style="margin:0 0 6px;font-size:12px;letter-spacing:1.6px;color:#8fd3b8;">${escapeHtml(BOOTCAMP.name.toUpperCase())}</p>
                     <h1 style="font-size:26px;margin:0;">${heading}</h1>
                 </div>
                 <div style="background:#fff;padding:24px;line-height:1.6;">
-                    <p style="margin-top:0;">That was two hours of your Saturday morning, and we are grateful for them. ${hasDeck ? "Three" : "Two"} things before we let you get on with your week.</p>
-                    ${deck}
-                    ${kicker(`${step(2)} · HOW DID WE DO?`)}
-                    <p style="margin:0 0 12px;">Three questions, two minutes: <a href="${escapeHtml(TASTER_FEEDBACK_URL)}" style="color:#147a59;font-weight:bold;">dystil.ai/feedback</a></p>
-                    <ol style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px 12px 36px;margin:0;">
-                        ${questions}
-                    </ol>
-                </div>
-                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:22px 24px;line-height:1.6;">
-                    <p style="margin:0 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">${step(3)} · THE NEXT COHORT</p>
-                    <h2 style="font-size:20px;margin:0 0 12px;color:#123f31;">${escapeHtml(NEXT_COHORT.name)}</h2>
-                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;margin:0 0 14px;">
-                        <strong>Starts ${escapeHtml(NEXT_COHORT.starts)}</strong><br>
-                        Registration closes ${escapeHtml(NEXT_COHORT.closes)}
+                    <p style="margin-top:0;">The taster session was an hour of what the work looks like. The Bootcamp is where you do it: real projects, in your own field, finished and in your portfolio.</p>
+                    <p style="background:#123f31;color:#fff;padding:14px 16px;margin:0 0 18px;border-radius:8px;">
+                        \u{1F4C5} <strong>Starts ${escapeHtml(BOOTCAMP.starts)}</strong><br>
+                        ⏳ Registration closes ${escapeHtml(BOOTCAMP.closes)}<br>
+                        \u{1F39F}️ Seats are limited
                     </p>
-                    <p style="margin:0 0 14px;">Places are limited and are held in the order registrations arrive, so the closing date is the last day to register rather than the day to decide. If Saturday made the decision for you, take your place now.</p>
-                    <p style="margin:0;font-size:17px;">👉 <a href="${escapeHtml(TASTER_REGISTER_URL)}" style="color:#147a59;font-weight:bold;">dystil.ai/students/register</a></p>
-                </div>
-                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:22px 24px;line-height:1.6;">
-                    <p style="margin:0 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">PASS IT ON</p>
-                    <p style="margin:0 0 12px;">Know a friend, classmate or colleague asking the same questions about AI and their career? Forward them this email, or send them the taster page — the next session is open to them too.</p>
-                    <p style="margin:0;font-size:17px;">👉 <a href="${escapeHtml(TASTER_SHARE_URL)}" style="color:#147a59;font-weight:bold;">dystil.ai/students/taster</a></p>
+                    <p style="margin:0 0 14px;">Two pathways, one goal. Pick the one that matches where you are now:</p>
+                    ${pathways}
+                    <p style="margin:0;">Places are held in the order registrations arrive, so the closing date is the last day to register rather than the day to decide.</p>
                 </div>
                 <div style="background:#fff;border-top:1px solid #e4ebe8;padding:20px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;font-size:14px;color:#4c5a54;">
-                    <p style="margin:0 0 6px;">Questions before you register? Call or write, and one of us will answer.</p>
+                    <p style="margin:0 0 6px;">Not sure which pathway is yours? Call or write, and one of us will talk it through.</p>
                     <p style="margin:0 0 16px;">☎ <a href="${escapeHtml(DYSTIL_PHONE_LINK)}" style="color:#147a59;">${escapeHtml(DYSTIL_PHONE)}</a> &nbsp;·&nbsp; ✉ <a href="mailto:askus@dystil.ai" style="color:#147a59;">askus@dystil.ai</a></p>
                     <p style="margin:0 0 16px;">${socials}</p>
                     <p style="margin:0;color:#16221d;">Kind regards,<br><strong>The Dystil Team</strong></p>
@@ -2404,429 +1637,56 @@ function buildFeedbackHtml(firstName) {
         </body></html>`;
 }
 
-function buildFeedbackText(firstName) {
-    const hasDeck = Boolean(TASTER_DECK_URL);
-    const step = (number) => (hasDeck ? number : number - 1);
-
-    const deck = hasDeck
-        ? [
-            "1. THE SESSION DECK",
-            "",
-            "The taster session presentation is attached, so you can go back through the ideas, the demonstrations and the pathways in your own time.",
-            "",
-            "Download it here: " + TASTER_DECK_URL,
-            ""
-        ]
-        : [];
-
+function buildBootcampText(firstName) {
     return [
-        firstName ? `Thank you for joining us, ${firstName}.` : "Thank you for joining us.",
+        firstName ? `Ready for the next step, ${firstName}?` : "Ready for the next step?",
         "",
-        `That was two hours of your Saturday morning, and we are grateful for them. ${hasDeck ? "Three" : "Two"} things before we let you get on with your week.`,
+        "The taster session was an hour of what the work looks like. The Bootcamp is where you do it: real projects, in your own field, finished and in your portfolio.",
         "",
-        ...deck,
-        `${step(2)}. HOW DID WE DO?`,
+        `\u{1F4C5} Starts ${BOOTCAMP.starts}`,
+        `⏳ Registration closes ${BOOTCAMP.closes}`,
+        "\u{1F39F}️ Seats are limited",
         "",
-        "Three questions, two minutes: " + TASTER_FEEDBACK_URL,
+        "Two pathways, one goal. Pick the one that matches where you are now:",
         "",
-        ...TASTER_FEEDBACK_QUESTIONS.map((question, index) => `${index + 1}. ${question}`),
+        ...BOOTCAMP.pathways.flatMap(([icon, name, detail, href]) => [
+            `${icon} ${name.toUpperCase()} - ${detail}`,
+            `Register: ${href}`,
+            ""
+        ]),
+        "Places are held in the order registrations arrive, so the closing date is the last day to register rather than the day to decide.",
         "",
-        `${step(3)}. THE NEXT COHORT: ` + NEXT_COHORT.name.toUpperCase(),
+        "Not sure which pathway is yours? Call " + DYSTIL_PHONE + " or write to askus@dystil.ai, and one of us will talk it through.",
         "",
-        "Starts " + NEXT_COHORT.starts,
-        "Registration closes " + NEXT_COHORT.closes,
-        "",
-        "Places are limited and are held in the order registrations arrive, so the closing date is the last day to register rather than the day to decide. If Saturday made the decision for you, take your place now.",
-        "",
-        "Take your place: " + TASTER_REGISTER_URL,
-        "",
-        "PASS IT ON",
-        "",
-        "Know a friend, classmate or colleague asking the same questions about AI and their career? Forward them this email, or send them the taster page - the next session is open to them too.",
-        "",
-        TASTER_SHARE_URL,
-        "",
-        "Questions before you register? Call " + DYSTIL_PHONE + " or write to askus@dystil.ai, and one of us will answer.",
-        "",
-        ...TASTER_SOCIALS.map(([icon, name, href]) => `${icon} ${name}: ${href}`),
+        ...DYSTIL_SOCIALS.map(([icon, name, href]) => `${icon} ${name}: ${href}`),
         "",
         "Kind regards,",
         "The Dystil Team"
     ].join("\n");
 }
 
-function buildFeedbackCampaigns() {
+// One campaign per register per name. Both names on a register share a ledger,
+// so asking as Frank cannot ask again as Dystil; the two registers do not, so
+// the same email reaches each of them once.
+function buildBootcampCampaigns() {
     const campaigns = {};
 
-    for (const [who, sender] of Object.entries(TASTER_SENDERS)) {
-        campaigns[`taster-2026-08-29-feedback-${who}`] = {
-            formType: "Free Taster Registration",
-            subject: TASTER_FEEDBACK_SUBJECT,
-            buildHtml: buildFeedbackHtml,
-            buildText: buildFeedbackText,
-            sender,
-            replyTo: sender,
-            // The email says the deck is attached, so it goes with it.
-            attachDeck: true,
-            // One ledger for both names, so a person asked by Frank is not
-            // asked again by Dystil.
-            dedupeKey: "taster-2026-08-29-feedback",
-            testRecipients: TASTER_TEST_TEAM
-        };
+    for (const [register, target] of Object.entries(BOOTCAMP_REGISTERS)) {
+        for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
+            campaigns[`bootcamp-2026-09-26-invite-${register}-${who}`] = {
+                formType: target.formType,
+                subject: BOOTCAMP_SUBJECT,
+                buildHtml: buildBootcampHtml,
+                buildText: buildBootcampText,
+                sender,
+                replyTo: sender,
+                dedupeKey: `bootcamp-2026-09-26-invite-${register}`,
+                testRecipients: TEST_TEAM
+            };
+        }
     }
 
     return campaigns;
-}
-
-/* ---------------------------------------------------------------------------
-   The bootcamp call
-   ---------------------------------------------------------------------------
-   A second email for the same register, in a warmer and much longer voice than
-   the feedback note: it thanks the room, asks for feedback, and then spends
-   most of its length on the two bootcamp pathways and the closing date.
-
-   Kept as its own campaign rather than a rewrite of the feedback email, so the
-   two can go to different people, or to the same people in either order,
-   without one ledger blocking the other.
---------------------------------------------------------------------------- */
-
-const MUAZ_PATHWAYS = [
-    ["\u{1F331}", "Foundation", "Build your foundations and develop practical, future-ready skills."],
-    ["\u{26A1}", "Advanced", "Go further with more advanced projects and build a stronger career profile."]
-];
-
-const MUAZ_SOCIAL_HANDLES = {
-    Facebook: "Dystil",
-    Instagram: "@dystil.ai",
-    TikTok: "@dystil.ai"
-};
-
-// One kicker style for every section heading in this email.
-function muazKicker(text) {
-    return `<p style="margin:24px 0 8px;font-size:12px;letter-spacing:1.6px;color:#6c7d75;">${text}</p>`;
-}
-
-function muazAction(href, label) {
-    return `<p style="margin:0 0 14px;font-size:17px;">\u{1F449} <a href="${escapeHtml(href)}" style="color:#147a59;font-weight:bold;">${escapeHtml(label)}</a></p>`;
-}
-
-function buildMuazSection(text) {
-    return `<h2 style="font-size:20px;margin:24px 0 12px;color:#123f31;">${text}</h2>`;
-}
-
-function buildMuazHtml(firstName) {
-    const greeting = firstName ? `Hey ${escapeHtml(firstName)}!` : "Hey!";
-
-    const pathways = MUAZ_PATHWAYS.map(([icon, name, detail]) => `
-                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;margin:0 0 12px;">
-                        <strong style="color:#123f31;">${icon} ${escapeHtml(name.toUpperCase())}</strong> — <span style="color:#4c5a54;">${escapeHtml(detail)}</span>
-                    </p>`).join("");
-
-    const socials = TASTER_SOCIALS.map(([, name, href]) =>
-        `<p style="margin:0 0 8px;">`
-        + `<img src="${SOCIAL_ICONS}${name.toLowerCase()}.png" width="18" height="18" alt=""`
-        + ` style="border:0;vertical-align:-3px;margin-right:8px;">${escapeHtml(name)}: `
-        + `<a href="${escapeHtml(href)}" style="color:#147a59;font-weight:bold;">${escapeHtml(MUAZ_SOCIAL_HANDLES[name] || name)}</a></p>`
-    ).join("");
-
-    // Left out entirely until the deck is on the site, so the campaign can
-    // never go out pointing at a file that is not there.
-    const deck = TASTER_DECK_URL
-        ? muazKicker("\u{1F4DA} WANT TO REVISIT THE SESSION?")
-            + `<p style="margin:0 0 12px;">The <strong>Taster Session presentation</strong> is here, so you can revisit the key ideas, insights and opportunities we explored together.</p>`
-            + muazAction(TASTER_DECK_URL, "View / download the taster session presentation")
-        : "";
-
-    return `<!doctype html>
-        <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
-            <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
-                <div style="background:#123f31;color:#fff;padding:28px 24px;border-radius:12px 12px 0 0;">
-                    <p style="margin:0 0 6px;font-size:12px;letter-spacing:1.6px;color:#8fd3b8;">CAREER ACCELERATOR · FIRST TASTER SESSION</p>
-                    <h1 style="font-size:26px;margin:0;">${greeting}</h1>
-                    <p style="margin:8px 0 0;font-size:16px;color:#d8ede5;"><strong>You showed up. You explored. You asked questions.</strong></p>
-                </div>
-                <div style="background:#fff;padding:24px;line-height:1.6;">
-                    <p style="margin-top:0;">A huge <strong>THANK YOU</strong> to everyone who joined us for Dystil’s very first Career Accelerator Free Taster Session. We hope you left with a useful glimpse of what AI, real-world projects and future-ready skills could mean for your career.</p>
-                    <p style="margin:0;"><strong>But the taster was just that… a taste. \u{1F440}</strong></p>
-                    ${deck}
-                    ${muazKicker("\u{1F4AC} TELL US WHAT YOU THOUGHT")}
-                    <p style="margin:0 0 10px;">This was our first taster, so <strong>your feedback genuinely matters.</strong></p>
-                    <p style="margin:0 0 14px;">There is <strong>no wrong answer — the unflattering ones are the useful ones.</strong> Everything you write is read by us and <strong>is not shared or published anywhere.</strong></p>
-                    ${muazAction(TASTER_FEEDBACK_URL, "Share your feedback")}
-                    <p style="margin:0;">Rather not open a form? <strong>Just reply to this email — it reaches the same people.</strong></p>
-                </div>
-                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:8px 24px 24px;line-height:1.6;">
-                    ${buildMuazSection("\u{1F680} READY FOR THE NEXT LEVEL?")}
-                    <p style="margin:0 0 14px;">The taster gave you the <strong>WHY</strong>. The Bootcamp is where you start building the <strong>HOW</strong>.</p>
-                    <p style="margin:0 0 12px;">Our next <strong>Career Accelerator Bootcamp</strong> is on:</p>
-                    <p style="background:#123f31;color:#fff;padding:14px 16px;margin:0 0 16px;border-radius:8px;">
-                        \u{1F4C5} <strong>Saturday, 26th September 2026</strong><br>
-                        ⏳ <strong>Registration closes: Tuesday, 15th September 2026</strong><br>
-                        \u{1F39F}️ <strong>Seats are limited.</strong>
-                    </p>
-                    <p style="margin:0 0 12px;">Choose your pathway:</p>
-                    ${pathways}
-                    <p style="margin:0 0 16px;"><strong>Different starting points. One goal: becoming career-ready for the future.</strong></p>
-                    ${muazAction(FOUNDATION_REGISTER_URL, "Register for Foundation")}
-                    ${muazAction(ADVANCED_REGISTER_URL, "Register for Advanced")}
-                    <p style="margin:0;"><strong>Pick your pathway. Secure your seat. Start building your future. \u{1F680}</strong></p>
-                </div>
-                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:8px 24px 24px;line-height:1.6;">
-                    ${muazKicker("\u{1F465} KNOW SOMEONE WHO SHOULD BE HERE?")}
-                    <p style="margin:0 0 10px;">Have a friend, classmate, colleague or family member who could benefit?</p>
-                    <p style="margin:0 0 14px;"><strong>Send this their way. One share could be someone’s next career move. \u{1F680}</strong></p>
-                    ${muazAction(TASTER_SHARE_URL, "dystil.ai/students/taster")}
-                </div>
-                <div style="background:#fff;border-top:1px solid #e4ebe8;padding:8px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;">
-                    ${muazKicker("\u{1F4F2} STAY CONNECTED")}
-                    ${socials}
-                    <p style="margin:18px 0 4px;">Questions about the Bootcamp?</p>
-                    <p style="margin:0 0 20px;">\u{1F4DE} <a href="${escapeHtml(DYSTIL_PHONE_LINK)}" style="color:#147a59;font-weight:bold;">${escapeHtml(DYSTIL_PHONE)}</a></p>
-                    <p style="margin:0 0 14px;border-top:1px solid #e4ebe8;padding-top:18px;"><strong>The taster was the introduction.<br>The Bootcamp is where the real journey begins. \u{1F680}</strong></p>
-                    <p style="margin:0 0 18px;">See you on <strong>26th September</strong>!</p>
-                    <p style="margin:0;"><strong>The Dystil Team</strong><br><br>Frank M<br><span style="color:#4c5a54;">Executive Partner</span></p>
-                </div>
-            </div>
-        </body></html>`;
-}
-
-function buildMuazText(firstName) {
-    const deck = TASTER_DECK_URL
-        ? [
-            "\u{1F4DA} WANT TO REVISIT THE SESSION?",
-            "",
-            "The Taster Session presentation is here, so you can revisit the key ideas, insights and opportunities we explored together.",
-            "\u{1F449} " + TASTER_DECK_URL,
-            ""
-        ]
-        : [];
-
-    return [
-        firstName ? `Hey ${firstName}!` : "Hey!",
-        "",
-        "You showed up. You explored. You asked questions.",
-        "",
-        "A huge THANK YOU to everyone who joined us for Dystil’s very first Career Accelerator Free Taster Session. We hope you left with a useful glimpse of what AI, real-world projects and future-ready skills could mean for your career.",
-        "",
-        "But the taster was just that… a taste. \u{1F440}",
-        "",
-        ...deck,
-        "\u{1F4AC} TELL US WHAT YOU THOUGHT",
-        "",
-        "This was our first taster, so your feedback genuinely matters.",
-        "",
-        "There is no wrong answer - the unflattering ones are the useful ones. Everything you write is read by us and is not shared or published anywhere.",
-        "",
-        "\u{1F449} " + TASTER_FEEDBACK_URL,
-        "",
-        "Rather not open a form? Just reply to this email - it reaches the same people.",
-        "",
-        "\u{1F680} READY FOR THE NEXT LEVEL?",
-        "",
-        "The taster gave you the WHY. The Bootcamp is where you start building the HOW.",
-        "",
-        "Our next Career Accelerator Bootcamp is on:",
-        "",
-        "\u{1F4C5} Saturday, 26th September 2026",
-        "⏳ Registration closes: Tuesday, 15th September 2026",
-        "\u{1F39F}️ Seats are limited.",
-        "",
-        "Choose your pathway:",
-        "",
-        ...MUAZ_PATHWAYS.map(([icon, name, detail]) => `${icon} ${name.toUpperCase()} - ${detail}`),
-        "",
-        "Different starting points. One goal: becoming career-ready for the future.",
-        "",
-        "\u{1F449} Register for Foundation: " + FOUNDATION_REGISTER_URL,
-        "\u{1F449} Register for Advanced: " + ADVANCED_REGISTER_URL,
-        "",
-        "Pick your pathway. Secure your seat. Start building your future. \u{1F680}",
-        "",
-        "\u{1F465} KNOW SOMEONE WHO SHOULD BE HERE?",
-        "",
-        "Have a friend, classmate, colleague or family member who could benefit?",
-        "",
-        "Send this their way. One share could be someone’s next career move. \u{1F680}",
-        "",
-        "\u{1F449} " + TASTER_SHARE_URL,
-        "",
-        "\u{1F4F2} STAY CONNECTED",
-        "",
-        ...TASTER_SOCIALS.map(([icon, name, href]) => `${icon} ${name}: ${MUAZ_SOCIAL_HANDLES[name] || name} - ${href}`),
-        "",
-        "Questions about the Bootcamp?",
-        "\u{1F4DE} " + DYSTIL_PHONE,
-        "",
-        "The taster was the introduction.",
-        "The Bootcamp is where the real journey begins. \u{1F680}",
-        "",
-        "See you on 26th September!",
-        "",
-        "The Dystil Team",
-        "",
-        "Frank M",
-        "Executive Partner"
-    ].join("\n");
-}
-
-function buildMuazCampaigns() {
-    const campaigns = {};
-
-    for (const [who, sender] of Object.entries(TASTER_SENDERS)) {
-        campaigns[`taster-2026-08-29-muaz-${who}`] = {
-            formType: "Free Taster Registration",
-            subject: MUAZ_SUBJECT,
-            buildHtml: buildMuazHtml,
-            buildText: buildMuazText,
-            sender,
-            replyTo: sender,
-            // The copy says the presentation is attached, so it is, as well as
-            // being linked. This rides the Brevo route only: buildGraphMessage
-            // carries no attachment.
-            attachDeck: true,
-            // One ledger for both names, as with every other pair.
-            dedupeKey: "taster-2026-08-29-muaz",
-            testRecipients: TASTER_TEST_TEAM
-        };
-    }
-
-    return campaigns;
-}
-
-/* ---------------------------------------------------------------------------
-   Calendar invitation
-   ---------------------------------------------------------------------------
-   The joining email promised one, and an invitation does the job the email
-   cannot: it puts the session in the calendar with a reminder attached, so
-   nobody has to find the right email on Saturday morning.
-
-   Sent as a real iCalendar REQUEST rather than a link, so the mailbox treats it
-   as a meeting. Every recipient gets the same UID, so this is one event that
-   can be updated later rather than a new event per person; bumping SEQUENCE is
-   what tells a calendar an update has arrived.
---------------------------------------------------------------------------- */
-
-const INVITE_UID = "dystil-taster-2026-08-29@dystil.ai";
-const INVITE_SEQUENCE = 0;
-// 11:00 to 13:00 UK time on 29 August 2026. Britain is on BST that day, an
-// hour ahead of UTC, so the times are written here as 10:00 and 12:00 UTC.
-const INVITE_START_UTC = "20260829T100000Z";
-const INVITE_END_UTC = "20260829T120000Z";
-
-// A property must not exceed 75 octets on a line; longer ones continue on the
-// next line behind a single space. The meeting URL is far past that on its own.
-function foldIcsLine(line) {
-    if (line.length <= 74) return line;
-
-    const parts = [line.slice(0, 74)];
-    let rest = line.slice(74);
-
-    while (rest.length > 73) {
-        parts.push(" " + rest.slice(0, 73));
-        rest = rest.slice(73);
-    }
-
-    if (rest.length) parts.push(" " + rest);
-
-    return parts.join("\r\n");
-}
-
-function escapeIcsText(value) {
-    return String(value === null || value === undefined ? "" : value)
-        .replace(/\\/g, "\\\\")
-        .replace(/;/g, "\\;")
-        .replace(/,/g, "\\,")
-        .replace(/\r?\n/g, "\\n");
-}
-
-function buildTasterInvite(person, organiser, stamp) {
-    const lines = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//Dystil//Free Taster Session//EN",
-        "CALSCALE:GREGORIAN",
-        "METHOD:REQUEST",
-        "BEGIN:VEVENT",
-        `UID:${INVITE_UID}`,
-        `SEQUENCE:${INVITE_SEQUENCE}`,
-        `DTSTAMP:${stamp}`,
-        `DTSTART:${INVITE_START_UTC}`,
-        `DTEND:${INVITE_END_UTC}`,
-        "SUMMARY:" + escapeIcsText("Dystil Free Taster Session"),
-        "DESCRIPTION:" + escapeIcsText(
-            "Your Dystil free taster session.\n\n"
-            + "Join on Microsoft Teams:\n" + TASTER_MEETING_URL + "\n\n"
-            + "The session runs for two hours and covers the future of work in your industry, "
-            + "a live demonstration of AI applied to real job roles, a look at the kind of projects "
-            + "you would build, and a question and answer session at the end."
-        ),
-        "LOCATION:" + escapeIcsText("Online, on Microsoft Teams"),
-        "URL:" + TASTER_MEETING_URL,
-        `ORGANIZER;CN=${escapeIcsText(organiser.name)}:mailto:${organiser.email}`,
-        `ATTENDEE;CN=${escapeIcsText(person.fullName)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${person.email}`,
-        "STATUS:CONFIRMED",
-        "TRANSP:OPAQUE",
-        "BEGIN:VALARM",
-        "TRIGGER:-PT30M",
-        "ACTION:DISPLAY",
-        "DESCRIPTION:" + escapeIcsText("Dystil Free Taster Session starts in 30 minutes"),
-        "END:VALARM",
-        "END:VEVENT",
-        "END:VCALENDAR"
-    ];
-
-    return lines.map(foldIcsLine).join("\r\n") + "\r\n";
-}
-
-function buildInviteAttachment(person, organiser) {
-    const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-    const ics = buildTasterInvite(person, organiser, stamp);
-
-    return {
-        name: "dystil-taster-session.ics",
-        content: bytesToBase64(new TextEncoder().encode(ics))
-    };
-}
-
-function buildInviteHtml(firstName) {
-    const heading = firstName
-        ? `Your calendar invitation, ${escapeHtml(firstName)}.`
-        : "Your calendar invitation.";
-
-    return `<!doctype html>
-        <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
-            <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
-                <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
-                    <h1 style="font-size:24px;margin:0;">${heading}</h1>
-                </div>
-                <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
-                    <p style="margin-top:0;">Here is the calendar invitation for your Dystil free taster session, as promised. Accepting it puts the session in your calendar with the joining link and a reminder half an hour before.</p>
-                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>Saturday 29 August 2026</strong><br>11:00 to 13:00 UK time<br>Online, on <a href="${escapeHtml(TASTER_MEETING_URL)}" style="color:#147a59;">Microsoft Teams</a>.</p>
-                    <p>If your email does not add it for you, open the attached file and your calendar will pick it up.</p>
-                    <p>If you can no longer attend, decline the invitation or reply to this email, so we can offer your place to someone else.</p>
-                    <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
-                </div>
-            </div>
-        </body></html>`;
-}
-
-function buildInviteText(firstName) {
-    return [
-        firstName ? `Your calendar invitation, ${firstName}.` : "Your calendar invitation.",
-        "",
-        "Here is the calendar invitation for your Dystil free taster session, as promised. Accepting it puts the session in your calendar with the joining link and a reminder half an hour before.",
-        "",
-        "Saturday 29 August 2026",
-        "11:00 to 13:00 UK time",
-        "Online, on Microsoft Teams: " + TASTER_MEETING_URL,
-        "",
-        "If your email does not add it for you, open the attached file and your calendar will pick it up.",
-        "",
-        "If you can no longer attend, decline the invitation or reply to this email, so we can offer your place to someone else.",
-        "",
-        "Kind regards,",
-        "The Dystil Team"
-    ].join("\n");
 }
 
 /* ---------------------------------------------------------------------------

@@ -200,6 +200,18 @@
         .empty { padding: 40px; text-align: center; color: var(--light-text); font-size: 14px; }
 
         /* ---------- TESTING ---------- */
+        .blank {
+            background: var(--dark);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 26px 22px;
+            text-align: center;
+        }
+
+        .blank h2 { font-size: 15px; margin-bottom: 6px; }
+        .blank p { font-size: 13px; color: var(--light-text); max-width: 620px; margin: 0 auto; }
+        .blank code { font-family: Consolas, Menlo, monospace; color: var(--accent); font-size: 12.5px; }
+
         .testing {
             background: var(--dark);
             border: 1px solid var(--line);
@@ -308,30 +320,6 @@
         .visitors .fault { font-size: 12.5px; color: #ffb4a8; margin-top: 12px; }
 
         td.src .landed { font-size: 11.5px; color: var(--light-text); margin-top: 5px; }
-
-        /* ---------- LATE REGISTRATIONS ---------- */
-        .pending {
-            background: var(--dark);
-            border: 1px solid var(--line);
-            border-radius: 14px;
-            padding: 18px 20px;
-            margin-bottom: 20px;
-        }
-
-        .pending h2 { font-size: 15px; margin-bottom: 4px; }
-        .pending > p { font-size: 13px; color: var(--light-text); margin-bottom: 14px; }
-        .pending .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-        .pending button { padding: 10px 18px; font-size: 13px; background: #b4472f; }
-        .pending button:hover:enabled { background: #9c3c27; }
-        .pending button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .pending .note { font-size: 12.5px; color: var(--light-text); }
-        .pending .who { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
-        .pending .who .person { font-size: 12.5px; color: #d6dceb; }
-        .pending .log {
-            margin-top: 14px; font-size: 12.5px; line-height: 1.7; max-height: 190px;
-            overflow-y: auto; color: var(--light-text); white-space: pre-wrap;
-        }
-
 
     </style>
 </head>
@@ -447,9 +435,10 @@
         <div class="reminders" id="reminders" hidden>
             <h2>Send to everyone who registered</h2>
             <p>
-                Each message goes to everyone who has registered, once. Both names write to the same
-                record, so sending “2 days to go” from Frank means the Dystil button skips those people
-                rather than mailing them again. Sends go one at a time, so allow around twelve minutes.
+                Each message goes to everyone on its register, once. Both names on a row write to the
+                same record, so sending from Frank leaves the Dystil button with nobody rather than
+                mailing the same people twice. Sends go one at a time, so allow about a minute for
+                every eight people.
             </p>
 
             <p class="quota" id="quota">Checking today's sending allowance…</p>
@@ -459,22 +448,14 @@
             <div class="log" id="reminder-log" hidden></div>
         </div>
 
-        <div class="pending" id="pending" hidden>
-            <h2>Joining email for new registrations</h2>
+        <div class="blank" id="no-campaigns" hidden>
+            <h2>No emails yet</h2>
             <p>
-                The 85 who registered up to <strong>DYS-TAS-26-0088</strong> were emailed by hand and are
-                recorded as done. Anyone who has registered since is listed here, and gets the same
-                joining email. Each address is sent once, so pressing this twice is safe.
+                The sending machinery is all here: the register, the ledger that stops anyone being
+                mailed twice, the pacing, the team list and the daily allowance. What it has not got is
+                anything to send. Add a campaign to <code>CAMPAIGNS</code> in the Worker, list it in
+                <code>REMINDERS</code> and <code>TESTABLE</code> on this page, and the buttons appear here.
             </p>
-
-            <p class="who" id="pending-who"></p>
-
-            <div class="row">
-                <button id="pending-send" type="button">Send joining email</button>
-                <span class="note" id="pending-note"></span>
-            </div>
-
-            <div class="log" id="pending-log" hidden></div>
         </div>
 
         <div class="tools" id="tools">
@@ -585,9 +566,10 @@
 
         const TABLE_VIEWS = ["all", "taster", "taster2", "bootcamp"];
 
+
         // A panel is only shown once its own refresh has run, so switching to a
         // view never puts an empty box on screen.
-        const ready = { analytics: false, pending: false, reminders: false, test: false };
+        const ready = { analytics: false, reminders: false, test: false };
         let view = "all";
 
         lockForm.addEventListener("submit", async function (event) {
@@ -606,7 +588,6 @@
                 lock.hidden = true;
                 board.hidden = false;
                 render();
-                pendingRefresh();
                 reminderRefresh();
                 testRefresh();
                 visitorsRefresh();
@@ -645,7 +626,6 @@
             try {
                 all = await load(key);
                 render();
-                pendingRefresh();
                 reminderRefresh();
                 testRefresh();
                 visitorsRefresh();
@@ -664,7 +644,6 @@
             all = [];
             formFilter = "";
             ready.analytics = false;
-            ready.pending = false;
             ready.reminders = false;
             ready.test = false;
             showView("all");
@@ -673,11 +652,6 @@
             meta.textContent = "";
             search.value = "";
             document.getElementById("key").value = "";
-            pendingPeople = [];
-            pendingWho.textContent = "";
-            pendingLog.textContent = "";
-            pendingLog.hidden = true;
-            pendingPanel.hidden = true;
             remindersPanel.hidden = true;
             reminderRows.innerHTML = "";
             reminderLog.textContent = "";
@@ -735,7 +709,11 @@
             visitors.hidden = !(view === "analytics" && ready.analytics);
             testPanel.hidden = !(view === "emails" && ready.test);
             remindersPanel.hidden = !(view === "emails" && ready.reminders);
-            pendingPanel.hidden = !(view === "emails" && ready.pending);
+            // Nothing to send is a state worth showing, rather than panels that
+            // quietly never appear.
+            const nothingToSend = REMINDERS.length + TESTABLE.length === 0;
+
+            document.getElementById("no-campaigns").hidden = !(view === "emails" && nothingToSend);
         }
 
         function badgeCounts() {
@@ -1177,112 +1155,10 @@
         });
 
 
-        /* ---------- JOINING EMAIL FOR LATE REGISTRATIONS ---------- */
-        // Everyone up to DYS-TAS-26-0088 was emailed by hand and is written into
-        // broadcast_sends, so "who still needs it" is simply whoever the worker
-        // reports as remaining. Sends go one at a time with a gap between them,
-        // because the same email sent in a burst is sorted differently from the
-        // same email sent on its own.
-        const PENDING_API = "https://dystil-contact.dystil-ai.workers.dev/api/broadcast";
-        const PENDING_CAMPAIGN = "taster-2026-08-29-joining-link-confirmstyle";
+        // The broadcast endpoint, and the gap left between sends: the same email
+        // sent in a burst is sorted differently from one sent on its own.
+        const BROADCAST_API = "https://dystil-contact.dystil-ai.workers.dev/api/broadcast";
         const PENDING_PACE_MS = 8000;
-
-        const pendingPanel = document.getElementById("pending");
-        const pendingWho = document.getElementById("pending-who");
-        const pendingNote = document.getElementById("pending-note");
-        const pendingSend = document.getElementById("pending-send");
-        const pendingLog = document.getElementById("pending-log");
-
-        let pendingPeople = [];
-
-        async function pendingCall(payload) {
-            const response = await fetch(PENDING_API, {
-                method: "POST",
-                headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
-                body: JSON.stringify({ campaign: PENDING_CAMPAIGN, ...payload })
-            });
-
-            const body = await response.json().catch(function () { return {}; });
-
-            if (!response.ok || !body.success) throw new Error(body.message || "The request failed.");
-
-            return body;
-        }
-
-        async function pendingRefresh() {
-            ready.pending = true;
-            syncPanels();
-
-            try {
-                const roster = await pendingCall({ action: "list" });
-                const done = new Set(roster.alreadySent);
-                pendingPeople = (roster.recipients || []).filter(function (p) { return !done.has(p.email); });
-
-                if (!pendingPeople.length) {
-                    pendingWho.textContent = "Everyone who has registered has been sent the joining email.";
-                    pendingSend.disabled = true;
-                    pendingSend.textContent = "Nobody waiting";
-                    return;
-                }
-
-                pendingWho.innerHTML = "";
-                pendingPeople.forEach(function (person) {
-                    const line = document.createElement("span");
-                    line.className = "person";
-                    line.textContent = person.fullName + "  <" + person.email + ">  " + person.reference;
-                    pendingWho.appendChild(line);
-                });
-
-                pendingSend.disabled = false;
-                pendingSend.textContent = "Send joining email to " + pendingPeople.length;
-            } catch (error) {
-                pendingWho.textContent = "Could not check who is waiting: " + error.message;
-                pendingSend.disabled = true;
-            }
-        }
-
-        function pendingWrite(line) {
-            pendingLog.hidden = false;
-            pendingLog.textContent += line + "\n";
-            pendingLog.scrollTop = pendingLog.scrollHeight;
-        }
-
-        pendingSend.addEventListener("click", async function () {
-            if (!pendingPeople.length) return;
-
-            const names = pendingPeople.map(function (p) { return p.fullName + " <" + p.email + ">"; }).join("\n");
-            if (!confirm("Send the joining email to " + pendingPeople.length + "?\n\n" + names)) return;
-
-            pendingSend.disabled = true;
-            const waiting = pendingPeople.slice();
-            let sent = 0;
-
-            pendingWrite("Sending to " + waiting.length + ", one at a time…");
-
-            try {
-                for (let i = 0; i < waiting.length; i++) {
-                    if (i > 0) {
-                        await new Promise(function (done) { window.setTimeout(done, PENDING_PACE_MS); });
-                    }
-
-                    pendingSend.textContent = "Sending " + (i + 1) + " of " + waiting.length + "…";
-
-                    const body = await pendingCall({ action: "send", emails: [waiting[i].email] });
-
-                    body.results.forEach(function (r) {
-                        pendingWrite(r.email + ": " + (r.status === "sent" ? "sent" : r.status + " — " + r.reason));
-                        if (r.status === "sent") sent++;
-                    });
-                }
-
-                pendingWrite("Finished. " + sent + " sent.");
-            } catch (error) {
-                pendingWrite("Stopped: " + error.message);
-                pendingWrite("Anyone already sent is recorded — press again to carry on from where it stopped.");
-            } finally {
-                await pendingRefresh();
-            }
-        });
 
         /* ---------- REMINDERS ---------- */
         // Each reminder can go out under either name, but both names write to
@@ -1292,57 +1168,25 @@
         // Each row is one message that goes to everyone once. Where a row has
         // two buttons they are the same message under different names, and both
         // write to one ledger, so choosing one leaves the other with nobody.
+        // One row per message that goes to everyone once. Two buttons on a row
+        // are the same message under different names, sharing one ledger, so
+        // choosing one leaves the other with nobody:
+        //   { label: "Reminder", buttons: [["campaign-key-frank", "from Frank"]] }
         const REMINDERS = [
             {
-                label: "Calendar invitation",
+                label: "Bootcamp invitation · first taster",
                 buttons: [
-                    ["taster-2026-08-29-calendar-invite-frank", "from Frank"],
-                    ["taster-2026-08-29-calendar-invite-askus", "from Dystil"]
+                    ["bootcamp-2026-09-26-invite-taster1-frank", "from Frank"],
+                    ["bootcamp-2026-09-26-invite-taster1-askus", "from Dystil"]
                 ]
             },
+            // The same email against the September register. Its own ledger, so
+            // it neither blocks nor is blocked by the row above.
             {
-                label: "This Saturday",
+                label: "Bootcamp invitation · second taster",
                 buttons: [
-                    ["taster-2026-08-29-reminder-2-days-frank", "from Frank"],
-                    ["taster-2026-08-29-reminder-2-days-askus", "from Dystil"]
-                ]
-            },
-            {
-                label: "Tomorrow",
-                buttons: [
-                    ["taster-2026-08-29-reminder-1-day-frank", "from Frank"],
-                    ["taster-2026-08-29-reminder-1-day-askus", "from Dystil"]
-                ]
-            },
-            {
-                label: "We start at 11:00",
-                buttons: [
-                    ["taster-2026-08-29-reminder-final-frank", "from Frank"],
-                    ["taster-2026-08-29-reminder-final-askus", "from Dystil"]
-                ]
-            },
-            {
-                label: "Few hours to go",
-                buttons: [
-                    ["taster-2026-08-29-reminder-hours-frank", "from Frank"],
-                    ["taster-2026-08-29-reminder-hours-askus", "from Dystil"]
-                ]
-            },
-            // The one that goes out after the session rather than before it.
-            {
-                label: "Feedback after the session",
-                buttons: [
-                    ["taster-2026-08-29-feedback-frank", "from Frank"],
-                    ["taster-2026-08-29-feedback-askus", "from Dystil"]
-                ]
-            },
-            // The longer bootcamp call. Its own ledger, so sending it does not
-            // stop the feedback email going to the same person, or the reverse.
-            {
-                label: "Bootcamp call",
-                buttons: [
-                    ["taster-2026-08-29-muaz-frank", "Muaz Style Frank"],
-                    ["taster-2026-08-29-muaz-askus", "Muaz Style Dystil"]
+                    ["bootcamp-2026-09-26-invite-taster2-frank", "from Frank"],
+                    ["bootcamp-2026-09-26-invite-taster2-askus", "from Dystil"]
                 ]
             }
         ];
@@ -1352,7 +1196,7 @@
         const reminderLog = document.getElementById("reminder-log");
 
         async function reminderCall(campaign, payload) {
-            const response = await fetch(PENDING_API, {
+            const response = await fetch(BROADCAST_API, {
                 method: "POST",
                 headers: { "X-Admin-Key": key, "Content-Type": "application/json" },
                 body: JSON.stringify({ campaign: campaign, ...payload })
@@ -1469,6 +1313,11 @@
         async function quotaRefresh() {
             const box = document.getElementById("quota");
 
+            if (!TESTABLE.length) {
+                box.textContent = "";
+                return;
+            }
+
             try {
                 const q = await reminderCall(TESTABLE[0].campaign, { action: "quota" });
                 const parts = [];
@@ -1502,6 +1351,8 @@
         }
 
         async function reminderRefresh() {
+            if (!REMINDERS.length) return;
+
             ready.reminders = true;
             syncPanels();
             quotaRefresh();
@@ -1533,22 +1384,11 @@
         // nobody on the real list loses their place because of it. The address
         // still has to be one the worker already knows, so this sends fewer
         // emails rather than opening the endpoint up.
+        // What the test panel offers, as { campaign, label }. A test goes to one
+        // person on the team list and is never written to the ledger.
         const TESTABLE = [
-            { campaign: "taster-2026-08-29-joining-link-confirmstyle", label: "Joining email" },
-            { campaign: "taster-2026-08-29-calendar-invite-frank", label: "Calendar invite · Frank" },
-            { campaign: "taster-2026-08-29-calendar-invite-askus", label: "Calendar invite · Dystil" },
-            { campaign: "taster-2026-08-29-reminder-2-days-frank", label: "2 days · Frank" },
-            { campaign: "taster-2026-08-29-reminder-2-days-askus", label: "2 days · Dystil" },
-            { campaign: "taster-2026-08-29-reminder-1-day-frank", label: "1 day · Frank" },
-            { campaign: "taster-2026-08-29-reminder-1-day-askus", label: "1 day · Dystil" },
-            { campaign: "taster-2026-08-29-reminder-final-frank", label: "We start at 11:00 · Frank" },
-            { campaign: "taster-2026-08-29-reminder-final-askus", label: "We start at 11:00 · Dystil" },
-            { campaign: "taster-2026-08-29-reminder-hours-frank", label: "Few hours · Frank" },
-            { campaign: "taster-2026-08-29-reminder-hours-askus", label: "Few hours · Dystil" },
-            { campaign: "taster-2026-08-29-feedback-frank", label: "Feedback · Frank" },
-            { campaign: "taster-2026-08-29-feedback-askus", label: "Feedback · Dystil" },
-            { campaign: "taster-2026-08-29-muaz-frank", label: "Muaz Style Frank" },
-            { campaign: "taster-2026-08-29-muaz-askus", label: "Muaz Style Dystil" }
+            { campaign: "bootcamp-2026-09-26-invite-taster1-frank", label: "Bootcamp invitation · Frank" },
+            { campaign: "bootcamp-2026-09-26-invite-taster1-askus", label: "Bootcamp invitation · Dystil" }
         ];
 
         const testPanel = document.getElementById("testing");
@@ -1593,6 +1433,8 @@
         }
 
         async function testRefresh() {
+            if (!TESTABLE.length) return;
+
             ready.test = true;
             syncPanels();
 
