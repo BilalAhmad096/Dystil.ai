@@ -1372,14 +1372,18 @@ async function signedWebhook(event, { secret = STRIPE_WEBHOOK_SECRET, timestamp 
 
 // The event Stripe sends for the session the Worker just opened. The token is
 // what ties it back to the held registration.
-function completedEvent(token, reference, amount = 39900) {
+function completedEvent(token, reference, amount = 39900, overrides = {}) {
     return {
-        type: "checkout.session.completed",
+        type: overrides.type || "checkout.session.completed",
         data: {
             object: {
                 id: "cs_test_123",
                 client_reference_id: reference,
                 amount_total: amount,
+                // Stripe's own verdict on whether the money arrived. A session
+                // can complete without it, which is the whole point of the test
+                // below.
+                payment_status: overrides.payment_status || "paid",
                 metadata: { reference, token }
             }
         }
@@ -1740,4 +1744,102 @@ test("leaves the unpaid forms saying what they always said", async function() {
         assert.match(confirmation.body.textContent, /enquiry has been sent successfully/);
         assert.doesNotMatch(confirmation.body.htmlContent, /Amount paid/);
     });
+});
+
+// A completed checkout is not a paid one. Klarna, bank debits and anything else
+// that settles later complete the session first and pay afterwards, so nobody
+// may be told their payment arrived on the strength of the event alone.
+test("never says payment received for a checkout that was not paid", async function() {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+
+    let calls;
+    await withMockedApis(async function(mocked) {
+        const request = await signedWebhook(
+            completedEvent(started.token, started.result.reference, 39900, { payment_status: "unpaid" })
+        );
+        calls = { ...mocked, response: await worker.fetch(request, paidEnv) };
+    });
+
+    // Acknowledged, so Stripe stops retrying, but nothing else happened.
+    assert.equal(calls.response.status, 200);
+    assert.equal(calls.emailCalls.length, 0);
+    assert.equal(paidEnv.DB.rows.length, 0);
+    assert.equal(paidEnv.DB.leads[0].paid_at, null);
+
+    // And the hold stays, because the money may still be on its way.
+    assert.equal(paidEnv.DB.pending.length, 1);
+});
+
+test("finishes the registration when a delayed payment finally settles", async function() {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+
+    await withMockedApis(async function() {
+        const pendingPayment = await signedWebhook(
+            completedEvent(started.token, started.result.reference, 39900, { payment_status: "unpaid" })
+        );
+        await worker.fetch(pendingPayment, paidEnv);
+    });
+
+    let calls;
+    await withMockedApis(async function(mocked) {
+        const settled = await signedWebhook(completedEvent(started.token, started.result.reference, 39900, {
+            type: "checkout.session.async_payment_succeeded"
+        }));
+        calls = { ...mocked, response: await worker.fetch(settled, paidEnv) };
+    });
+
+    assert.equal(calls.response.status, 200);
+    assert.equal(rowFor(paidEnv.DB, started.result.reference).payment_status, "paid");
+    assert.equal(calls.emailCalls.length, 2);
+    assert.match(calls.emailCalls[1].body.subject, /^Payment received \| /);
+    assert.equal(paidEnv.DB.pending.length, 0);
+});
+
+// A session nobody paid for expires. It can never be paid after that, so the
+// hold goes rather than waiting out its day.
+test("clears the hold when the checkout session expires", async function() {
+    paidEnv = makePaidEnv();
+    const started = await startRegistration();
+
+    let calls;
+    await withMockedApis(async function(mocked) {
+        const expired = await signedWebhook(
+            completedEvent(started.token, started.result.reference, 39900, { type: "checkout.session.expired" })
+        );
+        calls = { ...mocked, response: await worker.fetch(expired, paidEnv) };
+    });
+
+    assert.equal(calls.response.status, 200);
+    assert.equal(calls.emailCalls.length, 0);
+    assert.equal(paidEnv.DB.rows.length, 0);
+    assert.equal(paidEnv.DB.pending.length, 0);
+
+    // The lead survives it, so somebody who ran out of time can still be asked.
+    assert.equal(paidEnv.DB.leads.length, 1);
+    assert.equal(paidEnv.DB.leads[0].paid_at, null);
+});
+
+// The legacy path, for rows written before payment came first.
+test("does not mark an older row paid on an unpaid checkout", async function() {
+    paidEnv = makePaidEnv();
+
+    const request = await signedWebhook({
+        type: "checkout.session.completed",
+        data: {
+            object: {
+                id: "cs_test_legacy",
+                client_reference_id: "DYS-BOT-26-0008",
+                amount_total: 39900,
+                payment_status: "unpaid",
+                metadata: {}
+            }
+        }
+    });
+
+    const response = await worker.fetch(request, paidEnv);
+
+    assert.equal(response.status, 200);
+    assert.equal(paidEnv.DB.rows.length, 0);
 });

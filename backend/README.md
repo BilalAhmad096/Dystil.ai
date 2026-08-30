@@ -148,6 +148,14 @@ proves nothing, since anybody can type that address. A repeated webhook is
 harmless: the reference is a primary key, so the second delivery inserts
 nothing, sends nothing, and answers 200.
 
+**And only `payment_status: "paid"` counts as paid.** A completed checkout is
+not necessarily a paid one: Klarna, bank debits and anything else that settles
+later complete the session first and pay afterwards. A completed session that
+has not been paid is acknowledged, logged, and left alone, with its hold intact;
+the `checkout.session.async_payment_succeeded` event that follows is what
+finishes the registration. That is what stops anybody being told their payment
+arrived before it did.
+
 Anything still held 24 hours later was never paid for. It is deleted by the next
 registration that comes through.
 
@@ -173,8 +181,10 @@ price there and on `students/services.html` together.
    run until that finishes, which usually takes one to three working days.
 2. In the Stripe dashboard open **Developers > Webhooks** and add a destination
    for `https://dystil-contact.dystil-ai.workers.dev/api/stripe-webhook`,
-   subscribed to `checkout.session.completed`, payload style **Snapshot**.
-   Stripe then shows a signing secret beginning `whsec_`.
+   payload style **Snapshot**, subscribed to `checkout.session.completed`. Add
+   `checkout.session.async_payment_succeeded` and `checkout.session.expired` as
+   well if you ever enable a payment method that settles later, such as Klarna
+   or a bank debit. Stripe then shows a signing secret beginning `whsec_`.
 3. From the `backend` directory:
 
 ```powershell

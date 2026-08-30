@@ -1217,6 +1217,19 @@ async function completePaidRegistration(env, session) {
         return true;
     }
 
+    // A completed checkout is not a paid one. Klarna, bank debits and anything
+    // else that settles later complete the session first and pay afterwards, so
+    // Stripe's own verdict is what decides, never the arrival of the event. The
+    // hold is left alone: the later event is what finishes the registration.
+    if (session.payment_status !== "paid") {
+        console.error("A checkout completed without the money arriving.", {
+            reference,
+            paymentStatus: session.payment_status
+        });
+
+        return true;
+    }
+
     const pending = await env.DB.prepare(READ_PENDING_SQL).bind(token).first();
 
     // Already dealt with, or expired. Either way there is nothing to do and
@@ -1379,9 +1392,20 @@ async function handleStripeWebhook(request, env) {
         return new Response("Unreadable event.", { status: 400 });
     }
 
+    // A session that expired can never be paid, so the hold it was waiting on
+    // goes now rather than sitting there for a day.
+    if (event?.type === "checkout.session.expired") {
+        const token = event.data?.object?.metadata?.token || "";
+        if (token) await discardPending(env, token);
+
+        return new Response("ok", { status: 200 });
+    }
+
     // Anything else Stripe sends is acknowledged and ignored. A non-200 would
     // have it retried for days over an event we were never interested in.
-    if (event?.type === "checkout.session.completed") {
+    // async_payment_succeeded is how a delayed method reports that the money
+    // finally arrived, and it finishes the registration the same way.
+    if (["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event?.type)) {
         const session = event.data?.object || {};
 
         try {
@@ -1390,12 +1414,15 @@ async function handleStripeWebhook(request, env) {
             // instead: both kinds of payment end up recorded the same way.
             if (session.metadata?.token) {
                 await completePaidRegistration(env, session);
-            } else if (session.client_reference_id && env.DB) {
+            } else if (session.client_reference_id && env.DB && session.payment_status === "paid") {
                 await env.DB.prepare(MARK_PAID_SQL)
                     .bind(session.amount_total ?? null, session.id || null, session.client_reference_id)
                     .run();
             } else {
-                console.error("A completed payment carried nothing to match.", { session: session.id });
+                console.error("A completed payment carried nothing to match, or nothing was paid.", {
+                    session: session.id,
+                    paymentStatus: session.payment_status
+                });
             }
         } catch (error) {
             // Stripe retries a webhook that did not return 200, so a failure
