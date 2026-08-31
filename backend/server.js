@@ -2406,19 +2406,26 @@ function buildPaymentOpenText(firstName) {
 function buildPaymentOpenCampaigns() {
     const campaigns = {};
 
-    for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
-        campaigns[`bootcamp-payment-open-${who}`] = {
-            formType: PAID_FORM,
-            subject: PAYMENT_OPEN_SUBJECT,
-            buildHtml: buildPaymentOpenHtml,
-            buildText: buildPaymentOpenText,
-            sender,
-            replyTo: sender,
-            // Nobody who has paid is asked to pay.
-            unpaidOnly: true,
-            dedupeKey: "bootcamp-payment-open",
-            testRecipients: TEST_TEAM
-        };
+    const rounds = [
+        ["bootcamp-payment-open", "bootcamp-payment-open"],
+        ["bootcamp-confirm-place", "bootcamp-confirm-place"]
+    ];
+
+    for (const [prefix, ledger] of rounds) {
+        for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
+            campaigns[`${prefix}-${who}`] = {
+                formType: PAID_FORM,
+                subject: PAYMENT_OPEN_SUBJECT,
+                buildHtml: buildPaymentOpenHtml,
+                buildText: buildPaymentOpenText,
+                sender,
+                replyTo: sender,
+                // Nobody who has paid is asked to pay.
+                unpaidOnly: true,
+                dedupeKey: ledger,
+                testRecipients: TEST_TEAM
+            };
+        }
     }
 
     return campaigns;
