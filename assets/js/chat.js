@@ -26,6 +26,11 @@
     const CHAT_ENDPOINT = window.DYSTIL_CHAT_ENDPOINT || WORKER + "/api/chat";
     const ENQUIRY_ENDPOINT = window.DYSTIL_FORM_ENDPOINT || WORKER + "/api/enquiry";
 
+    /* What the advisor says while the Worker behind it is still being set up.
+       The Worker sends its own version of this once it carries the advisor but
+       has no key yet; this one covers the window before even that. */
+    const COMING_SOON = "I'm not quite live yet — I should be up and running very soon. In the meantime the Dystil team will happily answer anything at askus@dystil.ai.";
+
     const STORAGE_KEY = "dystil-advisor";
     const STORED_TURNS = 24;
     const MESSAGE_LIMIT = 1500;
@@ -298,11 +303,15 @@
             }
 
             if (!response.ok || !response.body) {
-                const refusal = new Error(await refusalMessage(response));
+                // An advisor waiting on its key answers 503 in its own wording.
+                // A Worker that does not carry the advisor yet answers 404 with
+                // none. Neither is a fault, so neither is shown in red.
+                const waiting = response.status === 503 || response.status === 404;
+                const refusal = new Error(
+                    response.status === 404 ? COMING_SOON : await refusalMessage(response)
+                );
 
-                // The advisor not being switched on yet is news, not a fault,
-                // so it is spoken rather than shown in red.
-                refusal.spoken = response.status === 503;
+                refusal.spoken = waiting;
 
                 throw refusal;
             }
