@@ -1827,7 +1827,7 @@ const BOOTCAMP_REGISTERS = {
 const BOOTCAMP_NOTE_SUBJECT = "Carrying on after the taster session?";
 // Says what happened, not what to do about it. The reminders that reached
 // Primary read the same way.
-const PAYMENT_OPEN_SUBJECT = "The payment page is now open | Dystil Career Accelerator";
+const PAYMENT_OPEN_SUBJECT = "Ready to confirm your place | Dystil Career Accelerator";
 
 // No offer in it: two facts about the programme the taster session was a
 // preview of. The version that sold a place went to Promotions twice.
@@ -2343,16 +2343,16 @@ function buildBootcampNoteText(firstName) {
 // so asking as Frank cannot ask again as Dystil; the two registers do not, so
 // the same email reaches each of them once.
 /* ---------------------------------------------------------------------------
-   The payment page is open
+   Ready to confirm your place
    ---------------------------------------------------------------------------
-   For the people who registered before there was anything to pay with. They
-   filled the form, were told a place is confirmed on payment, and then had no
-   way to make one. This tells them there is one now.
+   For the people who registered before there was anything to pay with. It
+   opens on what they did — they registered — rather than on the gap at our
+   end, which is our business and not a thing to lead a reader with.
 
-   The form is the payment page, so it asks them to fill it again, which is
-   worth saying plainly rather than letting them discover it. Anyone whose
-   address carries a paid registration is left out by the roster, not by the
-   copy.
+   The form is the payment page, so it asks them to fill it again. That is
+   said plainly, as what confirming involves, rather than left to be
+   discovered on arrival. Anyone whose address carries a paid registration is
+   left out by the roster, not by the copy.
 --------------------------------------------------------------------------- */
 
 function poundsOf(pence) {
@@ -2371,9 +2371,9 @@ function buildPaymentOpenHtml(firstName) {
                     <h1 style="font-size:24px;margin:0;">${heading}</h1>
                 </div>
                 <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
-                    <p style="margin-top:0;">You registered for the ${escapeHtml(BOOTCAMP.name)} before there was a way to pay for it. There is now, so you can confirm your place.</p>
+                    <p style="margin-top:0;">You registered for the ${escapeHtml(BOOTCAMP.name)} bootcamp, and we are now ready to confirm your place.</p>
                     <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>Starts ${escapeHtml(BOOTCAMP.starts)}</strong><br>Registration closes ${escapeHtml(BOOTCAMP.closes)}<br>Foundation ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])}, Advanced ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])}</p>
-                    <p>The form now takes the payment at the end, so it will ask for your details once more. It is short, and it is the last thing standing between you and a seat.</p>
+                    <p>Confirming takes a couple of minutes. The form asks for your details once more and takes the fee at the end, and your place is held from there.</p>
                     <p><a href="${escapeHtml(BOOTCAMP.register)}" style="color:#147a59;">Confirm your place</a></p>
                     <p>Places are held in the order the payments arrive. If anything has changed, or you would rather talk it through first, reply to this email or call ${escapeHtml(DYSTIL_PHONE)}.</p>
                     <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
@@ -2386,13 +2386,13 @@ function buildPaymentOpenText(firstName) {
     return [
         firstName ? `Your place is ready to confirm, ${firstName}.` : "Your place is ready to confirm.",
         "",
-        `You registered for the ${BOOTCAMP.name} before there was a way to pay for it. There is now, so you can confirm your place.`,
+        `You registered for the ${BOOTCAMP.name} bootcamp, and we are now ready to confirm your place.`,
         "",
         `Starts ${BOOTCAMP.starts}`,
         `Registration closes ${BOOTCAMP.closes}`,
         `Foundation ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])}, Advanced ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])}`,
         "",
-        "The form now takes the payment at the end, so it will ask for your details once more. It is short, and it is the last thing standing between you and a seat.",
+        "Confirming takes a couple of minutes. The form asks for your details once more and takes the fee at the end, and your place is held from there.",
         "",
         "Confirm your place: " + BOOTCAMP.register,
         "",
