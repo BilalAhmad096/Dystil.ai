@@ -1829,7 +1829,9 @@ const BOOTCAMP_NOTE_SUBJECT = "Carrying on after the taster session?";
 // Primary read the same way.
 const PAYMENT_OPEN_SUBJECT = "The payment page is now open | Dystil Career Accelerator";
 
-const BOOTCAMP_SUBJECT = `${BOOTCAMP.starts} | Dystil ${BOOTCAMP.name}`;
+// No offer in it: two facts about the programme the taster session was a
+// preview of. The version that sold a place went to Promotions twice.
+const BOOTCAMP_SUBJECT = `Dates and fees for the ${BOOTCAMP.name} | Dystil`;
 
 /* What reaches Primary, measured rather than guessed.
    ---------------------------------------------------------------------------
@@ -1842,10 +1844,20 @@ const BOOTCAMP_SUBJECT = `${BOOTCAMP.starts} | Dystil ${BOOTCAMP.name}`;
      Promotions  the bootcamp invitation. Three hosted images, seven links, a
                  row of social accounts, and a subject offering a place on a
                  programme.
+     Promotions  the same invitation stripped to no images and one link. The
+                 markup was no longer the difference; what it still did was
+                 offer a paid programme to somebody who had not asked.
+     Primary     the payment page notice. No images, one link, factual
+                 subject - and about a registration the reader had already
+                 made, which is the part the stripped invitation could not
+                 borrow.
 
-   So the template is not the problem, and neither is Brevo. Keep a campaign to
-   no images, one link, a subject that states a fact, and a plain sign-off, and
-   it goes where the reminders went.
+   So there are two things, not one. No images, one link, a subject that states
+   a fact, and a plain sign-off are necessary. What carries it over the line is
+   the email being about something the reader has already done: a session they
+   booked, a form they filled. An offer stays an offer however plainly it is
+   dressed, so where a campaign has to sell something, hang it off whatever the
+   reader did last rather than opening with the sale.
 --------------------------------------------------------------------------- */
 
 // Anything CAMPAIGNS reads has to be declared above it: the map is built when
@@ -2248,10 +2260,15 @@ function graphIsConfigured(env) {
 // header, one panel, one accent block of details, one link, no image anywhere,
 // and Kind regards on the end. The pathway choice moved onto the registration
 // page, which already asks for it, so this can carry a single link.
+// Rebuilt after the stripped version reached Promotions anyway. The markup was
+// already right - no images, one link - so what changed is what the email is
+// about. It opens on the session the reader came to and reports what happened
+// to the programme behind it. The fees are in it for the same reason: a price
+// is information, and withholding it is what an advertisement does.
 function buildBootcampHtml(firstName) {
     const heading = firstName
-        ? `The ${escapeHtml(BOOTCAMP.name)}, ${escapeHtml(firstName)}.`
-        : `The ${escapeHtml(BOOTCAMP.name)}.`;
+        ? `The programme behind the taster session, ${escapeHtml(firstName)}.`
+        : "The programme behind the taster session.";
 
     const pathways = BOOTCAMP.pathways
         .map(([, name, detail]) => `<p><strong>${escapeHtml(name)}.</strong> ${escapeHtml(detail)}</p>`)
@@ -2264,11 +2281,12 @@ function buildBootcampHtml(firstName) {
                     <h1 style="font-size:24px;margin:0;">${heading}</h1>
                 </div>
                 <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
-                    <p style="margin-top:0;">You came to the taster session, which was an hour of what the work looks like. The ${escapeHtml(BOOTCAMP.name)} is the longer version: real projects in your own field, finished, and in your portfolio at the end.</p>
-                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>Starts ${escapeHtml(BOOTCAMP.starts)}</strong><br>Registration closes ${escapeHtml(BOOTCAMP.closes)}<br>Online, in two pathways.</p>
+                    <p style="margin-top:0;">You came to our free taster session, which was an hour on what AI is doing to ordinary jobs. It was a preview of the ${escapeHtml(BOOTCAMP.name)}, and that programme now has its dates.</p>
+                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>Starts ${escapeHtml(BOOTCAMP.starts)}</strong><br>Registration closes ${escapeHtml(BOOTCAMP.closes)}<br>Foundation ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])}, Advanced ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])}</p>
                     ${pathways}
-                    <p>You choose the pathway on the registration form, and if you are not sure which is yours, reply to this email or call ${escapeHtml(DYSTIL_PHONE)} and we will talk it through.</p>
-                    <p><a href="${escapeHtml(BOOTCAMP.register)}" style="color:#147a59;">Register for the ${escapeHtml(BOOTCAMP.name)}</a></p>
+                    <p>Where the taster session showed you the change, this is where you do something about it: real projects in your own field, finished, and in your portfolio at the end. You choose the pathway on the form.</p>
+                    <p><a href="${escapeHtml(BOOTCAMP.register)}" style="color:#147a59;">Dates, pathways and registration</a></p>
+                    <p>If it is not for you, that is a fair answer and this is the last you will hear of it. If you are unsure, reply to this email or call ${escapeHtml(DYSTIL_PHONE)} and we will talk it through.</p>
                     <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
                 </div>
             </div>
@@ -2277,19 +2295,23 @@ function buildBootcampHtml(firstName) {
 
 function buildBootcampText(firstName) {
     return [
-        firstName ? `The ${BOOTCAMP.name}, ${firstName}.` : `The ${BOOTCAMP.name}.`,
+        firstName
+            ? `The programme behind the taster session, ${firstName}.`
+            : "The programme behind the taster session.",
         "",
-        `You came to the taster session, which was an hour of what the work looks like. The ${BOOTCAMP.name} is the longer version: real projects in your own field, finished, and in your portfolio at the end.`,
+        `You came to our free taster session, which was an hour on what AI is doing to ordinary jobs. It was a preview of the ${BOOTCAMP.name}, and that programme now has its dates.`,
         "",
         `Starts ${BOOTCAMP.starts}`,
         `Registration closes ${BOOTCAMP.closes}`,
-        "Online, in two pathways.",
+        `Foundation ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])}, Advanced ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])}`,
         "",
         ...BOOTCAMP.pathways.map(([, name, detail]) => `${name}. ${detail}`),
         "",
-        `You choose the pathway on the registration form, and if you are not sure which is yours, reply to this email or call ${DYSTIL_PHONE} and we will talk it through.`,
+        "Where the taster session showed you the change, this is where you do something about it: real projects in your own field, finished, and in your portfolio at the end. You choose the pathway on the form.",
         "",
-        "Register: " + BOOTCAMP.register,
+        "Dates, pathways and registration: " + BOOTCAMP.register,
+        "",
+        `If it is not for you, that is a fair answer and this is the last you will hear of it. If you are unsure, reply to this email or call ${DYSTIL_PHONE} and we will talk it through.`,
         "",
         "Kind regards,",
         "The Dystil Team"
