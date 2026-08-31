@@ -1,3 +1,5 @@
+import { buildAdvisorPrompt } from "./advisor-prompt.js";
+
 const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 const STRIPE_SESSIONS_API = "https://api.stripe.com/v1/checkout/sessions";
 const MAX_CV_SIZE = 4 * 1024 * 1024;
@@ -322,6 +324,14 @@ export default {
             }
 
             return siteVisitors(request, env, corsHeaders);
+        }
+
+        if (request.method === "POST" && url.pathname === "/api/chat") {
+            if (!allowedOrigins.has(origin)) {
+                return jsonResponse({ success: false, message: "Origin not allowed." }, 403);
+            }
+
+            return handleChat(request, env, corsHeaders);
         }
 
         if (request.method === "POST" && url.pathname === "/api/broadcast") {
@@ -1745,6 +1755,215 @@ function formatFileSize(bytes) {
     if (!Number.isFinite(bytes)) return "unknown size";
     if (bytes < 1024) return `${bytes} B`;
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+/* ---------------------------------------------------------------------------
+   The Dystil AI Advisor
+   ---------------------------------------------------------------------------
+   The website chat widget asks this endpoint, and this endpoint asks OpenAI.
+   The API key never reaches a browser, which is the whole reason the Worker is
+   in the middle: a key in public JavaScript is a key anybody can spend.
+
+   Every reply is charged for, so the conversation is bounded before it is sent
+   — how many turns, how long each one is, and how many a single address may
+   send in ten minutes. The browser holds the transcript rather than the Worker,
+   so nothing anybody typed into the chat is stored anywhere until they choose
+   to send an enquiry, and that goes through the ordinary form endpoint.
+--------------------------------------------------------------------------- */
+
+const OPENAI_CHAT_API = "https://api.openai.com/v1/chat/completions";
+
+// Overridden by OPENAI_MODEL in wrangler.toml, so the model can be changed
+// without a code edit.
+const CHAT_MODEL = "gpt-4o-mini";
+
+// A visitor with a genuine question is nowhere near any of these. They are here
+// so that a script pointed at the endpoint cannot run up a bill.
+const CHAT_TURN_LIMIT = 24;
+const CHAT_MESSAGE_LIMIT = 1500;
+const CHAT_HISTORY_LIMIT = 12000;
+const CHAT_BURST_LIMIT = 30;
+const CHAT_BURST_WINDOW_SECONDS = 600;
+const CHAT_REPLY_TOKENS = 700;
+
+// The advisor ends a reply with [[LEAD:corporate]] or [[LEAD:student]] when it
+// wants the widget to open an enquiry form. The widget strips the marker before
+// anything is shown, and it is stripped again here so a marker can never travel
+// back into the transcript and teach the model to scatter them.
+const LEAD_MARKER = /\[\[LEAD:[a-z]*\]\]/gi;
+
+async function handleChat(request, env, corsHeaders) {
+    // Deliberately a friendly line rather than a failure: the widget is live on
+    // the site before the key is, and a visitor who opens it in the meantime
+    // should be told it is coming, not that something is broken.
+    if (!env.OPENAI_API_KEY) {
+        console.error("OPENAI_API_KEY is not configured.");
+
+        return jsonResponse({
+            success: false,
+            message: "I'm not quite live yet — I should be up and running very soon. In the meantime the Dystil team will happily answer anything at askus@dystil.ai."
+        }, 503, corsHeaders);
+    }
+
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return jsonResponse({ success: false, message: "We could not read that message." }, 400, corsHeaders);
+    }
+
+    const messages = readChatMessages(body?.messages);
+    if (!messages.length || messages.at(-1).role !== "user") {
+        return jsonResponse({ success: false, message: "Please type a message." }, 400, corsHeaders);
+    }
+
+    if (await chatLimitReached(request)) {
+        return jsonResponse({
+            success: false,
+            message: "That is a lot of questions for one sitting. Please give it a few minutes, or email askus@dystil.ai."
+        }, 429, corsHeaders);
+    }
+
+    const page = {
+        path: cleanText(body?.page?.path, 120) || "/",
+        title: cleanText(body?.page?.title, 200)
+    };
+
+    let upstream;
+    try {
+        upstream = await fetch(OPENAI_CHAT_API, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                model: env.OPENAI_MODEL || CHAT_MODEL,
+                stream: true,
+                temperature: 0.4,
+                max_tokens: CHAT_REPLY_TOKENS,
+                messages: [
+                    { role: "system", content: buildAdvisorPrompt(BOOTCAMP_PRICES, page) },
+                    ...messages
+                ]
+            })
+        });
+    } catch (error) {
+        console.error("The advisor could not reach OpenAI.", error instanceof Error ? error.message : "Unknown error");
+        upstream = null;
+    }
+
+    if (!upstream || !upstream.ok || !upstream.body) {
+        console.error("The advisor request failed.", upstream ? `HTTP ${upstream.status}` : "no response");
+
+        return jsonResponse({
+            success: false,
+            message: "The advisor is unavailable right now. Please try again shortly, or email askus@dystil.ai."
+        }, 502, corsHeaders);
+    }
+
+    return streamChatReply(upstream, corsHeaders);
+}
+
+// The transcript arrives from the browser, so none of it is trusted. Only the
+// two roles a conversation actually has are kept, the oldest turns are dropped
+// once the history is long enough, and the system instructions are added here
+// rather than accepted from anybody.
+function readChatMessages(raw) {
+    if (!Array.isArray(raw)) return [];
+
+    const messages = [];
+
+    for (const item of raw.slice(-CHAT_TURN_LIMIT)) {
+        const role = item?.role;
+        if (role !== "user" && role !== "assistant") continue;
+
+        const content = cleanText(item?.content, CHAT_MESSAGE_LIMIT).replace(LEAD_MARKER, "").trim();
+        if (!content) continue;
+
+        messages.push({ role, content });
+    }
+
+    let length = messages.reduce((total, message) => total + message.content.length, 0);
+
+    while (messages.length > 1 && length > CHAT_HISTORY_LIMIT) {
+        length -= messages.shift().content.length;
+    }
+
+    return messages;
+}
+
+// Spent as the request is made rather than after it succeeds, because the cost
+// is incurred whether or not the answer is any good.
+async function chatLimitReached(request) {
+    if (typeof caches === "undefined" || !caches.default) return false;
+
+    const address = request.headers.get("CF-Connecting-IP") || "unknown";
+    const key = await findFreeChatKey(address);
+
+    if (!key) return true;
+
+    await caches.default.put(key, new Response("1", {
+        headers: { "Cache-Control": `public, max-age=${CHAT_BURST_WINDOW_SECONDS}` }
+    }));
+
+    return false;
+}
+
+async function findFreeChatKey(address) {
+    for (let slot = 0; slot < CHAT_BURST_LIMIT; slot += 1) {
+        const key = await buildLimitKey("chat", address, String(slot));
+        if (!(await caches.default.match(key))) return key;
+    }
+
+    return null;
+}
+
+// OpenAI answers in server-sent events; the widget only wants the words. The
+// text is forwarded as it arrives so the reply appears while it is still being
+// written, which is the difference between a chat that feels alive and one that
+// looks broken for six seconds.
+function streamChatReply(upstream, corsHeaders) {
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    let buffer = "";
+
+    const events = new TransformStream({
+        transform(chunk, controller) {
+            buffer += decoder.decode(chunk, { stream: true });
+
+            // An event can be split across two network chunks, so the last
+            // unfinished line stays in the buffer until the rest of it lands.
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+                if (!line.startsWith("data:")) continue;
+
+                const payload = line.slice(5).trim();
+                if (!payload || payload === "[DONE]") continue;
+
+                let text = "";
+                try {
+                    text = JSON.parse(payload).choices?.[0]?.delta?.content || "";
+                } catch {
+                    continue;
+                }
+
+                if (text) controller.enqueue(encoder.encode(text));
+            }
+        }
+    });
+
+    return new Response(upstream.body.pipeThrough(events), {
+        status: 200,
+        headers: {
+            ...corsHeaders,
+            "Content-Type": "text/plain; charset=utf-8",
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff"
+        }
+    });
 }
 
 /* ---------------------------------------------------------------------------

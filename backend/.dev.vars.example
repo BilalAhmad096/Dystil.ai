@@ -1,0 +1,16 @@
+# Copy to .dev.vars for local "npx wrangler dev" runs. Never commit .dev.vars:
+# it is in .gitignore because these are the real keys.
+#
+# In production every one of these is a Cloudflare secret instead:
+#   npx wrangler secret put OPENAI_API_KEY
+
+# The website chat advisor. Create the key at
+# https://platform.openai.com/api-keys and give the project a spend limit.
+OPENAI_API_KEY=sk-proj-your-key-here
+
+# The rest of the Worker, for reference. Only OPENAI_API_KEY is needed to try
+# the chat widget locally.
+BREVO_API_KEY=
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+ADMIN_KEY=

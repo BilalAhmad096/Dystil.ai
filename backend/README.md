@@ -6,6 +6,9 @@ four website forms and uses Brevo to send:
 1. the complete submission to `askus@dystil.ai`; and
 2. a confirmation to the visitor from `askus@dystil.ai`.
 
+It also takes bootcamp payments through Stripe and answers the website chat
+widget, the Dystil AI Advisor, which is documented further down.
+
 Email and API secrets stay in Cloudflare and are never exposed in the public
 GitHub Pages JavaScript. The Worker still accepts a PDF, DOC or DOCX attachment
 (up to 4 MB) on the unpaid forms, though none of them currently asks for one.
@@ -256,6 +259,117 @@ does not pay. The gap is not a lost record: the reference it was given is in
   wrong.
 - Say in the privacy policy that Stripe processes payments, and that the details
   of an unpaid registration are deleted within 24 hours.
+
+## The website AI advisor
+
+Every public page carries a chat launcher in the bottom corner. The panel is the
+**Dystil AI Advisor**: it answers questions about Dystil, works out whether it
+is talking to a business or a student, and can open a short enquiry form when
+somebody is ready to talk to a person.
+
+The browser never holds the OpenAI key. The widget asks
+`POST /api/chat` on this Worker, and the Worker asks OpenAI. A key in public
+JavaScript is a key anybody can spend.
+
+### The pieces
+
+| File | What it is |
+| --- | --- |
+| `assets/js/chat.js` | The widget: launcher, panel, streaming, the enquiry form |
+| `assets/css/style.css` | Its styling, in the section marked `DYSTIL AI ADVISOR` |
+| `backend/advisor-prompt.js` | What the advisor is told about Dystil |
+| `backend/server.js` | The `/api/chat` endpoint |
+
+The Worker URL is in `chat.js` as `WORKER`, the same address as in
+`assets/js/form-config.js`. If it ever changes, change both.
+
+### What the advisor is allowed to say
+
+`advisor-prompt.js` is the whole of its knowledge. It is told, in as many words,
+not to invent customers, testimonials, partnerships, trainers, statistics,
+prices, cohort dates, guarantees, certifications, results, case studies or
+accreditations, and not to promise anybody a job, a salary or a saving.
+
+The bootcamp fees are not written in the prompt. They are passed in from
+`BOOTCAMP_PRICES` in `server.js`, the same figures Stripe charges, so changing a
+price in one place changes what the advisor quotes.
+
+The links it may offer are a fixed list of real pages. The widget refuses to
+render a link to anywhere other than `dystil.ai` or `mailto:` at our own domain,
+so a made-up link cannot become a way of sending visitors elsewhere.
+
+The advisor knows which page the visitor is reading, so "how would this help me?"
+on the Finance page is understood without making them say it again, and the
+opening message and suggested questions differ on the corporate and student
+sides of the site.
+
+### Enquiries the advisor opens
+
+When somebody shows real interest, the advisor ends its reply with an invisible
+marker and the widget turns it into a four-field form. That form posts to
+`/api/enquiry` like any other form on the site, as a **Corporate Enquiry** or a
+**Student Enquiry**, so it is numbered, emailed, recorded and shown on the
+submissions page exactly like one typed on a contact page. Nothing new was
+added to the database for it.
+
+The conversation so far is sent with it, so whoever replies can see what was
+already discussed. The form says so above the send button.
+
+### What is stored
+
+Nothing. The transcript lives in the visitor's own browser tab —
+`sessionStorage`, so a chat survives moving between pages and disappears when
+the tab closes — and the Worker keeps no record of it. A conversation only
+becomes a record if the visitor fills in the enquiry form.
+
+Say so in the privacy policy, which currently does, under **When you use the AI
+advisor**.
+
+### What stops it running up a bill
+
+- Only `https://dystil.ai` and `https://www.dystil.ai` may call the endpoint.
+- One address gets 30 messages per 10 minutes. The allowance is spent when the
+  request is made, not when it succeeds, because the cost is incurred either way.
+- A conversation is capped at 24 turns, 1,500 characters a message and 12,000
+  characters of history; the oldest turns are dropped rather than sent.
+- Replies are capped at 700 tokens.
+- Only `user` and `assistant` turns are accepted from the browser. The
+  instructions are added by the Worker and cannot be sent to it.
+
+### One-time setup
+
+1. Create an API key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+2. Set a monthly spend limit on the OpenAI project. This is a public endpoint;
+   the limits above bound the traffic, and the spend limit bounds the bill.
+3. From the `backend` directory:
+
+```powershell
+npx wrangler secret put OPENAI_API_KEY
+npm run deploy
+```
+
+Paste the key when prompted. Do not put it in `wrangler.toml`, `chat.js`, a
+commit, or a chat message.
+
+The widget is live on the site before the key is, which is deliberate. Until
+that secret exists the launcher still appears and the panel still opens, and the
+first message answers, in the advisor's own voice rather than in red, that it is
+not quite live yet, should be up and running soon, and that the team can be
+reached at the mailbox in the meantime. Nothing else on the site is affected.
+
+### Trying it locally
+
+Copy `.dev.vars.example` to `.dev.vars`, put the key in it, and run
+`npx wrangler dev`. Point the widget at the local Worker by setting
+`window.DYSTIL_CHAT_ENDPOINT` before `chat.js` loads, or by editing `WORKER` in
+`chat.js` while testing.
+
+### Changing the model
+
+`OPENAI_MODEL` in `wrangler.toml`, then `npm run deploy`. It defaults to
+`gpt-4o-mini`. A larger model gives better answers and costs more per
+conversation; the system prompt is about 2,100 tokens and is sent every time,
+so check the model's cached-input pricing before moving up.
 
 ## Submission records and reference numbers
 

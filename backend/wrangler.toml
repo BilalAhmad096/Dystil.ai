@@ -18,3 +18,7 @@ ADMIN_EMAIL = "askus@dystil.ai"
 # The account ID and the API token are secrets, set with "wrangler secret put".
 CF_SITE_TAG = "eb62686eee01437ebd7b843ea889a796"
 FROM_EMAIL = "askus@dystil.ai"
+# Which OpenAI model answers the website chat. Change it here and redeploy; no
+# code edit is needed. The key itself is OPENAI_API_KEY, a secret, and must
+# never appear in this file.
+OPENAI_MODEL = "gpt-4o-mini"
