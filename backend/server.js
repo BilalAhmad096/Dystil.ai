@@ -1825,6 +1825,10 @@ const BOOTCAMP_REGISTERS = {
 // The same shape as the reminder subjects that reached Primary: what it is,
 // a pipe, and when.
 const BOOTCAMP_NOTE_SUBJECT = "Carrying on after the taster session?";
+// Says what happened, not what to do about it. The reminders that reached
+// Primary read the same way.
+const PAYMENT_OPEN_SUBJECT = "The payment page is now open | Dystil Career Accelerator";
+
 const BOOTCAMP_SUBJECT = `${BOOTCAMP.starts} | Dystil ${BOOTCAMP.name}`;
 
 /* What reaches Primary, measured rather than guessed.
@@ -1849,7 +1853,8 @@ const BOOTCAMP_SUBJECT = `${BOOTCAMP.starts} | Dystil ${BOOTCAMP.name}`;
 // and the Worker throws on the first request. Builders are fine — functions
 // hoist — but the constants they are given here are not.
 const CAMPAIGNS = {
-    ...buildBootcampCampaigns()
+    ...buildBootcampCampaigns(),
+    ...buildPaymentOpenCampaigns()
 };
 
 const BROADCAST_ROSTER_SQL = `
@@ -1857,6 +1862,18 @@ const BROADCAST_ROSTER_SQL = `
     FROM submissions
     WHERE form_type = ?
     GROUP BY lower(trim(email))
+    ORDER BY reference`;
+
+// Chasing a payment from somebody who has already made one is the worst thing
+// this endpoint could do, so the campaign that asks for money asks for this
+// roster instead. One paid row under an address is enough to leave it out,
+// whichever registration it belongs to.
+const BROADCAST_UNPAID_ROSTER_SQL = `
+    SELECT lower(trim(email)) AS email, full_name, MAX(reference) AS reference
+    FROM submissions
+    WHERE form_type = ?
+    GROUP BY lower(trim(email))
+    HAVING SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END) = 0
     ORDER BY reference`;
 
 const BROADCAST_SENT_SQL = "SELECT email FROM broadcast_sends WHERE campaign = ?";
@@ -1892,7 +1909,7 @@ async function handleBroadcast(request, env, corsHeaders) {
 
     // Which ledger records this send. Reminders share one across both senders.
     const ledger = campaign.dedupeKey || body.campaign;
-    const roster = await loadBroadcastRoster(env.DB, ledger, campaign.formType);
+    const roster = await loadBroadcastRoster(env.DB, ledger, campaign.formType, campaign.unpaidOnly);
 
     if (body.action === "list") {
         return jsonResponse({
@@ -2087,9 +2104,11 @@ async function sendBroadcastTest(env, campaign, corsHeaders, onlyEmail) {
     return jsonResponse({ success: true, results }, 200, corsHeaders);
 }
 
-async function loadBroadcastRoster(db, campaignName, formType) {
+async function loadBroadcastRoster(db, campaignName, formType, unpaidOnly) {
+    const rosterSql = unpaidOnly ? BROADCAST_UNPAID_ROSTER_SQL : BROADCAST_ROSTER_SQL;
+
     const [people, sent] = await Promise.all([
-        db.prepare(BROADCAST_ROSTER_SQL).bind(formType).all(),
+        db.prepare(rosterSql).bind(formType).all(),
         db.prepare(BROADCAST_SENT_SQL).bind(campaignName).all()
     ]);
 
@@ -2301,6 +2320,88 @@ function buildBootcampNoteText(firstName) {
 // One campaign per register per name. Both names on a register share a ledger,
 // so asking as Frank cannot ask again as Dystil; the two registers do not, so
 // the same email reaches each of them once.
+/* ---------------------------------------------------------------------------
+   The payment page is open
+   ---------------------------------------------------------------------------
+   For the people who registered before there was anything to pay with. They
+   filled the form, were told a place is confirmed on payment, and then had no
+   way to make one. This tells them there is one now.
+
+   The form is the payment page, so it asks them to fill it again, which is
+   worth saying plainly rather than letting them discover it. Anyone whose
+   address carries a paid registration is left out by the roster, not by the
+   copy.
+--------------------------------------------------------------------------- */
+
+function poundsOf(pence) {
+    return "£" + (pence / 100).toFixed(2).replace(/\.00$/, "");
+}
+
+function buildPaymentOpenHtml(firstName) {
+    const heading = firstName
+        ? `Your place is ready to confirm, ${escapeHtml(firstName)}.`
+        : "Your place is ready to confirm.";
+
+    return `<!doctype html>
+        <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
+            <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
+                <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
+                    <h1 style="font-size:24px;margin:0;">${heading}</h1>
+                </div>
+                <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
+                    <p style="margin-top:0;">You registered for the ${escapeHtml(BOOTCAMP.name)} before there was a way to pay for it. There is now, so you can confirm your place.</p>
+                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>Starts ${escapeHtml(BOOTCAMP.starts)}</strong><br>Registration closes ${escapeHtml(BOOTCAMP.closes)}<br>Foundation ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])}, Advanced ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])}</p>
+                    <p>The form now takes the payment at the end, so it will ask for your details once more. It is short, and it is the last thing standing between you and a seat.</p>
+                    <p><a href="${escapeHtml(BOOTCAMP.register)}" style="color:#147a59;">Confirm your place</a></p>
+                    <p>Places are held in the order the payments arrive. If anything has changed, or you would rather talk it through first, reply to this email or call ${escapeHtml(DYSTIL_PHONE)}.</p>
+                    <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
+                </div>
+            </div>
+        </body></html>`;
+}
+
+function buildPaymentOpenText(firstName) {
+    return [
+        firstName ? `Your place is ready to confirm, ${firstName}.` : "Your place is ready to confirm.",
+        "",
+        `You registered for the ${BOOTCAMP.name} before there was a way to pay for it. There is now, so you can confirm your place.`,
+        "",
+        `Starts ${BOOTCAMP.starts}`,
+        `Registration closes ${BOOTCAMP.closes}`,
+        `Foundation ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])}, Advanced ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])}`,
+        "",
+        "The form now takes the payment at the end, so it will ask for your details once more. It is short, and it is the last thing standing between you and a seat.",
+        "",
+        "Confirm your place: " + BOOTCAMP.register,
+        "",
+        `Places are held in the order the payments arrive. If anything has changed, or you would rather talk it through first, reply to this email or call ${DYSTIL_PHONE}.`,
+        "",
+        "Kind regards,",
+        "The Dystil Team"
+    ].join("\n");
+}
+
+function buildPaymentOpenCampaigns() {
+    const campaigns = {};
+
+    for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
+        campaigns[`bootcamp-payment-open-${who}`] = {
+            formType: PAID_FORM,
+            subject: PAYMENT_OPEN_SUBJECT,
+            buildHtml: buildPaymentOpenHtml,
+            buildText: buildPaymentOpenText,
+            sender,
+            replyTo: sender,
+            // Nobody who has paid is asked to pay.
+            unpaidOnly: true,
+            dedupeKey: "bootcamp-payment-open",
+            testRecipients: TEST_TEAM
+        };
+    }
+
+    return campaigns;
+}
+
 function buildBootcampCampaigns() {
     const campaigns = {};
 

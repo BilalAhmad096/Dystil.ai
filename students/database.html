@@ -1343,6 +1343,15 @@
         // choosing one leaves the other with nobody:
         //   { label: "Reminder", buttons: [["campaign-key-frank", "from Frank"]] }
         const REMINDERS = [
+            // The only row aimed at the bootcamp register rather than a taster
+            // one, and the only one whose roster leaves out anyone who has paid.
+            {
+                label: "Payment page is open",
+                buttons: [
+                    ["bootcamp-payment-open-frank", "from Frank"],
+                    ["bootcamp-payment-open-askus", "from Dystil"]
+                ]
+            },
             // No HTML part at all, so no pixel and no link: the plainest thing
             // we can send. Shares the ledger with the designed row below it, so
             // a person can have one or the other, never both.
@@ -1574,6 +1583,8 @@
         // What the test panel offers, as { campaign, label }. A test goes to one
         // person on the team list and is never written to the ledger.
         const TESTABLE = [
+            { campaign: "bootcamp-payment-open-frank", label: "Payment page · Frank" },
+            { campaign: "bootcamp-payment-open-askus", label: "Payment page · Dystil" },
             { campaign: "bootcamp-2026-09-26-note-taster1-frank", label: "Plain note · Frank" },
             { campaign: "bootcamp-2026-09-26-note-taster1-askus", label: "Plain note · Dystil" },
             { campaign: "bootcamp-2026-09-26-invite-taster1-frank", label: "Bootcamp invitation · Frank" },
