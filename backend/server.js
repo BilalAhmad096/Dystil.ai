@@ -1854,7 +1854,7 @@ async function handleChat(request, env, corsHeaders) {
     }
 
     if (!upstream || !upstream.ok || !upstream.body) {
-        console.error("The advisor request failed.", upstream ? `HTTP ${upstream.status}` : "no response");
+        console.error("The advisor request failed.", upstream ? await describeChatFailure(upstream) : "no response");
 
         return jsonResponse({
             success: false,
@@ -1863,6 +1863,23 @@ async function handleChat(request, env, corsHeaders) {
     }
 
     return streamChatReply(upstream, corsHeaders);
+}
+
+// A status on its own cannot tell an exhausted account from a burst of traffic:
+// OpenAI answers 429 to both. It says which in the body, in words, and the key
+// is never part of that, so the log carries its explanation rather than a
+// number somebody then has to guess at.
+async function describeChatFailure(response) {
+    let reason = "";
+
+    try {
+        const body = await response.json();
+        reason = body?.error?.message || body?.error?.code || "";
+    } catch {
+        /* Not every failure is JSON. */
+    }
+
+    return `HTTP ${response.status}${reason ? `: ${reason}` : ""}`;
 }
 
 // The transcript arrives from the browser, so none of it is trusted. Only the
