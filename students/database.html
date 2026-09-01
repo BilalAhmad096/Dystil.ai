@@ -1342,40 +1342,10 @@
         // are the same message under different names, sharing one ledger, so
         // choosing one leaves the other with nobody:
         //   { label: "Reminder", buttons: [["campaign-key-frank", "from Frank"]] }
+        // One row per email that goes to a whole register. Two buttons means
+        // the same email under either name, sharing a ledger, so a person gets
+        // it once whichever button is pressed.
         const REMINDERS = [
-            // The only row aimed at the bootcamp register rather than a taster
-            // one, and the only one whose roster leaves out anyone who has paid.
-            {
-                label: "Payment page is open",
-                buttons: [
-                    ["bootcamp-payment-open-frank", "from Frank"],
-                    ["bootcamp-payment-open-askus", "from Dystil"]
-                ]
-            },
-            {
-                label: "Confirm your place (2nd)",
-                buttons: [
-                    ["bootcamp-confirm-place-frank", "from Frank"],
-                    ["bootcamp-confirm-place-askus", "from Dystil"]
-                ]
-            },
-            // No HTML part at all, so no pixel and no link: the plainest thing
-            // we can send. Shares the ledger with the designed row below it, so
-            // a person can have one or the other, never both.
-            {
-                label: "Plain note · first taster",
-                buttons: [
-                    ["bootcamp-2026-09-26-note-taster1-frank", "from Frank"],
-                    ["bootcamp-2026-09-26-note-taster1-askus", "from Dystil"]
-                ]
-            },
-            {
-                label: "Plain note · second taster",
-                buttons: [
-                    ["bootcamp-2026-09-26-note-taster2-frank", "from Frank"],
-                    ["bootcamp-2026-09-26-note-taster2-askus", "from Dystil"]
-                ]
-            },
             {
                 label: "Bootcamp invitation · first taster",
                 buttons: [
@@ -1383,8 +1353,6 @@
                     ["bootcamp-2026-09-26-invite-taster1-askus", "from Dystil"]
                 ]
             },
-            // The same email against the September register. Its own ledger, so
-            // it neither blocks nor is blocked by the row above.
             {
                 label: "Bootcamp invitation · second taster",
                 buttons: [
@@ -1590,12 +1558,6 @@
         // What the test panel offers, as { campaign, label }. A test goes to one
         // person on the team list and is never written to the ledger.
         const TESTABLE = [
-            { campaign: "bootcamp-payment-open-frank", label: "Payment page · Frank" },
-            { campaign: "bootcamp-payment-open-askus", label: "Payment page · Dystil" },
-            { campaign: "bootcamp-confirm-place-frank", label: "Confirm place 2nd · Frank" },
-            { campaign: "bootcamp-confirm-place-askus", label: "Confirm place 2nd · Dystil" },
-            { campaign: "bootcamp-2026-09-26-note-taster1-frank", label: "Plain note · Frank" },
-            { campaign: "bootcamp-2026-09-26-note-taster1-askus", label: "Plain note · Dystil" },
             { campaign: "bootcamp-2026-09-26-invite-taster1-frank", label: "Bootcamp invitation · Frank" },
             { campaign: "bootcamp-2026-09-26-invite-taster1-askus", label: "Bootcamp invitation · Dystil" }
         ];

@@ -2030,24 +2030,6 @@ const BOOTCAMP = {
 const DYSTIL_PHONE = "+44 7516 317705";
 const DYSTIL_PHONE_LINK = "tel:+447516317705";
 
-// Nothing is scheduled. Add a campaign here and it appears in the panel:
-// formType picks the register it goes to, buildHtml and buildText build the
-// email, sender and replyTo name it, dedupeKey is the ledger that stops a
-// second send, and testRecipients is who a test may reach. attachUrl and
-// attachName hang a file on it, fetched from the site rather than carried
-// here. See the git history for fifteen worked examples.
-const BOOTCAMP_REGISTERS = {
-    taster1: { label: "first taster", formType: "Free Taster Registration" },
-    taster2: { label: "second taster", formType: "Second Taster Registration" }
-};
-
-// The same shape as the reminder subjects that reached Primary: what it is,
-// a pipe, and when.
-const BOOTCAMP_NOTE_SUBJECT = "Carrying on after the taster session?";
-// Says what happened, not what to do about it. The reminders that reached
-// Primary read the same way.
-const PAYMENT_OPEN_SUBJECT = "Ready to confirm your place | Dystil Career Accelerator";
-
 // No offer in it: two facts about the programme the taster session was a
 // preview of. The version that sold a place went to Promotions twice.
 const BOOTCAMP_SUBJECT = `Dates and fees for the ${BOOTCAMP.name} | Dystil`;
@@ -2083,9 +2065,19 @@ const BOOTCAMP_SUBJECT = `Dates and fees for the ${BOOTCAMP.name} | Dystil`;
 // the module loads, so a const further down the file is still in its dead zone
 // and the Worker throws on the first request. Builders are fine — functions
 // hoist — but the constants they are given here are not.
+// Nothing is scheduled. Add a campaign here and it appears in the panel:
+// formType picks the register it goes to, buildHtml and buildText build the
+// email, sender and replyTo name it, dedupeKey is the ledger that stops a
+// second send, and testRecipients is who a test may reach. attachUrl and
+// attachName hang a file on it, fetched from the site rather than carried
+// here. See the git history for fifteen worked examples.
+const BOOTCAMP_REGISTERS = {
+    taster1: { label: "first taster", formType: "Free Taster Registration" },
+    taster2: { label: "second taster", formType: "Second Taster Registration" }
+};
+
 const CAMPAIGNS = {
-    ...buildBootcampCampaigns(),
-    ...buildPaymentOpenCampaigns()
+    ...buildBootcampCampaigns()
 };
 
 const BROADCAST_ROSTER_SQL = `
@@ -2537,27 +2529,6 @@ function buildBootcampText(firstName) {
     ].join("\n");
 }
 
-// No HTML, no URL, no image, ninety words. There is nothing here for a filter
-// to read as an advertisement: no link to score, no pixel to find, and a
-// question at the end that asks for a reply rather than a click. That reply is
-// also the thing Gmail weighs most heavily in favour of Primary next time.
-function buildBootcampNoteText(firstName) {
-    return [
-        firstName ? `Hi ${firstName},` : "Hi,",
-        "",
-        "After a successful taster session in August, I thought I would let you know what is next.",
-        "",
-        `The ${BOOTCAMP.name} runs from ${BOOTCAMP.starts}, and registration closes on ${BOOTCAMP.closes}.`,
-        "",
-        "There are two pathways. Foundation is for building the basics; Advanced is for harder projects and a stronger profile. You would pick one when you register.",
-        "",
-        "If you would like the details, just reply to this email and I will send them over. Or call me on " + DYSTIL_PHONE + " and we can talk it through.",
-        "",
-        "Frank M",
-        "Dystil"
-    ].join("\n");
-}
-
 // One campaign per register per name. Both names on a register share a ledger,
 // so asking as Frank cannot ask again as Dystil; the two registers do not, so
 // the same email reaches each of them once.
@@ -2578,100 +2549,14 @@ function poundsOf(pence) {
     return "£" + (pence / 100).toFixed(2).replace(/\.00$/, "");
 }
 
-function buildPaymentOpenHtml(firstName) {
-    const heading = firstName
-        ? `Your place is ready to confirm, ${escapeHtml(firstName)}.`
-        : "Your place is ready to confirm.";
 
-    return `<!doctype html>
-        <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
-            <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
-                <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
-                    <h1 style="font-size:24px;margin:0;">${heading}</h1>
-                </div>
-                <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
-                    <p style="margin-top:0;">You registered for the ${escapeHtml(BOOTCAMP.name)} bootcamp, and we are now ready to confirm your place.</p>
-                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>Starts ${escapeHtml(BOOTCAMP.starts)}</strong><br>Registration closes ${escapeHtml(BOOTCAMP.closes)}<br>Foundation ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])}, Advanced ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])}</p>
-                    <p>Confirming takes a couple of minutes. The form asks for your details once more and takes the fee at the end, and your place is held from there.</p>
-                    <p><a href="${escapeHtml(BOOTCAMP.register)}" style="color:#147a59;">Confirm your place</a></p>
-                    <p>Places are held in the order the payments arrive. If anything has changed, or you would rather talk it through first, reply to this email or call ${escapeHtml(DYSTIL_PHONE)}.</p>
-                    <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
-                </div>
-            </div>
-        </body></html>`;
-}
 
-function buildPaymentOpenText(firstName) {
-    return [
-        firstName ? `Your place is ready to confirm, ${firstName}.` : "Your place is ready to confirm.",
-        "",
-        `You registered for the ${BOOTCAMP.name} bootcamp, and we are now ready to confirm your place.`,
-        "",
-        `Starts ${BOOTCAMP.starts}`,
-        `Registration closes ${BOOTCAMP.closes}`,
-        `Foundation ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])}, Advanced ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])}`,
-        "",
-        "Confirming takes a couple of minutes. The form asks for your details once more and takes the fee at the end, and your place is held from there.",
-        "",
-        "Confirm your place: " + BOOTCAMP.register,
-        "",
-        `Places are held in the order the payments arrive. If anything has changed, or you would rather talk it through first, reply to this email or call ${DYSTIL_PHONE}.`,
-        "",
-        "Kind regards,",
-        "The Dystil Team"
-    ].join("\n");
-}
-
-function buildPaymentOpenCampaigns() {
-    const campaigns = {};
-
-    const rounds = [
-        ["bootcamp-payment-open", "bootcamp-payment-open"],
-        ["bootcamp-confirm-place", "bootcamp-confirm-place"]
-    ];
-
-    for (const [prefix, ledger] of rounds) {
-        for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
-            campaigns[`${prefix}-${who}`] = {
-                formType: PAID_FORM,
-                subject: PAYMENT_OPEN_SUBJECT,
-                buildHtml: buildPaymentOpenHtml,
-                buildText: buildPaymentOpenText,
-                sender,
-                replyTo: sender,
-                // Nobody who has paid is asked to pay.
-                unpaidOnly: true,
-                dedupeKey: ledger,
-                testRecipients: TEST_TEAM
-            };
-        }
-    }
-
-    return campaigns;
-}
 
 function buildBootcampCampaigns() {
     const campaigns = {};
 
     for (const [register, target] of Object.entries(BOOTCAMP_REGISTERS)) {
         for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
-            // The same offer as a plain note: no HTML part, so no pixel, and
-            // no URL to score. Shares the register's ledger with the designed
-            // one, so a person gets one or the other and never both.
-            campaigns[`bootcamp-2026-09-26-note-${register}-${who}`] = {
-                formType: target.formType,
-                subject: BOOTCAMP_NOTE_SUBJECT,
-                // Never called on a plainOnly campaign, but the payload is
-                // built before that is known, so it has to be here.
-                buildHtml: buildBootcampNoteText,
-                buildText: buildBootcampNoteText,
-                plainOnly: true,
-                sender,
-                replyTo: sender,
-                dedupeKey: `bootcamp-2026-09-26-invite-${register}`,
-                testRecipients: TEST_TEAM
-            };
-
             campaigns[`bootcamp-2026-09-26-invite-${register}-${who}`] = {
                 formType: target.formType,
                 subject: BOOTCAMP_SUBJECT,
