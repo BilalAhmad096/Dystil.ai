@@ -2557,6 +2557,20 @@ function buildBootcampCampaigns() {
 
     for (const [register, target] of Object.entries(BOOTCAMP_REGISTERS)) {
         for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
+            campaigns[`bootcamp-2026-09-26-plain-${register}-${who}`] = {
+                formType: target.formType,
+                subject: BOOTCAMP_SUBJECT,
+                // Never reached on a plainOnly campaign, but the payload is
+                // built before that is known, so it has to be here.
+                buildHtml: buildBootcampPlainText,
+                buildText: buildBootcampPlainText,
+                plainOnly: true,
+                sender,
+                replyTo: sender,
+                dedupeKey: `bootcamp-2026-09-26-invite-${register}`,
+                testRecipients: TEST_TEAM
+            };
+
             campaigns[`bootcamp-2026-09-26-invite-${register}-${who}`] = {
                 formType: target.formType,
                 subject: BOOTCAMP_SUBJECT,
@@ -2635,4 +2649,30 @@ async function readSendingQuota(env, corsHeaders) {
         statsError: stats.ok ? null : `${stats.status} ${stats.detail || ""}`.trim(),
         accountError: account.ok ? null : `${account.status} ${account.detail || ""}`.trim()
     }, 200, corsHeaders);
+}
+
+// The invitation as plain text: no HTML part, so Brevo has no body to hang its
+// pixel on, and one URL — the register — so there is a single thing to click
+// and a single thing for a filter to score. The designed version reached
+// Promotions with one link and no images already, so what is different here is
+// that there is no markup at all.
+function buildBootcampPlainText(firstName) {
+    return [
+        firstName ? `Hi ${firstName},` : "Hi,",
+        "",
+        `Our free taster session in August went well: an hour on what AI is doing to ordinary jobs. It was a preview of the ${BOOTCAMP.name}, and that programme now has its dates.`,
+        "",
+        `Starts ${BOOTCAMP.starts}`,
+        `Registration closes ${BOOTCAMP.closes}`,
+        `Foundation ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])}, Advanced ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])}`,
+        "",
+        "Foundation is for building the basics. Advanced is for harder projects and a stronger profile. You choose the pathway on the form.",
+        "",
+        "Book your place: " + BOOTCAMP.register,
+        "",
+        `If it is not for you, that is a fair answer and this is the last you will hear of it. If you are unsure, reply to this email or call ${DYSTIL_PHONE} and we will talk it through.`,
+        "",
+        "Kind regards,",
+        "The Dystil Team"
+    ].join("\n");
 }

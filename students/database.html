@@ -1345,16 +1345,34 @@
         // One row per email that goes to a whole register. Two buttons means
         // the same email under either name, sharing a ledger, so a person gets
         // it once whichever button is pressed.
+        // One row per email that goes to a whole register. Two buttons means
+        // the same email under either name, sharing a ledger, so a person gets
+        // it once whichever button is pressed. The plain and designed versions
+        // of a register share that ledger too: one or the other, never both.
         const REMINDERS = [
             {
-                label: "Bootcamp invitation · first taster",
+                label: "Plain invitation · first taster",
+                buttons: [
+                    ["bootcamp-2026-09-26-plain-taster1-frank", "from Frank"],
+                    ["bootcamp-2026-09-26-plain-taster1-askus", "from Dystil"]
+                ]
+            },
+            {
+                label: "Plain invitation · second taster",
+                buttons: [
+                    ["bootcamp-2026-09-26-plain-taster2-frank", "from Frank"],
+                    ["bootcamp-2026-09-26-plain-taster2-askus", "from Dystil"]
+                ]
+            },
+            {
+                label: "Designed invitation · first taster",
                 buttons: [
                     ["bootcamp-2026-09-26-invite-taster1-frank", "from Frank"],
                     ["bootcamp-2026-09-26-invite-taster1-askus", "from Dystil"]
                 ]
             },
             {
-                label: "Bootcamp invitation · second taster",
+                label: "Designed invitation · second taster",
                 buttons: [
                     ["bootcamp-2026-09-26-invite-taster2-frank", "from Frank"],
                     ["bootcamp-2026-09-26-invite-taster2-askus", "from Dystil"]
@@ -1558,8 +1576,10 @@
         // What the test panel offers, as { campaign, label }. A test goes to one
         // person on the team list and is never written to the ledger.
         const TESTABLE = [
-            { campaign: "bootcamp-2026-09-26-invite-taster1-frank", label: "Bootcamp invitation · Frank" },
-            { campaign: "bootcamp-2026-09-26-invite-taster1-askus", label: "Bootcamp invitation · Dystil" }
+            { campaign: "bootcamp-2026-09-26-plain-taster1-frank", label: "Plain invitation · Frank" },
+            { campaign: "bootcamp-2026-09-26-plain-taster1-askus", label: "Plain invitation · Dystil" },
+            { campaign: "bootcamp-2026-09-26-invite-taster1-frank", label: "Designed invitation · Frank" },
+            { campaign: "bootcamp-2026-09-26-invite-taster1-askus", label: "Designed invitation · Dystil" }
         ];
 
         const testPanel = document.getElementById("testing");
