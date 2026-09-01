@@ -2032,7 +2032,7 @@ const DYSTIL_PHONE_LINK = "tel:+447516317705";
 
 // No offer in it: two facts about the programme the taster session was a
 // preview of. The version that sold a place went to Promotions twice.
-const BOOTCAMP_SUBJECT = `Dates and fees for the ${BOOTCAMP.name} | Dystil`;
+const BOOTCAMP_SUBJECT = `Dates for the ${BOOTCAMP.name} | Dystil`;
 
 /* What reaches Primary, measured rather than guessed.
    ---------------------------------------------------------------------------
