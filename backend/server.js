@@ -2500,7 +2500,7 @@ function buildBootcampHtml(firstName) {
                     <h1 style="font-size:24px;margin:0;">${heading}</h1>
                 </div>
                 <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
-                    <p style="margin-top:0;">You came to our free taster session, which was an hour on what AI is doing to ordinary jobs. It was a preview of the ${escapeHtml(BOOTCAMP.name)}, and that programme now has its dates.</p>
+                    <p style="margin-top:0;">Our free taster session in August went well: an hour on what AI is doing to ordinary jobs. It was a preview of the ${escapeHtml(BOOTCAMP.name)}, and that programme now has its dates.</p>
                     <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>Starts ${escapeHtml(BOOTCAMP.starts)}</strong><br>Registration closes ${escapeHtml(BOOTCAMP.closes)}<br>Foundation ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])}, Advanced ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])}</p>
                     ${pathways}
                     <p>Where the taster session showed you the change, this is where you do something about it: real projects in your own field, finished, and in your portfolio at the end. You choose the pathway on the form.</p>
@@ -2518,7 +2518,7 @@ function buildBootcampText(firstName) {
             ? `The programme behind the taster session, ${firstName}.`
             : "The programme behind the taster session.",
         "",
-        `You came to our free taster session, which was an hour on what AI is doing to ordinary jobs. It was a preview of the ${BOOTCAMP.name}, and that programme now has its dates.`,
+        `Our free taster session in August went well: an hour on what AI is doing to ordinary jobs. It was a preview of the ${BOOTCAMP.name}, and that programme now has its dates.`,
         "",
         `Starts ${BOOTCAMP.starts}`,
         `Registration closes ${BOOTCAMP.closes}`,
@@ -2545,7 +2545,7 @@ function buildBootcampNoteText(firstName) {
     return [
         firstName ? `Hi ${firstName},` : "Hi,",
         "",
-        "You came to our taster session in August, so I thought I would let you know what is next.",
+        "After a successful taster session in August, I thought I would let you know what is next.",
         "",
         `The ${BOOTCAMP.name} runs from ${BOOTCAMP.starts}, and registration closes on ${BOOTCAMP.closes}.`,
         "",
