@@ -1353,47 +1353,21 @@
         // the same email under either name, sharing a ledger, so a person gets
         // it once whichever button is pressed. All three versions of the
         // invitation share that ledger too: one of them, never two.
+        // One row per register. Two buttons means the same email under either
+        // name, sharing a ledger, so a person gets it once whichever is pressed.
         const REMINDERS = [
             {
-                label: "Full invitation · first taster",
+                label: "Bootcamp invitation · first taster",
                 buttons: [
                     ["bootcamp-2026-09-26-rich-taster1-frank", "from Frank"],
                     ["bootcamp-2026-09-26-rich-taster1-askus", "from Dystil"]
                 ]
             },
             {
-                label: "Full invitation · second taster",
+                label: "Bootcamp invitation · second taster",
                 buttons: [
                     ["bootcamp-2026-09-26-rich-taster2-frank", "from Frank"],
                     ["bootcamp-2026-09-26-rich-taster2-askus", "from Dystil"]
-                ]
-            },
-            {
-                label: "Plain invitation · first taster",
-                buttons: [
-                    ["bootcamp-2026-09-26-plain-taster1-frank", "from Frank"],
-                    ["bootcamp-2026-09-26-plain-taster1-askus", "from Dystil"]
-                ]
-            },
-            {
-                label: "Plain invitation · second taster",
-                buttons: [
-                    ["bootcamp-2026-09-26-plain-taster2-frank", "from Frank"],
-                    ["bootcamp-2026-09-26-plain-taster2-askus", "from Dystil"]
-                ]
-            },
-            {
-                label: "Simple invitation · first taster",
-                buttons: [
-                    ["bootcamp-2026-09-26-invite-taster1-frank", "from Frank"],
-                    ["bootcamp-2026-09-26-invite-taster1-askus", "from Dystil"]
-                ]
-            },
-            {
-                label: "Simple invitation · second taster",
-                buttons: [
-                    ["bootcamp-2026-09-26-invite-taster2-frank", "from Frank"],
-                    ["bootcamp-2026-09-26-invite-taster2-askus", "from Dystil"]
                 ]
             }
         ];
@@ -1594,12 +1568,8 @@
         // What the test panel offers, as { campaign, label }. A test goes to one
         // person on the team list and is never written to the ledger.
         const TESTABLE = [
-            { campaign: "bootcamp-2026-09-26-rich-taster1-frank", label: "Full invitation · Frank" },
-            { campaign: "bootcamp-2026-09-26-rich-taster1-askus", label: "Full invitation · Dystil" },
-            { campaign: "bootcamp-2026-09-26-plain-taster1-frank", label: "Plain invitation · Frank" },
-            { campaign: "bootcamp-2026-09-26-plain-taster1-askus", label: "Plain invitation · Dystil" },
-            { campaign: "bootcamp-2026-09-26-invite-taster1-frank", label: "Simple invitation · Frank" },
-            { campaign: "bootcamp-2026-09-26-invite-taster1-askus", label: "Simple invitation · Dystil" }
+            { campaign: "bootcamp-2026-09-26-rich-taster1-frank", label: "Bootcamp invitation · Frank" },
+            { campaign: "bootcamp-2026-09-26-rich-taster1-askus", label: "Bootcamp invitation · Dystil" }
         ];
 
         const testPanel = document.getElementById("testing");

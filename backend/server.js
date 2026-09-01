@@ -2467,67 +2467,6 @@ function graphIsConfigured(env) {
    three lines rather than a search through the copy.
 --------------------------------------------------------------------------- */
 
-// Built to the reminder that reached Primary, deliberately and exactly: dark
-// header, one panel, one accent block of details, one link, no image anywhere,
-// and Kind regards on the end. The pathway choice moved onto the registration
-// page, which already asks for it, so this can carry a single link.
-// Rebuilt after the stripped version reached Promotions anyway. The markup was
-// already right - no images, one link - so what changed is what the email is
-// about. It opens on the session the reader came to and reports what happened
-// to the programme behind it. The fees are in it for the same reason: a price
-// is information, and withholding it is what an advertisement does.
-function buildBootcampHtml(firstName) {
-    const heading = firstName
-        ? `The programme behind the taster session, ${escapeHtml(firstName)}.`
-        : "The programme behind the taster session.";
-
-    const pathways = BOOTCAMP.pathways
-        .map(([, name, detail]) => `<p><strong>${escapeHtml(name)}.</strong> ${escapeHtml(detail)}</p>`)
-        .join("\n                    ");
-
-    return `<!doctype html>
-        <html><body style="margin:0;background:#f4f7f6;font-family:Arial,sans-serif;color:#16221d;">
-            <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
-                <div style="background:#123f31;color:#fff;padding:24px;border-radius:12px 12px 0 0;">
-                    <h1 style="font-size:24px;margin:0;">${heading}</h1>
-                </div>
-                <div style="background:#fff;padding:24px;border-radius:0 0 12px 12px;line-height:1.6;">
-                    <p style="margin-top:0;">Our free taster session in August went well: an hour on what AI is doing to ordinary jobs. It was a preview of the ${escapeHtml(BOOTCAMP.name)}, and that programme now has its dates.</p>
-                    <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>Starts ${escapeHtml(BOOTCAMP.starts)}</strong><br>Registration closes ${escapeHtml(BOOTCAMP.closes)}<br>Foundation ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])}, Advanced ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])}</p>
-                    ${pathways}
-                    <p>Where the taster session showed you the change, this is where you do something about it: real projects in your own field, finished, and in your portfolio at the end. You choose the pathway on the form.</p>
-                    <p style="text-align:center;margin:26px 0;"><a href="${escapeHtml(BOOTCAMP.register)}" style="display:inline-block;background:#147a59;color:#ffffff;text-decoration:none;font-weight:bold;font-size:17px;padding:15px 34px;border-radius:8px;">Book your place</a></p>
-                    <p>If it is not for you, that is a fair answer and this is the last you will hear of it. If you are unsure, reply to this email or call ${escapeHtml(DYSTIL_PHONE)} and we will talk it through.</p>
-                    <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
-                </div>
-            </div>
-        </body></html>`;
-}
-
-function buildBootcampText(firstName) {
-    return [
-        firstName
-            ? `The programme behind the taster session, ${firstName}.`
-            : "The programme behind the taster session.",
-        "",
-        `Our free taster session in August went well: an hour on what AI is doing to ordinary jobs. It was a preview of the ${BOOTCAMP.name}, and that programme now has its dates.`,
-        "",
-        `Starts ${BOOTCAMP.starts}`,
-        `Registration closes ${BOOTCAMP.closes}`,
-        `Foundation ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])}, Advanced ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])}`,
-        "",
-        ...BOOTCAMP.pathways.map(([, name, detail]) => `${name}. ${detail}`),
-        "",
-        "Where the taster session showed you the change, this is where you do something about it: real projects in your own field, finished, and in your portfolio at the end. You choose the pathway on the form.",
-        "",
-        "Dates, pathways and registration: " + BOOTCAMP.register,
-        "",
-        `If it is not for you, that is a fair answer and this is the last you will hear of it. If you are unsure, reply to this email or call ${DYSTIL_PHONE} and we will talk it through.`,
-        "",
-        "Kind regards,",
-        "The Dystil Team"
-    ].join("\n");
-}
 
 // One campaign per register per name. Both names on a register share a ledger,
 // so asking as Frank cannot ask again as Dystil; the two registers do not, so
@@ -2561,34 +2500,9 @@ function buildBootcampCampaigns() {
                 formType: target.formType,
                 subject: BOOTCAMP_SUBJECT,
                 buildHtml: buildBootcampRichHtml,
-                // The plain text is the same one the plain version sends, so a
-                // client that refuses HTML still gets a whole email.
+                // A plain text part as well, so a client that refuses HTML
+                // still gets a whole email rather than an empty one.
                 buildText: buildBootcampPlainText,
-                sender,
-                replyTo: sender,
-                dedupeKey: `bootcamp-2026-09-26-invite-${register}`,
-                testRecipients: TEST_TEAM
-            };
-
-            campaigns[`bootcamp-2026-09-26-plain-${register}-${who}`] = {
-                formType: target.formType,
-                subject: BOOTCAMP_SUBJECT,
-                // Never reached on a plainOnly campaign, but the payload is
-                // built before that is known, so it has to be here.
-                buildHtml: buildBootcampPlainText,
-                buildText: buildBootcampPlainText,
-                plainOnly: true,
-                sender,
-                replyTo: sender,
-                dedupeKey: `bootcamp-2026-09-26-invite-${register}`,
-                testRecipients: TEST_TEAM
-            };
-
-            campaigns[`bootcamp-2026-09-26-invite-${register}-${who}`] = {
-                formType: target.formType,
-                subject: BOOTCAMP_SUBJECT,
-                buildHtml: buildBootcampHtml,
-                buildText: buildBootcampText,
                 sender,
                 replyTo: sender,
                 dedupeKey: `bootcamp-2026-09-26-invite-${register}`,
