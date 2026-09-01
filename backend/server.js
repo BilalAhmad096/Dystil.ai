@@ -2504,7 +2504,7 @@ function buildBootcampHtml(firstName) {
                     <p style="background:#f4f7f6;border-left:4px solid #147a59;padding:12px 16px;"><strong>Starts ${escapeHtml(BOOTCAMP.starts)}</strong><br>Registration closes ${escapeHtml(BOOTCAMP.closes)}<br>Foundation ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])}, Advanced ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])}</p>
                     ${pathways}
                     <p>Where the taster session showed you the change, this is where you do something about it: real projects in your own field, finished, and in your portfolio at the end. You choose the pathway on the form.</p>
-                    <p><a href="${escapeHtml(BOOTCAMP.register)}" style="color:#147a59;">Dates, pathways and registration</a></p>
+                    <p style="text-align:center;margin:26px 0;"><a href="${escapeHtml(BOOTCAMP.register)}" style="display:inline-block;background:#147a59;color:#ffffff;text-decoration:none;font-weight:bold;font-size:17px;padding:15px 34px;border-radius:8px;">Book your place</a></p>
                     <p>If it is not for you, that is a fair answer and this is the last you will hear of it. If you are unsure, reply to this email or call ${escapeHtml(DYSTIL_PHONE)} and we will talk it through.</p>
                     <p style="margin-bottom:0;">Kind regards,<br><strong>The Dystil Team</strong></p>
                 </div>
