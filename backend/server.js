@@ -2557,6 +2557,19 @@ function buildBootcampCampaigns() {
 
     for (const [register, target] of Object.entries(BOOTCAMP_REGISTERS)) {
         for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
+            campaigns[`bootcamp-2026-09-26-rich-${register}-${who}`] = {
+                formType: target.formType,
+                subject: BOOTCAMP_SUBJECT,
+                buildHtml: buildBootcampRichHtml,
+                // The plain text is the same one the plain version sends, so a
+                // client that refuses HTML still gets a whole email.
+                buildText: buildBootcampPlainText,
+                sender,
+                replyTo: sender,
+                dedupeKey: `bootcamp-2026-09-26-invite-${register}`,
+                testRecipients: TEST_TEAM
+            };
+
             campaigns[`bootcamp-2026-09-26-plain-${register}-${who}`] = {
                 formType: target.formType,
                 subject: BOOTCAMP_SUBJECT,
@@ -2674,4 +2687,135 @@ function buildBootcampPlainText(firstName) {
         "Kind regards,",
         "The Dystil Team"
     ].join("\n");
+}
+
+/* ---------------------------------------------------------------------------
+   The invitation, fully dressed
+   ---------------------------------------------------------------------------
+   Laid out in tables with the styling on each cell, because Outlook renders
+   neither flexbox nor a stylesheet, and a design that collapses in Outlook is
+   worse than no design at all. Widths are fixed and the two pathway cards fall
+   into one column on a narrow screen.
+
+   This is the version that carries everything: the header, both pathways as
+   cards, and the social accounts in the footer. The plain one exists beside it
+   for the opposite reason, and the two share a ledger, so a reader gets one of
+   them and never both.
+--------------------------------------------------------------------------- */
+
+const RICH_INK = "#16221d";
+const RICH_DEEP = "#0d2f24";
+const RICH_GREEN = "#123f31";
+const RICH_ACCENT = "#147a59";
+const RICH_MINT = "#8fd3b8";
+const RICH_PAPER = "#f4f7f6";
+const RICH_LINE = "#e2e9e6";
+const RICH_MUTED = "#5b6b64";
+
+function richPathwayCards() {
+    const [foundation, advanced] = BOOTCAMP.pathways;
+
+    const card = ([, name, detail], price, tint) => `
+                                    <td width="50%" valign="top" style="padding:0 6px;">
+                                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${tint};border:1px solid ${RICH_LINE};border-radius:10px;">
+                                            <tr><td style="padding:18px 18px 16px;">
+                                                <p style="margin:0 0 6px;font-size:13px;letter-spacing:1.4px;color:${RICH_ACCENT};font-weight:bold;">${escapeHtml(name.toUpperCase())}</p>
+                                                <p style="margin:0 0 10px;font-size:26px;font-weight:bold;color:${RICH_INK};">${escapeHtml(price)}</p>
+                                                <p style="margin:0;font-size:14px;line-height:1.5;color:${RICH_MUTED};">${escapeHtml(detail)}</p>
+                                            </td></tr>
+                                        </table>
+                                    </td>`;
+
+    return card(foundation, poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"]), "#ffffff")
+        + card(advanced, poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"]), RICH_PAPER);
+}
+
+function richTakeaways() {
+    const points = [
+        "Real projects in your own field, finished and in your portfolio",
+        "Practical work with AI, data and cloud tools",
+        "Something concrete to talk about at interview"
+    ];
+
+    return points.map((point) => `
+                                <tr>
+                                    <td width="26" valign="top" style="padding:5px 0;color:${RICH_ACCENT};font-size:16px;font-weight:bold;">&#10003;</td>
+                                    <td style="padding:5px 0;font-size:15px;line-height:1.5;color:${RICH_INK};">${escapeHtml(point)}</td>
+                                </tr>`).join("");
+}
+
+function richSocials() {
+    return DYSTIL_SOCIALS.map(([, name, url]) => `
+                                    <td style="padding:0 7px;">
+                                        <a href="${escapeHtml(url)}"><img src="${SOCIAL_ICONS}${name.toLowerCase()}.png" width="28" height="28" alt="${escapeHtml(name)}" style="display:block;border:0;"></a>
+                                    </td>`).join("");
+}
+
+function buildBootcampRichHtml(firstName) {
+    const greeting = firstName ? escapeHtml(firstName) : "there";
+
+    return `<!doctype html>
+<html><body style="margin:0;padding:0;background:${RICH_PAPER};">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Dates are set for the ${escapeHtml(BOOTCAMP.name)}. Registration closes ${escapeHtml(BOOTCAMP.closes)}.</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${RICH_PAPER};">
+        <tr><td align="center" style="padding:28px 12px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:100%;font-family:Arial,Helvetica,sans-serif;color:${RICH_INK};">
+
+                <tr><td style="background:${RICH_GREEN};padding:30px 32px 28px;border-radius:14px 14px 0 0;">
+                    <p style="margin:0 0 20px;font-size:15px;letter-spacing:5px;color:#ffffff;font-weight:bold;">DYSTIL</p>
+                    <p style="margin:0 0 10px;font-size:12px;letter-spacing:2px;color:${RICH_MINT};font-weight:bold;">THE PROGRAMME BEHIND THE TASTER</p>
+                    <h1 style="margin:0;font-size:31px;line-height:1.25;color:#ffffff;">${escapeHtml(BOOTCAMP.name)}</h1>
+                </td></tr>
+
+                <tr><td style="background:#ffffff;padding:30px 32px 8px;">
+                    <p style="margin:0 0 16px;font-size:16px;line-height:1.6;">Hi ${greeting},</p>
+                    <p style="margin:0 0 22px;font-size:16px;line-height:1.6;">Our free taster session in August went well: an hour on what AI is doing to ordinary jobs. It was a preview of this, and the dates are now set.</p>
+
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${RICH_PAPER};border-left:4px solid ${RICH_ACCENT};border-radius:0 8px 8px 0;">
+                        <tr><td style="padding:16px 20px;">
+                            <p style="margin:0 0 4px;font-size:18px;font-weight:bold;color:${RICH_INK};">Starts ${escapeHtml(BOOTCAMP.starts)}</p>
+                            <p style="margin:0;font-size:15px;color:${RICH_MUTED};">Registration closes ${escapeHtml(BOOTCAMP.closes)}</p>
+                        </td></tr>
+                    </table>
+                </td></tr>
+
+                <tr><td style="background:#ffffff;padding:26px 26px 4px;">
+                    <p style="margin:0 0 14px;padding:0 6px;font-size:13px;letter-spacing:1.6px;color:${RICH_MUTED};font-weight:bold;">CHOOSE A PATHWAY</p>
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                        <tr>${richPathwayCards()}
+                        </tr>
+                    </table>
+                </td></tr>
+
+                <tr><td style="background:#ffffff;padding:26px 32px 6px;">
+                    <p style="margin:0 0 12px;font-size:13px;letter-spacing:1.6px;color:${RICH_MUTED};font-weight:bold;">WHAT YOU LEAVE WITH</p>
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${richTakeaways()}
+                    </table>
+                </td></tr>
+
+                <tr><td align="center" style="background:#ffffff;padding:30px 32px 10px;">
+                    <a href="${escapeHtml(BOOTCAMP.register)}" style="display:inline-block;background:${RICH_ACCENT};color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:16px 42px;border-radius:8px;">Book your place</a>
+                </td></tr>
+
+                <tr><td style="background:#ffffff;padding:14px 32px 30px;border-radius:0 0 0 0;">
+                    <p style="margin:0;font-size:14px;line-height:1.6;color:${RICH_MUTED};">If it is not for you, that is a fair answer and this is the last you will hear of it. If you are unsure, reply to this email or call <a href="${DYSTIL_PHONE_LINK}" style="color:${RICH_ACCENT};text-decoration:none;">${escapeHtml(DYSTIL_PHONE)}</a> and we will talk it through.</p>
+                </td></tr>
+
+                <tr><td align="center" style="background:${RICH_DEEP};padding:26px 32px;border-radius:0 0 14px 14px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 16px;">
+                        <tr>${richSocials()}
+                        </tr>
+                    </table>
+                    <p style="margin:0 0 6px;font-size:14px;color:#ffffff;font-weight:bold;">The Dystil Team</p>
+                    <p style="margin:0;font-size:13px;line-height:1.7;color:${RICH_MINT};">
+                        <a href="mailto:askus@dystil.ai" style="color:${RICH_MINT};text-decoration:none;">askus@dystil.ai</a>
+                        &nbsp;&middot;&nbsp; ${escapeHtml(DYSTIL_PHONE)}
+                        &nbsp;&middot;&nbsp; <a href="https://dystil.ai" style="color:${RICH_MINT};text-decoration:none;">dystil.ai</a>
+                    </p>
+                </td></tr>
+
+            </table>
+        </td></tr>
+    </table>
+</body></html>`;
 }
