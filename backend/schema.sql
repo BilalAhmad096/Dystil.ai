@@ -41,3 +41,12 @@ CREATE TABLE IF NOT EXISTS broadcast_sends (
     sent_at TEXT NOT NULL,
     PRIMARY KEY (campaign, email)
 );
+
+-- Somebody who asks not to be emailed again is not emailed again. Held here
+-- rather than by deleting their submission, so the record of what they did
+-- survives and registering again does not put them back on a list.
+CREATE TABLE IF NOT EXISTS suppressions (
+    email TEXT PRIMARY KEY,
+    reason TEXT,
+    added_at TEXT NOT NULL
+);

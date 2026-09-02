@@ -371,6 +371,44 @@ Copy `.dev.vars.example` to `.dev.vars`, put the key in it, and run
 conversation; the system prompt is about 2,100 tokens and is sent every time,
 so check the model's cached-input pricing before moving up.
 
+### Taking somebody off the mailing list
+
+When somebody asks not to be emailed again, add their address to
+`suppressions`. Every broadcast roster excludes it, so the request holds for
+campaigns that do not exist yet as well as the ones that do.
+
+```powershell
+npx wrangler d1 execute dystil-submissions --remote --command "INSERT INTO suppressions (email, reason, added_at) VALUES ('person@example.com', 'Asked by email, 2 September 2026', datetime('now')) ON CONFLICT (email) DO NOTHING"
+```
+
+Use the address in lower case. Then confirm they are off the roster:
+
+```powershell
+npx wrangler d1 execute dystil-submissions --remote --command "SELECT email FROM suppressions ORDER BY added_at DESC"
+```
+
+Do this rather than deleting their submission. The registration still happened
+and the record of it is worth keeping, and deleting it would not even work:
+they could fill a form in again next week and be back on the list.
+
+The ledger cannot do this job. `broadcast_sends` records who has had a given
+email, so a new campaign starts with an empty one and would mail them again.
+
+Suppression stops broadcasts only. If a suppressed person fills in a form, the
+confirmation still reaches them, because that is a reply to something they just
+did rather than a mailing.
+
+**This is a legal obligation, not a courtesy.** Under PECR and the UK GDPR an
+opt-out has to be honoured, so act on the request when it arrives rather than
+before the next send.
+
+Right now the only way somebody can opt out is to write and ask, and the
+request then has to be typed in by hand. Every marketing email should carry a
+one-click unsubscribe as well: `List-Unsubscribe` and
+`List-Unsubscribe-Post` headers, which Gmail and Yahoo both require of bulk
+senders, pointing at an endpoint that writes the row above. Nothing here does
+that yet.
+
 ## Submission records and reference numbers
 
 Every submission is written to the `dystil-submissions` D1 database before the

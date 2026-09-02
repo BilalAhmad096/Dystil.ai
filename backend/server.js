@@ -2139,10 +2139,17 @@ const CAMPAIGNS = {
     ...buildConfirmPlaceCampaigns()
 };
 
+// Anybody who has asked not to be emailed is left out of every roster, so the
+// request holds for campaigns that do not exist yet as well as the ones that
+// do. The ledger cannot do this job: it records who has had a given email, and
+// a new campaign starts with an empty one.
+const SUPPRESSED_SQL = "lower(trim(email)) NOT IN (SELECT email FROM suppressions)";
+
 const BROADCAST_ROSTER_SQL = `
     SELECT lower(trim(email)) AS email, full_name, MAX(reference) AS reference
     FROM submissions
     WHERE form_type = ?
+      AND ${SUPPRESSED_SQL}
     GROUP BY lower(trim(email))
     ORDER BY reference`;
 
@@ -2154,6 +2161,7 @@ const BROADCAST_UNPAID_ROSTER_SQL = `
     SELECT lower(trim(email)) AS email, full_name, MAX(reference) AS reference
     FROM submissions
     WHERE form_type = ?
+      AND ${SUPPRESSED_SQL}
     GROUP BY lower(trim(email))
     HAVING SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END) = 0
     ORDER BY reference`;
