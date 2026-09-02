@@ -2058,6 +2058,11 @@ const BOOTCAMP_SUBJECT = `Dates for the ${BOOTCAMP.name} | Dystil`;
    Their registration is real and their place is not, because nothing was ever
    paid. This asks them to finish it.
 
+   It does not tell them any of that. Why they were never charged is our
+   business, not theirs, and an email that opens on a gap at our end has made
+   itself the subject. It opens on what they did — they registered — and asks
+   them to confirm. Do not add the explanation back.
+
    It is deliberately not dressed like the invitation. The note above CAMPAIGNS
    records that the fully styled invitation went to Promotions and the payment
    notice reached Primary, and that what carried it was being about something
@@ -2694,9 +2699,9 @@ function buildConfirmPlaceHtml(firstName) {
                         <td style="padding:34px 34px 8px;">
                             <p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:${RICH_INK};">Hi ${greeting},</p>
 
-                            <p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:${RICH_INK};">You registered for the ${escapeHtml(BOOTCAMP.name)} at the end of August, before we had a payment page. That page is open now.</p>
+                            <p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:${RICH_INK};">You registered for the ${escapeHtml(BOOTCAMP.name)}, and we are ready to confirm your place.</p>
 
-                            <p style="margin:0 0 26px;font-size:16px;line-height:1.6;color:${RICH_INK};">Your registration is on our list, but a place is only held once the fee is paid, so yours is not confirmed yet. It takes a couple of minutes to finish.</p>
+                            <p style="margin:0 0 26px;font-size:16px;line-height:1.6;color:${RICH_INK};">Please confirm it by filling in the form below. It takes a couple of minutes.</p>
                         </td>
                     </tr>
 
@@ -2746,9 +2751,9 @@ function buildConfirmPlaceText(firstName) {
     return [
         firstName ? `Hi ${firstName},` : "Hi,",
         "",
-        `You registered for the ${BOOTCAMP.name} at the end of August, before we had a payment page. That page is open now.`,
+        `You registered for the ${BOOTCAMP.name}, and we are ready to confirm your place.`,
         "",
-        "Your registration is on our list, but a place is only held once the fee is paid, so yours is not confirmed yet. It takes a couple of minutes to finish.",
+        "Please confirm it by filling in the form below. It takes a couple of minutes.",
         "",
         `Starts ${BOOTCAMP.starts}`,
         `Registration closes ${BOOTCAMP.closes}`,
