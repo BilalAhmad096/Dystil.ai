@@ -1370,6 +1370,16 @@
                     ["bootcamp-2026-09-26-reminder-taster2-frank", "from Frank"],
                     ["bootcamp-2026-09-26-reminder-taster2-askus", "from Dystil"]
                 ]
+            },
+            {
+                // Goes to bootcamp registrations with nothing paid against
+                // them. Anybody who pays first drops off the roster on their
+                // own, so this never chases somebody who has already paid.
+                label: "Confirm your place · unpaid registrations",
+                buttons: [
+                    ["bootcamp-confirm-place-2026-09-frank", "from Frank"],
+                    ["bootcamp-confirm-place-2026-09-askus", "from Dystil"]
+                ]
             }
         ];
 
@@ -1570,7 +1580,9 @@
         // person on the team list and is never written to the ledger.
         const TESTABLE = [
             { campaign: "bootcamp-2026-09-26-rich-taster1-frank", label: "Bootcamp invitation · Frank" },
-            { campaign: "bootcamp-2026-09-26-rich-taster1-askus", label: "Bootcamp invitation · Dystil" }
+            { campaign: "bootcamp-2026-09-26-rich-taster1-askus", label: "Bootcamp invitation · Dystil" },
+            { campaign: "bootcamp-confirm-place-2026-09-frank", label: "Confirm your place · Frank" },
+            { campaign: "bootcamp-confirm-place-2026-09-askus", label: "Confirm your place · Dystil" }
         ];
 
         const testPanel = document.getElementById("testing");

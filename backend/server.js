@@ -2051,6 +2051,30 @@ const DYSTIL_PHONE_LINK = "tel:+447516317705";
 // preview of. The version that sold a place went to Promotions twice.
 const BOOTCAMP_SUBJECT = `Dates for the ${BOOTCAMP.name} | Dystil`;
 
+/* ---------------------------------------------------------------------------
+   Confirming a place on the Career Accelerator
+   ---------------------------------------------------------------------------
+   Six people registered on 29 and 30 August, before there was a payment page.
+   Their registration is real and their place is not, because nothing was ever
+   paid. This asks them to finish it.
+
+   It is deliberately not dressed like the invitation. The note above CAMPAIGNS
+   records that the fully styled invitation went to Promotions and the payment
+   notice reached Primary, and that what carried it was being about something
+   the reader had already done. This is that email exactly: no images, one
+   link, a subject stating a date, and an opening line about their own
+   registration. Styling it like the invitation would trade the inbox for a
+   letterhead, on the one email where reaching the inbox is the whole point.
+
+   The urgency is the real closing date in BOOTCAMP, not a claim that places
+   are running out. We have never published a number of seats, and inventing
+   scarcity to hurry somebody into paying is both a lie and, for a paid
+   programme, a practice the consumer regulations name specifically.
+--------------------------------------------------------------------------- */
+
+const CONFIRM_PLACE_SUBJECT =
+    `Registration closes ${BOOTCAMP.closes} | your ${BOOTCAMP.name} place`;
+
 /* What reaches Primary, measured rather than guessed.
    ---------------------------------------------------------------------------
    Sent through Brevo, all carrying its pixel:
@@ -2106,7 +2130,8 @@ const BOOTCAMP_ROUNDS = [
 ];
 
 const CAMPAIGNS = {
-    ...buildBootcampCampaigns()
+    ...buildBootcampCampaigns(),
+    ...buildConfirmPlaceCampaigns()
 };
 
 const BROADCAST_ROSTER_SQL = `
@@ -2632,6 +2657,134 @@ function buildBootcampPlainText(firstName) {
         "Kind regards,",
         "The Dystil Team"
     ].join("\n");
+}
+
+// One row of the facts table: a label and a value, hairline ruled.
+function confirmFact(label, value, last) {
+    const edge = last ? "" : `border-bottom:1px solid ${RICH_LINE};`;
+
+    return `
+                                <tr>
+                                    <td style="padding:11px 0;${edge}font-size:13px;letter-spacing:1.2px;color:${RICH_MUTED};text-transform:uppercase;">${escapeHtml(label)}</td>
+                                    <td align="right" style="padding:11px 0;${edge}font-size:15px;font-weight:bold;color:${RICH_INK};">${escapeHtml(value)}</td>
+                                </tr>`;
+}
+
+function buildConfirmPlaceHtml(firstName) {
+    const greeting = firstName ? escapeHtml(firstName) : "there";
+    const foundation = poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"]);
+    const advanced = poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"]);
+
+    return `<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:${RICH_PAPER};">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${RICH_PAPER};">
+        <tr>
+            <td align="center" style="padding:32px 12px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="width:560px;max-width:100%;background:#ffffff;border:1px solid ${RICH_LINE};border-radius:12px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">
+
+                    <tr>
+                        <td style="background:${RICH_GREEN};padding:20px 34px;">
+                            <p style="margin:0;font-size:17px;font-weight:bold;letter-spacing:5px;color:#ffffff;">DYSTIL</p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="padding:34px 34px 8px;">
+                            <p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:${RICH_INK};">Hi ${greeting},</p>
+
+                            <p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:${RICH_INK};">You registered for the ${escapeHtml(BOOTCAMP.name)} at the end of August, before we had a payment page. That page is open now.</p>
+
+                            <p style="margin:0 0 26px;font-size:16px;line-height:1.6;color:${RICH_INK};">Your registration is on our list, but a place is only held once the fee is paid, so yours is not confirmed yet. It takes a couple of minutes to finish.</p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="padding:0 34px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid ${RICH_LINE};border-bottom:1px solid ${RICH_LINE};">
+${confirmFact("Starts", BOOTCAMP.starts, false)}${confirmFact("Registration closes", BOOTCAMP.closes, true)}
+                            </table>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="padding:26px 34px 0;">
+                            <p style="margin:0 0 26px;font-size:16px;line-height:1.6;color:${RICH_INK};">You choose your pathway when you confirm. <strong>Foundation</strong> is ${foundation} and builds the basics. <strong>Advanced</strong> is ${advanced} and adds a two-week project with mentor support.</p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td align="center" style="padding:0 34px 30px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td align="center" style="background:${RICH_ACCENT};border-radius:8px;">
+                                        <a href="${BOOTCAMP.register}" style="display:inline-block;padding:15px 40px;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none;">Confirm your place</a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="padding:0 34px 34px;border-top:1px solid ${RICH_LINE};">
+                            <p style="margin:24px 0 18px;font-size:15px;line-height:1.6;color:${RICH_MUTED};">If you have changed your mind, that is a fair answer and you can ignore this. If you are unsure which pathway fits, reply to this email or call ${escapeHtml(DYSTIL_PHONE)} and we will talk it through.</p>
+
+                            <p style="margin:0;font-size:15px;line-height:1.6;color:${RICH_INK};">Kind regards,<br>The Dystil Team</p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>`;
+}
+
+function buildConfirmPlaceText(firstName) {
+    return [
+        firstName ? `Hi ${firstName},` : "Hi,",
+        "",
+        `You registered for the ${BOOTCAMP.name} at the end of August, before we had a payment page. That page is open now.`,
+        "",
+        "Your registration is on our list, but a place is only held once the fee is paid, so yours is not confirmed yet. It takes a couple of minutes to finish.",
+        "",
+        `Starts ${BOOTCAMP.starts}`,
+        `Registration closes ${BOOTCAMP.closes}`,
+        "",
+        `You choose your pathway when you confirm. Foundation is ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])} and builds the basics. Advanced is ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])} and adds a two-week project with mentor support.`,
+        "",
+        "Confirm your place: " + BOOTCAMP.register,
+        "",
+        `If you have changed your mind, that is a fair answer and you can ignore this. If you are unsure which pathway fits, reply to this email or call ${DYSTIL_PHONE} and we will talk it through.`,
+        "",
+        "Kind regards,",
+        "The Dystil Team"
+    ].join("\n");
+}
+
+// Nobody who has paid is asked to pay: unpaidOnly drops a registration the
+// moment its fee arrives, so somebody who pays between the roster being read
+// and the send finishing is left out rather than chased.
+function buildConfirmPlaceCampaigns() {
+    const campaigns = {};
+
+    for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
+        campaigns[`bootcamp-confirm-place-2026-09-${who}`] = {
+            formType: PAID_FORM,
+            subject: CONFIRM_PLACE_SUBJECT,
+            buildHtml: buildConfirmPlaceHtml,
+            buildText: buildConfirmPlaceText,
+            sender,
+            replyTo: sender,
+            unpaidOnly: true,
+            dedupeKey: "bootcamp-confirm-place-2026-09",
+            testRecipients: TEST_TEAM
+        };
+    }
+
+    return campaigns;
 }
 
 /* ---------------------------------------------------------------------------
