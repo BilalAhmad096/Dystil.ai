@@ -1331,30 +1331,17 @@
         const PENDING_PACE_MS = 8000;
 
         /* ---------- REMINDERS ---------- */
-        // Each reminder can go out under either name, but both names write to
-        // one ledger, so picking Frank and then picking Dystil skips everyone
-        // rather than sending the same reminder twice. Sends are paced for the
-        // same reason the joining email is: a burst is sorted differently.
-        // Each row is one message that goes to everyone once. Where a row has
-        // two buttons they are the same message under different names, and both
-        // write to one ledger, so choosing one leaves the other with nobody.
-        // One row per message that goes to everyone once. Two buttons on a row
-        // are the same message under different names, sharing one ledger, so
-        // choosing one leaves the other with nobody:
-        //   { label: "Reminder", buttons: [["campaign-key-frank", "from Frank"]] }
-        // One row per email that goes to a whole register. Two buttons means
-        // the same email under either name, sharing a ledger, so a person gets
-        // it once whichever button is pressed.
-        // One row per email that goes to a whole register. Two buttons means
-        // the same email under either name, sharing a ledger, so a person gets
-        // it once whichever button is pressed. The plain and designed versions
-        // of a register share that ledger too: one or the other, never both.
-        // One row per email that goes to a whole register. Two buttons means
-        // the same email under either name, sharing a ledger, so a person gets
-        // it once whichever button is pressed. All three versions of the
-        // invitation share that ledger too: one of them, never two.
-        // One row per register. Two buttons means the same email under either
-        // name, sharing a ledger, so a person gets it once whichever is pressed.
+        // One row per email per register. Two buttons are the same email under
+        // either name, sharing one ledger, so a person gets it once whichever
+        // is pressed and the second button then finds nobody left.
+        //
+        // A round has its own ledger. The first round is what the 101 people
+        // from the first taster already received; the reminder round starts
+        // empty, so pressing it sends to all of them again. That is what it is
+        // for, and it is why it is a separate row rather than the same one.
+        //
+        // Sends are paced for the same reason the joining email is: a burst is
+        // sorted differently.
         const REMINDERS = [
             {
                 label: "Bootcamp invitation · first taster",
@@ -1368,6 +1355,20 @@
                 buttons: [
                     ["bootcamp-2026-09-26-rich-taster2-frank", "from Frank"],
                     ["bootcamp-2026-09-26-rich-taster2-askus", "from Dystil"]
+                ]
+            },
+            {
+                label: "Bootcamp reminder · first taster (round 2)",
+                buttons: [
+                    ["bootcamp-2026-09-26-reminder-taster1-frank", "from Frank"],
+                    ["bootcamp-2026-09-26-reminder-taster1-askus", "from Dystil"]
+                ]
+            },
+            {
+                label: "Bootcamp reminder · second taster (round 2)",
+                buttons: [
+                    ["bootcamp-2026-09-26-reminder-taster2-frank", "from Frank"],
+                    ["bootcamp-2026-09-26-reminder-taster2-askus", "from Dystil"]
                 ]
             }
         ];

@@ -2093,6 +2093,18 @@ const BOOTCAMP_REGISTERS = {
     taster2: { label: "second taster", formType: "Second Taster Registration" }
 };
 
+// Each round has its own ledger, so the invitation can go out a second time to
+// people who did not act on the first without the first send being forgotten.
+//
+// The first round's ledger key is the one 101 people from the first taster are
+// already recorded under. It is left exactly as it was on purpose: rename it
+// and every one of them is sent the invitation again by accident, which is the
+// one mistake this table exists to prevent.
+const BOOTCAMP_ROUNDS = [
+    ["rich", "invite"],
+    ["reminder", "reminder"]
+];
+
 const CAMPAIGNS = {
     ...buildBootcampCampaigns()
 };
@@ -2511,20 +2523,22 @@ function poundsOf(pence) {
 function buildBootcampCampaigns() {
     const campaigns = {};
 
-    for (const [register, target] of Object.entries(BOOTCAMP_REGISTERS)) {
-        for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
-            campaigns[`bootcamp-2026-09-26-rich-${register}-${who}`] = {
-                formType: target.formType,
-                subject: BOOTCAMP_SUBJECT,
-                buildHtml: buildBootcampRichHtml,
-                // A plain text part as well, so a client that refuses HTML
-                // still gets a whole email rather than an empty one.
-                buildText: buildBootcampPlainText,
-                sender,
-                replyTo: sender,
-                dedupeKey: `bootcamp-2026-09-26-invite-${register}`,
-                testRecipients: TEST_TEAM
-            };
+    for (const [prefix, ledger] of BOOTCAMP_ROUNDS) {
+        for (const [register, target] of Object.entries(BOOTCAMP_REGISTERS)) {
+            for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
+                campaigns[`bootcamp-2026-09-26-${prefix}-${register}-${who}`] = {
+                    formType: target.formType,
+                    subject: BOOTCAMP_SUBJECT,
+                    buildHtml: buildBootcampRichHtml,
+                    // A plain text part as well, so a client that refuses HTML
+                    // still gets a whole email rather than an empty one.
+                    buildText: buildBootcampPlainText,
+                    sender,
+                    replyTo: sender,
+                    dedupeKey: `bootcamp-2026-09-26-${ledger}-${register}`,
+                    testRecipients: TEST_TEAM
+                };
+            }
         }
     }
 
