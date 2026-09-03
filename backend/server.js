@@ -260,7 +260,7 @@ const REQUIRED_FIELDS = {
     "Corporate Enquiry": ["fullName", "email", "company", "focusArea"],
     "Bootcamp Registration": ["fullName", "email", "phone", "package"],
     "Free Taster Registration": ["fullName", "email", "currentStatus", "areaOfInterest"],
-    "Second Taster Registration": ["fullName", "email", "currentStatus", "areaOfInterest"],
+    "Second Taster Registration": ["fullName", "email", "phone", "currentStatus", "areaOfInterest"],
     "Taster Session Feedback": ["fullName", "email", "attended", "rating", "nextStep"]
 };
 

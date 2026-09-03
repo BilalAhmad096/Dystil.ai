@@ -509,6 +509,7 @@ test("gives the second taster session its own reference series", async function(
             formType: "Second Taster Registration",
             fullName: "Nadia Second",
             email: "nadia@example.com",
+            phone: "07700 900123",
             currentStatus: "Student",
             areaOfInterest: "Engineering"
         }), env);
@@ -519,6 +520,23 @@ test("gives the second taster session its own reference series", async function(
         assert.ok(reference.startsWith("DYS-TS2-"));
         assert.equal(row.form_type, "Second Taster Registration");
         assert.equal(row.delivery_status, "sent");
+    });
+});
+
+// A taster signup we cannot phone is a signup we cannot chase, so the number
+// is asked for on the same terms as the name and the email.
+test("turns away a taster signup with no phone number", async function() {
+    await withMockedEmailApi(async function(calls) {
+        const response = await worker.fetch(makeRequest({
+            formType: "Second Taster Registration",
+            fullName: "Nadia Second",
+            email: "nadia@example.com",
+            currentStatus: "Student",
+            areaOfInterest: "Engineering"
+        }), env);
+
+        assert.equal(response.status, 400);
+        assert.equal(calls.length, 0);
     });
 });
 
