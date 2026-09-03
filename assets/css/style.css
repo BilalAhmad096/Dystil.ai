@@ -1898,6 +1898,7 @@ img {
 }
 
 .match-step {
+    align-self: stretch;
     background: white;
     border-radius: 28px;
     padding: 34px 20px;
@@ -1915,6 +1916,17 @@ img {
     margin-top: 12px;
     color: var(--dark);
     font-size: 23px;
+}
+
+.visual-pathways-section h2 {
+    margin-bottom: 20px;
+}
+
+.match-step p {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1.6;
 }
 
 .flow-line {
