@@ -349,7 +349,7 @@ test("escapes visitor content in the HTML email", async function() {
             formType: "Student Enquiry",
             fullName: "<script>alert(1)</script>",
             email: "safe@example.com",
-            phone: "07123",
+            phone: "07123 456789",
             interest: "Career Pathways",
             message: "<img src=x onerror=alert(1)>"
         }), env);
@@ -538,6 +538,48 @@ test("turns away a taster signup with no phone number", async function() {
         assert.equal(response.status, 400);
         assert.equal(calls.length, 0);
     });
+});
+
+// A word in the phone box passed every check and became a real registration,
+// because "required" only asks that the box is not empty.
+test("turns away a taster signup whose phone number is a word", async function() {
+    await withMockedEmailApi(async function(calls) {
+        const response = await worker.fetch(makeRequest({
+            formType: "Second Taster Registration",
+            fullName: "Nadia Second",
+            email: "nadia@example.com",
+            phone: "dada",
+            currentStatus: "Student",
+            areaOfInterest: "Engineering"
+        }), env);
+
+        const result = await response.json();
+
+        assert.equal(response.status, 400);
+        assert.equal(result.message, "Please enter a valid phone number.");
+        assert.equal(calls.length, 0);
+    });
+});
+
+// People write their number the way it is printed on a card, and none of these
+// spellings should cost somebody their place.
+test("takes a phone number written the way people write it", async function() {
+    const accepted = ["07700 900123", "+44 7700 900123", "(01632) 960-123", "+1 202.555.0147"];
+
+    for (const phone of accepted) {
+        await withMockedEmailApi(async function() {
+            const response = await worker.fetch(makeRequest({
+                formType: "Second Taster Registration",
+                fullName: "Nadia Second",
+                email: "nadia@example.com",
+                phone,
+                currentStatus: "Student",
+                areaOfInterest: "Engineering"
+            }), env);
+
+            assert.equal(response.status, 200, phone);
+        });
+    }
 });
 
 test("puts the reference in both emails", async function() {

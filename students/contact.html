@@ -88,7 +88,7 @@
                 <input id="student-email" name="email" type="email" placeholder="Enter your email" autocomplete="email" maxlength="254" required>
 
                 <label for="student-phone">Phone</label>
-                <input id="student-phone" name="phone" type="tel" placeholder="Enter your phone number" autocomplete="tel" maxlength="40" required>
+                <input id="student-phone" name="phone" type="tel" placeholder="Enter your phone number" autocomplete="tel" maxlength="40" inputmode="tel" pattern="\+?[0-9][0-9 ().-]{5,38}" title="Enter a phone number using digits, for example 07700 900123 or +44 7700 900123" required>
 
                 <label for="student-interest">I am interested in</label>
                 <select id="student-interest" name="interest" required>

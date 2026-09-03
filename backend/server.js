@@ -397,6 +397,10 @@ export default {
             return respond({ success: false, message: "Please enter a valid email address." }, 400);
         }
 
+        if (values.phone && !isValidPhone(values.phone)) {
+            return respond({ success: false, message: "Please enter a valid phone number." }, 400);
+        }
+
         const cvResult = await readCvAttachment(formData.get("cv"));
         if (cvResult.error) {
             return respond({ success: false, message: cvResult.error }, 400);
@@ -565,6 +569,18 @@ function cleanText(value, maximumLength) {
 
 function isValidEmail(email) {
     return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// A required phone field only proves somebody typed something, and "dada" got
+// through as a real registration. People write their number with spaces,
+// dashes, brackets and dots, and international ones start with a plus, so the
+// separators come out and what is left has to be a plausible number: an
+// optional plus, then 7 to 15 digits, which is the E.164 ceiling and about the
+// shortest national number in use. This does not prove the line exists; it
+// only stops a word standing in for a number.
+function isValidPhone(phone) {
+    const digits = phone.replace(/[\s().-]/g, "");
+    return /^\+?[0-9]{7,15}$/.test(digits);
 }
 
 async function readCvAttachment(value) {
