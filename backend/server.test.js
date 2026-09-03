@@ -26,13 +26,14 @@ function makeFakeDatabase() {
                 details: args[4],
                 cv_filename: args[5],
                 submitted_at: args[6],
+                submitted_sort: args[7],
                 delivery_status: "pending",
-                source_channel: args[7],
-                source_detail: args[8],
-                source_landing: args[9],
+                source_channel: args[8],
+                source_detail: args[9],
+                source_landing: args[10],
                 payment_status: "paid",
-                payment_amount: args[10],
-                stripe_session_id: args[11]
+                payment_amount: args[11],
+                stripe_session_id: args[12]
             });
 
             return { success: true, meta: { changes: 1 } };
@@ -47,12 +48,13 @@ function makeFakeDatabase() {
                 details: args[4],
                 cv_filename: args[5],
                 submitted_at: args[6],
+                submitted_sort: args[7],
                 delivery_status: "pending",
-                source_channel: args[7],
-                source_detail: args[8],
-                source_landing: args[9],
-                payment_status: args[10],
-                payment_amount: args[11]
+                source_channel: args[8],
+                source_detail: args[9],
+                source_landing: args[10],
+                payment_status: args[11],
+                payment_amount: args[12]
             });
 
             return { success: true, meta: { changes: 1 } };
@@ -68,8 +70,9 @@ function makeFakeDatabase() {
                 source_detail: args[5],
                 source_landing: args[6],
                 submitted_at: args[7],
-                fee: args[8],
-                created_at: args[9]
+                submitted_sort: args[8],
+                fee: args[9],
+                created_at: args[10]
             });
 
             return { success: true, meta: { changes: 1 } };
@@ -92,6 +95,7 @@ function makeFakeDatabase() {
                     package: args[4],
                     fee: args[5],
                     started_at: args[6],
+                    started_sort: args[7],
                     paid_at: null
                 });
             }
@@ -426,6 +430,39 @@ test("stores the whole submission and marks it sent", async function() {
         assert.equal(row.delivery_status, "sent");
         assert.equal(JSON.parse(row.details).interest, "Foundation Bootcamp");
     });
+});
+
+// submitted_at is a sentence, and a sentence sorts alphabetically: the list
+// put "3 September" below "31 August" because the space sorts before the 1.
+// The row now carries the same instant a second time in a form that orders,
+// and the two have to agree or the list is sorted by a different moment than
+// the one on show.
+test("records a sortable timestamp that agrees with the printed one", async function() {
+    await withMockedEmailApi(async function() {
+        const response = await worker.fetch(makeRequest(studentEnquiry), env);
+        const { reference } = await response.json();
+        const row = env.DB.rows.find((candidate) => candidate.reference === reference);
+
+        assert.match(row.submitted_sort, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+        assert.match(row.submitted_at, /^\d{1,2} [A-Z][a-z]+ \d{4} at \d{2}:\d{2}$/);
+
+        const [sortDate, sortClock] = row.submitted_sort.split(" ");
+        const [year, month, day] = sortDate.split("-");
+        const months = ["January", "February", "March", "April", "May", "June", "July",
+                        "August", "September", "October", "November", "December"];
+
+        assert.equal(row.submitted_at, `${Number(day)} ${months[Number(month) - 1]} ${year} at ${sortClock}`);
+    });
+});
+
+// Two submissions a month apart have to come back newest first, and the string
+// comparison the database does is the one that decides it.
+test("sorts the day of a month above the end of the month before", async function() {
+    const earlier = "2026-08-31 14:06";
+    const later = "2026-09-03 22:04";
+
+    assert.ok(later > earlier);
+    assert.ok("3 September 2026 at 22:04" < "31 August 2026 at 14:06");
 });
 
 test("records the CV filename without storing the file", async function() {

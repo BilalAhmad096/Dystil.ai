@@ -127,9 +127,9 @@ const NEXT_REFERENCE_SQL = `
 
 const SAVE_SUBMISSION_SQL = `
     INSERT INTO submissions
-        (reference, form_type, full_name, email, details, cv_filename, submitted_at, delivery_status,
-         source_channel, source_detail, source_landing, payment_status, payment_amount)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`;
+        (reference, form_type, full_name, email, details, cv_filename, submitted_at, submitted_sort,
+         delivery_status, source_channel, source_detail, source_landing, payment_status, payment_amount)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`;
 
 const MARK_DELIVERY_SQL = "UPDATE submissions SET delivery_status = ? WHERE reference = ?";
 
@@ -146,15 +146,16 @@ const MARK_PAID_SQL = `
 // inserts nothing, reports no change, and so sends no second email.
 const SAVE_PAID_SUBMISSION_SQL = `
     INSERT OR IGNORE INTO submissions
-        (reference, form_type, full_name, email, details, cv_filename, submitted_at, delivery_status,
-         source_channel, source_detail, source_landing, payment_status, payment_amount, stripe_session_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, 'paid', ?, ?)`;
+        (reference, form_type, full_name, email, details, cv_filename, submitted_at, submitted_sort,
+         delivery_status, source_channel, source_detail, source_landing, payment_status, payment_amount,
+         stripe_session_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, 'paid', ?, ?)`;
 
 const SAVE_PENDING_SQL = `
     INSERT INTO pending_registrations
         (token, reference, form_type, details,
-         source_channel, source_detail, source_landing, submitted_at, fee, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+         source_channel, source_detail, source_landing, submitted_at, submitted_sort, fee, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 const READ_PENDING_SQL = "SELECT * FROM pending_registrations WHERE token = ?";
 
@@ -164,8 +165,9 @@ const DELETE_PENDING_SQL = "DELETE FROM pending_registrations WHERE token = ?";
 const STALE_PENDING_SQL = "SELECT token FROM pending_registrations WHERE created_at < ? LIMIT 20";
 
 const SAVE_LEAD_SQL = `
-    INSERT INTO registration_leads (reference, form_type, full_name, email, package, fee, started_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO registration_leads
+        (reference, form_type, full_name, email, package, fee, started_at, started_sort)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (reference) DO NOTHING`;
 
 const MARK_LEAD_PAID_SQL =
@@ -181,7 +183,7 @@ const LIST_LEADS_SQL = `
     SELECT reference, full_name, email, package, fee, started_at
     FROM registration_leads
     WHERE paid_at IS NULL
-    ORDER BY started_at DESC
+    ORDER BY started_sort DESC
     LIMIT ?`;
 
 // Every payment, newest first, for the paid table on the submissions page.
@@ -197,7 +199,7 @@ const LIST_SUBMISSIONS_SQL = `
     SELECT reference, form_type, full_name, email, details, cv_filename, submitted_at, delivery_status,
            source_channel, source_detail, source_landing, payment_status, payment_amount
     FROM submissions
-    ORDER BY submitted_at DESC
+    ORDER BY submitted_sort DESC
     LIMIT ?`;
 
 const FORM_SCHEMAS = {
@@ -412,8 +414,19 @@ export default {
         }
 
         const source = describeSource(formData.get("sourceFirst"), formData.get("sourceVisit"));
-        const submittedAt = new Date().toLocaleString("en-GB", {
+        const now = new Date();
+        const submittedAt = now.toLocaleString("en-GB", {
             dateStyle: "long",
+            timeStyle: "short",
+            timeZone: "Europe/London"
+        });
+        // The same instant again, in the one form that sorts. "3 September"
+        // sorts below "31 August" as text, so the sentence above can be read
+        // but not ordered, and the submissions list was quietly alphabetical.
+        // Swedish formatting is the shortest way to ask for year-month-day;
+        // the clock is London's either way, so the two always agree.
+        const submittedSort = now.toLocaleString("sv-SE", {
+            dateStyle: "short",
             timeStyle: "short",
             timeZone: "Europe/London"
         });
@@ -429,7 +442,7 @@ export default {
         // rather than refused: the registration is what matters.
         if (fee) {
             return startPaidRegistration(env, respond, {
-                formType, values, source, submittedAt, fee, rateLimit
+                formType, values, source, submittedAt, submittedSort, fee, rateLimit
             });
         }
 
@@ -439,7 +452,7 @@ export default {
         let reference;
         try {
             reference = await allocateReference(env.DB, formType);
-            await saveSubmission(env.DB, reference, formType, values, cvResult.attachment, submittedAt, source, 0);
+            await saveSubmission(env.DB, reference, formType, values, cvResult.attachment, submittedAt, submittedSort, source, 0);
         } catch (error) {
             console.error("Could not record the submission.", error instanceof Error ? error.message : "Unknown error");
 
@@ -1126,7 +1139,7 @@ function labelForSource(detail) {
 
 // The CV is kept out of the database and stays an email attachment, so only its
 // filename is recorded here.
-async function saveSubmission(db, reference, formType, values, attachment, submittedAt, source, fee = 0) {
+async function saveSubmission(db, reference, formType, values, attachment, submittedAt, submittedSort, source, fee = 0) {
     await db.prepare(SAVE_SUBMISSION_SQL).bind(
         reference,
         formType,
@@ -1135,6 +1148,7 @@ async function saveSubmission(db, reference, formType, values, attachment, submi
         JSON.stringify(values),
         attachment ? attachment.filename : null,
         submittedAt,
+        submittedSort,
         source.channel,
         source.detail,
         source.landing,
@@ -1222,7 +1236,7 @@ async function deliverSubmission(env, { reference, formType, schema, values, att
 // emailed and nothing appears in the submissions list until Stripe confirms the
 // money arrived; only the name and email are kept, as a lead, so somebody who
 // stops at the payment page can still be followed up.
-async function startPaidRegistration(env, respond, { formType, values, source, submittedAt, fee, rateLimit }) {
+async function startPaidRegistration(env, respond, { formType, values, source, submittedAt, submittedSort, fee, rateLimit }) {
     const token = crypto.randomUUID();
     let reference;
 
@@ -1238,12 +1252,14 @@ async function startPaidRegistration(env, respond, { formType, values, source, s
             source.detail,
             source.landing,
             submittedAt,
+            submittedSort,
             fee,
             Date.now()
         ).run();
 
         await env.DB.prepare(SAVE_LEAD_SQL).bind(
-            reference, formType, values.fullName, values.email, values.package || null, fee, submittedAt
+            reference, formType, values.fullName, values.email, values.package || null, fee,
+            submittedAt, submittedSort
         ).run();
     } catch (error) {
         console.error("Could not hold the registration.", error instanceof Error ? error.message : "Unknown error");
@@ -1334,6 +1350,7 @@ async function completePaidRegistration(env, session) {
         pending.details,
         null,
         pending.submitted_at,
+        pending.submitted_sort,
         pending.source_channel,
         pending.source_detail,
         pending.source_landing,
