@@ -1372,6 +1372,16 @@
                 ]
             },
             {
+                // Draws on the leads register instead of a form: whoever
+                // reached the payment page and did not come back. Anyone who
+                // paid afterwards, under any reference, is left off it.
+                label: "Stopped at payment · chase",
+                buttons: [
+                    ["bootcamp-checkout-abandoned-frank", "from Frank"],
+                    ["bootcamp-checkout-abandoned-askus", "from Dystil"]
+                ]
+            },
+            {
                 // Goes to bootcamp registrations with nothing paid against
                 // them. Anybody who pays first drops off the roster on their
                 // own, so this never chases somebody who has already paid.
@@ -1582,7 +1592,9 @@
             { campaign: "bootcamp-2026-09-26-rich-taster1-frank", label: "Bootcamp invitation · Frank" },
             { campaign: "bootcamp-2026-09-26-rich-taster1-askus", label: "Bootcamp invitation · Dystil" },
             { campaign: "bootcamp-confirm-place-2026-09-frank", label: "Confirm your place · Frank" },
-            { campaign: "bootcamp-confirm-place-2026-09-askus", label: "Confirm your place · Dystil" }
+            { campaign: "bootcamp-confirm-place-2026-09-askus", label: "Confirm your place · Dystil" },
+            { campaign: "bootcamp-checkout-abandoned-frank", label: "Stopped at payment · Frank" },
+            { campaign: "bootcamp-checkout-abandoned-askus", label: "Stopped at payment · Dystil" }
         ];
 
         const testPanel = document.getElementById("testing");

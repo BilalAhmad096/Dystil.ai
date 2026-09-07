@@ -2068,6 +2068,8 @@ const BOOTCAMP = {
     name: "Career Accelerator",
     starts: "Saturday 26 September 2026",
     closes: "Tuesday 15 September 2026",
+    // The same day as `closes`, for counting with rather than reading.
+    closesOn: "2026-09-15",
     // One link, so no ?package= to preselect with: the form asks for the
     // pathway itself, which is one link fewer in the email.
     register: "https://dystil.ai/students/register",
@@ -2167,9 +2169,30 @@ const BOOTCAMP_ROUNDS = [
     ["reminder", "reminder"]
 ];
 
+function buildAbandonedCampaigns() {
+    const campaigns = {};
+
+    for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
+        campaigns[`bootcamp-checkout-abandoned-${who}`] = {
+            formType: PAID_FORM,
+            roster: "leads",
+            subject: buildAbandonedSubject,
+            buildHtml: buildAbandonedHtml,
+            buildText: buildAbandonedText,
+            sender,
+            replyTo: sender,
+            dedupeKey: "bootcamp-checkout-abandoned",
+            testRecipients: TEST_TEAM
+        };
+    }
+
+    return campaigns;
+}
+
 const CAMPAIGNS = {
     ...buildBootcampCampaigns(),
-    ...buildConfirmPlaceCampaigns()
+    ...buildConfirmPlaceCampaigns(),
+    ...buildAbandonedCampaigns()
 };
 
 // Anybody who has asked not to be emailed is left out of every roster, so the
@@ -2197,6 +2220,21 @@ const BROADCAST_UNPAID_ROSTER_SQL = `
       AND ${SUPPRESSED_SQL}
     GROUP BY lower(trim(email))
     HAVING SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END) = 0
+    ORDER BY reference`;
+
+function subjectFor(campaign, person) {
+    return typeof campaign.subject === "function" ? campaign.subject(person) : campaign.subject;
+}
+
+const BROADCAST_LEADS_ROSTER_SQL = `
+    SELECT lower(trim(email)) AS email, full_name, MAX(reference) AS reference, package, fee
+    FROM registration_leads
+    WHERE paid_at IS NULL
+      AND ${SUPPRESSED_SQL}
+      AND lower(trim(email)) NOT IN (
+          SELECT lower(trim(email)) FROM submissions WHERE payment_status = 'paid'
+      )
+    GROUP BY lower(trim(email))
     ORDER BY reference`;
 
 const BROADCAST_SENT_SQL = "SELECT email FROM broadcast_sends WHERE campaign = ?";
@@ -2232,7 +2270,7 @@ async function handleBroadcast(request, env, corsHeaders) {
 
     // Which ledger records this send. Reminders share one across both senders.
     const ledger = campaign.dedupeKey || body.campaign;
-    const roster = await loadBroadcastRoster(env.DB, ledger, campaign.formType, campaign.unpaidOnly);
+    const roster = await loadBroadcastRoster(env.DB, ledger, campaign);
 
     if (body.action === "list") {
         return jsonResponse({
@@ -2313,11 +2351,11 @@ async function handleBroadcast(request, env, corsHeaders) {
             sender: campaign.sender || { email: env.FROM_EMAIL, name: "Dystil" },
             to: [{ email: person.email, name: person.fullName }],
             replyTo: campaign.replyTo || { email: env.ADMIN_EMAIL, name: "Dystil" },
-            subject: campaign.subject,
+            subject: subjectFor(campaign, person),
             // A text-only email cannot carry Brevo's tracking pixel, because
             // the pixel is an image and there is no HTML for it to sit in.
-            htmlContent: campaign.plainOnly ? undefined : campaign.buildHtml(person.firstName),
-            textContent: campaign.buildText(person.firstName)
+            htmlContent: campaign.plainOnly ? undefined : campaign.buildHtml(person.firstName, person),
+            textContent: campaign.buildText(person.firstName, person)
         };
 
         // Brevo fetches an attachment given as a URL, so the file lives on the
@@ -2400,11 +2438,11 @@ async function sendBroadcastTest(env, campaign, corsHeaders, onlyEmail) {
             sender: campaign.sender || { email: env.FROM_EMAIL, name: "Dystil" },
             to: [{ email: person.email, name: person.fullName }],
             replyTo: campaign.replyTo || { email: env.ADMIN_EMAIL, name: "Dystil" },
-            subject: campaign.subject,
+            subject: subjectFor(campaign, person),
             // A text-only email cannot carry Brevo's tracking pixel, because
             // the pixel is an image and there is no HTML for it to sit in.
-            htmlContent: campaign.plainOnly ? undefined : campaign.buildHtml(firstNameOf(person.fullName)),
-            textContent: campaign.buildText(firstNameOf(person.fullName))
+            htmlContent: campaign.plainOnly ? undefined : campaign.buildHtml(firstNameOf(person.fullName), person),
+            textContent: campaign.buildText(firstNameOf(person.fullName), person)
         };
 
         // Brevo fetches an attachment given as a URL, so the file lives on the
@@ -2427,11 +2465,20 @@ async function sendBroadcastTest(env, campaign, corsHeaders, onlyEmail) {
     return jsonResponse({ success: true, results }, 200, corsHeaders);
 }
 
-async function loadBroadcastRoster(db, campaignName, formType, unpaidOnly) {
-    const rosterSql = unpaidOnly ? BROADCAST_UNPAID_ROSTER_SQL : BROADCAST_ROSTER_SQL;
+// Three registers to draw from: everyone on a form, everyone on a form who has
+// not paid, and everyone who stopped at the payment page. The leads one asks
+// the other table entirely, so it takes no form type.
+async function loadBroadcastRoster(db, campaignName, campaign) {
+    const fromLeads = campaign.roster === "leads";
+
+    const rosterSql = fromLeads ? BROADCAST_LEADS_ROSTER_SQL
+        : campaign.unpaidOnly ? BROADCAST_UNPAID_ROSTER_SQL
+        : BROADCAST_ROSTER_SQL;
+
+    const rosterQuery = db.prepare(rosterSql);
 
     const [people, sent] = await Promise.all([
-        db.prepare(rosterSql).bind(formType).all(),
+        (fromLeads ? rosterQuery : rosterQuery.bind(campaign.formType)).all(),
         db.prepare(BROADCAST_SENT_SQL).bind(campaignName).all()
     ]);
 
@@ -2440,7 +2487,11 @@ async function loadBroadcastRoster(db, campaignName, formType, unpaidOnly) {
             email: row.email,
             fullName: row.full_name,
             firstName: firstNameOf(row.full_name),
-            reference: row.reference
+            reference: row.reference,
+            // Only the leads register carries these; the others leave them
+            // undefined and the emails that use them are only sent to leads.
+            package: row.package,
+            fee: row.fee
         })),
         alreadySent: (sent.results || []).map((row) => row.email)
     };
@@ -2534,8 +2585,8 @@ async function sendViaGraph(token, sender, message) {
 function buildGraphMessage(campaign, person, firstName) {
     return {
         message: {
-            subject: campaign.subject,
-            body: { contentType: "HTML", content: campaign.buildHtml(firstName) },
+            subject: subjectFor(campaign, person),
+            body: { contentType: "HTML", content: campaign.buildHtml(firstName, person) },
             toRecipients: [{
                 emailAddress: { address: person.email, name: person.fullName }
             }],
@@ -2962,4 +3013,168 @@ function buildBootcampRichHtml(firstName) {
         </td></tr>
     </table>
 </body></html>`;
+}
+
+/* ---------------------------------------------------------------------------
+   Stopped at the payment page
+   ---------------------------------------------------------------------------
+   For the people who filled the form, chose a pathway, reached Stripe and did
+   not come back. Their registration is not a record — nothing is kept until the
+   fee is paid — so the only thing standing between them and a place is the
+   payment, and that is the whole point of the email.
+
+   The urgency is real and is not invented: the closing date is the published
+   one, the days left are counted from it on the day of sending, and places are
+   held in the order payments arrive, which is what the earlier emails already
+   told everyone. Nothing here claims a number of seats.
+--------------------------------------------------------------------------- */
+
+const CHASE_INK = "#16221d";
+const CHASE_DEEP = "#3a1d05";
+const CHASE_AMBER = "#c2620a";
+const CHASE_AMBER_SOFT = "#fff6ea";
+const CHASE_GREEN = "#147a59";
+const CHASE_PAPER = "#f4f7f6";
+const CHASE_LINE = "#e8ded2";
+const CHASE_MUTED = "#5b6b64";
+
+// "Advanced Bootcamp" is how the form records it; "Advanced" is how a person
+// says it.
+function pathwayName(person) {
+    return String(person && person.package || "").replace(/\s*Bootcamp\s*$/i, "").trim() || "";
+}
+
+// Counted on the day the email goes out, so it cannot be stale in the way a
+// written number would be. Anything at or past the close says so instead.
+function daysUntilClose(now = new Date()) {
+    const close = Date.UTC(...BOOTCAMP.closesOn.split("-").map((v, i) => i === 1 ? Number(v) - 1 : Number(v)));
+    const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    return Math.round((close - today) / 86400000);
+}
+
+function closingLine() {
+    const days = daysUntilClose();
+
+    if (days > 1) return `${days} days left to register`;
+    if (days === 1) return "Last day to register is tomorrow";
+    if (days === 0) return "Registration closes today";
+    return "Registration has closed";
+}
+
+function buildAbandonedSubject(person) {
+    const pathway = pathwayName(person);
+    return pathway
+        ? `Your ${pathway} place is still unclaimed`
+        : "Your place is still unclaimed";
+}
+
+function buildAbandonedHtml(firstName, person) {
+    const greeting = firstName ? escapeHtml(firstName) : "there";
+    const pathway = pathwayName(person);
+    const fee = person && typeof person.fee === "number" ? poundsOf(person.fee) : "";
+
+    const chosen = pathway
+        ? `<tr><td style="padding:4px 0;font-size:15px;color:${CHASE_MUTED};">You chose <strong style="color:${CHASE_INK};">${escapeHtml(pathway)}</strong>${fee ? ` &middot; <strong style="color:${CHASE_INK};">${escapeHtml(fee)}</strong>` : ""}</td></tr>`
+        : "";
+
+    const missing = [
+        "Real projects in your own field, finished and in your portfolio",
+        "Practical work with AI, data and cloud tools",
+        "Something concrete to talk about at interview"
+    ].map((point) => `
+                                <tr>
+                                    <td width="26" valign="top" style="padding:5px 0;color:${CHASE_AMBER};font-size:16px;font-weight:bold;">&#8250;</td>
+                                    <td style="padding:5px 0;font-size:15px;line-height:1.5;color:${CHASE_INK};">${escapeHtml(point)}</td>
+                                </tr>`).join("");
+
+    const socials = DYSTIL_SOCIALS.map(([, name, url]) => `
+                                    <td style="padding:0 7px;">
+                                        <a href="${escapeHtml(url)}"><img src="${SOCIAL_ICONS}${name.toLowerCase()}.png" width="28" height="28" alt="${escapeHtml(name)}" style="display:block;border:0;"></a>
+                                    </td>`).join("");
+
+    return `<!doctype html>
+<html><body style="margin:0;padding:0;background:${CHASE_PAPER};">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(closingLine())}. Your form is done — only the payment is outstanding.</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${CHASE_PAPER};">
+        <tr><td align="center" style="padding:28px 12px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:100%;font-family:Arial,Helvetica,sans-serif;color:${CHASE_INK};">
+
+                <tr><td style="background:${CHASE_DEEP};padding:30px 32px 28px;border-radius:14px 14px 0 0;">
+                    <p style="margin:0 0 20px;font-size:15px;letter-spacing:5px;color:#ffffff;font-weight:bold;">DYSTIL</p>
+                    <p style="margin:0 0 10px;font-size:12px;letter-spacing:2px;color:#f3b163;font-weight:bold;">YOU WERE ONE STEP AWAY</p>
+                    <h1 style="margin:0;font-size:31px;line-height:1.25;color:#ffffff;">Your place is still unclaimed</h1>
+                </td></tr>
+
+                <tr><td style="background:#ffffff;padding:30px 32px 8px;">
+                    <p style="margin:0 0 16px;font-size:16px;line-height:1.6;">Hi ${greeting},</p>
+                    <p style="margin:0 0 22px;font-size:16px;line-height:1.6;">You filled in the form for the ${escapeHtml(BOOTCAMP.name)}, picked your pathway, and got as far as the payment page. Then it stopped there — so your place is not held.</p>
+
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${CHASE_AMBER_SOFT};border:1px solid ${CHASE_LINE};border-left:4px solid ${CHASE_AMBER};border-radius:0 8px 8px 0;">
+                        <tr><td style="padding:16px 20px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                                <tr><td style="padding:0 0 6px;font-size:19px;font-weight:bold;color:${CHASE_AMBER};">${escapeHtml(closingLine())}</td></tr>
+                                <tr><td style="padding:4px 0;font-size:15px;color:${CHASE_MUTED};">Registration closes ${escapeHtml(BOOTCAMP.closes)} &middot; starts ${escapeHtml(BOOTCAMP.starts)}</td></tr>
+                                ${chosen}
+                            </table>
+                        </td></tr>
+                    </table>
+                </td></tr>
+
+                <tr><td style="background:#ffffff;padding:24px 32px 4px;">
+                    <p style="margin:0 0 14px;font-size:16px;line-height:1.6;">Everything you typed is already done. The only thing left is the payment, and places are held in the order those arrive.</p>
+                    <p style="margin:0 0 12px;font-size:13px;letter-spacing:1.6px;color:${CHASE_MUTED};font-weight:bold;">WHAT IS WAITING ON THE OTHER SIDE</p>
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${missing}
+                    </table>
+                </td></tr>
+
+                <tr><td align="center" style="background:#ffffff;padding:28px 32px 10px;">
+                    <a href="${escapeHtml(BOOTCAMP.register)}" style="display:inline-block;background:${CHASE_AMBER};color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:16px 42px;border-radius:8px;">Finish and claim my place</a>
+                    <p style="margin:14px 0 0;font-size:13px;color:${CHASE_MUTED};">Takes a couple of minutes${fee ? ` &middot; ${escapeHtml(fee)}` : ""}</p>
+                </td></tr>
+
+                <tr><td style="background:#ffffff;padding:16px 32px 30px;">
+                    <p style="margin:0;font-size:14px;line-height:1.6;color:${CHASE_MUTED};">Changed your mind? That is a fair answer — reply and say so and we will leave you alone. If something got in the way, reply or call <a href="${DYSTIL_PHONE_LINK}" style="color:${CHASE_GREEN};text-decoration:none;">${escapeHtml(DYSTIL_PHONE)}</a> and we will sort it out.</p>
+                </td></tr>
+
+                <tr><td align="center" style="background:${CHASE_DEEP};padding:26px 32px;border-radius:0 0 14px 14px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 16px;">
+                        <tr>${socials}
+                        </tr>
+                    </table>
+                    <p style="margin:0 0 6px;font-size:14px;color:#ffffff;font-weight:bold;">The Dystil Team</p>
+                    <p style="margin:0;font-size:13px;line-height:1.7;color:#f3b163;">
+                        <a href="mailto:askus@dystil.ai" style="color:#f3b163;text-decoration:none;">askus@dystil.ai</a>
+                        &nbsp;&middot;&nbsp; ${escapeHtml(DYSTIL_PHONE)}
+                        &nbsp;&middot;&nbsp; <a href="https://dystil.ai" style="color:#f3b163;text-decoration:none;">dystil.ai</a>
+                    </p>
+                </td></tr>
+
+            </table>
+        </td></tr>
+    </table>
+</body></html>`;
+}
+
+function buildAbandonedText(firstName, person) {
+    const pathway = pathwayName(person);
+    const fee = person && typeof person.fee === "number" ? poundsOf(person.fee) : "";
+
+    return [
+        firstName ? `Hi ${firstName},` : "Hi,",
+        "",
+        `You filled in the form for the ${BOOTCAMP.name}, picked your pathway, and got as far as the payment page. Then it stopped there — so your place is not held.`,
+        "",
+        closingLine().toUpperCase(),
+        `Registration closes ${BOOTCAMP.closes}, and it starts ${BOOTCAMP.starts}.`,
+        ...(pathway ? [`You chose ${pathway}${fee ? ` (${fee})` : ""}.`] : []),
+        "",
+        "Everything you typed is already done. The only thing left is the payment, and places are held in the order those arrive.",
+        "",
+        "Finish and claim your place: " + BOOTCAMP.register,
+        "",
+        "Changed your mind? That is a fair answer — reply and say so and we will leave you alone. If something got in the way, reply or call " + DYSTIL_PHONE + " and we will sort it out.",
+        "",
+        "Kind regards,",
+        "The Dystil Team"
+    ].join("\n");
 }
