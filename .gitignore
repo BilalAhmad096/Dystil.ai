@@ -10,3 +10,16 @@ backend/node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Scratch: scripts and their output, kept out of the repo
+tmp/
+output/
+
+# Posters and social images that live on Bilal's machine. Nothing in
+# assets/files is linked from any page, so these are shared as links by hand
+# rather than being part of the site. Named one by one on purpose: a wildcard
+# here would silently swallow the next poster too.
+assets/files/Dystil Students - Free Taster Session Social.pdf
+assets/files/Dystil Students - Free Taster Session Social.png
+assets/files/Dystil Students - Free Taster Session Instagram 4x5.png
+assets/files/Dystil Students - Free Taster Session Story 9x16.png
