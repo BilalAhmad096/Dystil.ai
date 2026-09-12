@@ -371,6 +371,49 @@ Copy `.dev.vars.example` to `.dev.vars`, put the key in it, and run
 conversation; the system prompt is about 2,100 tokens and is sent every time,
 so check the model's cached-input pricing before moving up.
 
+### Taster emails on the database page
+
+The Emails tab contains two messages for Sunday 13 September 2026,
+2–3pm UK time:
+
+- **Calendar invitation:** a short note with an attached personalised `.ics`
+  invitation, the Teams link and a 30-minute reminder.
+- **Taster session joining link:** the date, time, one Teams link and a brief
+  agenda.
+
+Both messages combine the first and second taster registers, normalise and
+deduplicate email addresses, and exclude suppressions. Each message can be
+sent from Frank or Dystil; those sender variants share a sent ledger. The
+calendar and joining emails have separate ledgers. The existing joining
+ledger is preserved so editing the copy does not mail previous recipients
+again.
+
+The bootcamp campaigns are no longer on the page, and they are still in the
+Worker. The Career Accelerator starts on 26 September with registration open
+until the 15th, so the one that chases a payment somebody abandoned halfway is
+the last thing to delete while that window is open. Their send records are
+untouched, so putting a row back in `REMINDERS` resumes them where they left
+off rather than mailing anyone twice.
+
+Both messages are also in **Test an email**. Select a team recipient and sender,
+then the message to test. Tests use the same content and calendar attachment
+as broadcasts, but do not mark registered recipients as sent. Test messages
+still count towards the provider's allowance.
+
+The calendar uses UTC (13:00–14:00Z) so calendar apps display the correct local
+time. Each invitation includes only its own attendee. The email provides
+instructions for opening the `.ics` attachment if the client does not show a
+calendar invitation automatically.
+
+Both HTML and plain text contain the same facts, with minimal formatting and
+one web link. Gmail decides category placement per recipient; verify the
+actual inbox category with team tests before a broadcast. A successful send
+records provider acceptance, not Primary-tab delivery.
+
+Run `npm test` from `backend` to check both the existing form/payment behaviour
+and the taster email integration tests. Tests require Node.js 24 or later for
+the built-in SQLite adapter and never contact the email provider.
+
 ### Taking somebody off the mailing list
 
 When somebody asks not to be emailed again, add their address to

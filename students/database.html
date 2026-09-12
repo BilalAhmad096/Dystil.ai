@@ -432,6 +432,14 @@
                 <select id="test-who"><option value="">Choose a person…</option></select>
             </div>
 
+            <div class="row">
+                <label class="send-label" for="test-from">SEND FROM</label>
+                <select id="test-from">
+                    <option value="frank">Frank</option>
+                    <option value="askus">Dystil</option>
+                </select>
+            </div>
+
             <div class="buttons" id="test-buttons"></div>
 
             <div class="log" id="test-log" hidden></div>
@@ -440,10 +448,10 @@
         <div class="reminders" id="reminders" hidden>
             <h2>Send to everyone who registered</h2>
             <p>
-                Each message goes to everyone on its register, once. Both names on a row write to the
-                same record, so sending from Frank leaves the Dystil button with nobody rather than
-                mailing the same people twice. Sends go one at a time, so allow about a minute for
-                every eight people.
+                Both emails go to everyone who registered for either taster session, once per email.
+                Duplicate addresses and people who opted out are excluded. Choose Frank or Dystil
+                for each email; both sender options share the same sent record. Sends go one at a
+                time, so allow about a minute for every eight people.
             </p>
 
             <p class="quota" id="quota">Checking today's sending allowance…</p>
@@ -456,10 +464,7 @@
         <div class="blank" id="no-campaigns" hidden>
             <h2>No emails yet</h2>
             <p>
-                The sending machinery is all here: the register, the ledger that stops anyone being
-                mailed twice, the pacing, the team list and the daily allowance. What it has not got is
-                anything to send. Add a campaign to <code>CAMPAIGNS</code> in the Worker, list it in
-                <code>REMINDERS</code> and <code>TESTABLE</code> on this page, and the buttons appear here.
+                No emails are currently available to test or send.
             </p>
         </div>
 
@@ -611,7 +616,7 @@
             },
             emails: {
                 title: "Emails",
-                note: "Test an email against the team list first. The send buttons below go to everyone who registered, once each."
+                note: "Test both emails against the team list first. Each email goes to everyone who registered for either taster session."
             }
         };
 
@@ -1325,81 +1330,26 @@
         });
 
 
-        // The broadcast endpoint, and the gap left between sends: the same email
-        // sent in a burst is sorted differently from one sent on its own.
+        // Pace broadcast requests to respect the mail provider's send limits.
         const BROADCAST_API = "https://dystil-contact.dystil-ai.workers.dev/api/broadcast";
         const PENDING_PACE_MS = 8000;
 
         /* ---------- REMINDERS ---------- */
-        // One row per email per register. Two buttons are the same email under
-        // either name, sharing one ledger, so a person gets it once whichever
-        // is pressed and the second button then finds nobody left.
-        //
-        // A round has its own ledger. The first round is what the 101 people
-        // from the first taster already received; the reminder round starts
-        // empty, so pressing it sends to all of them again. That is what it is
-        // for, and it is why it is a separate row rather than the same one.
-        //
-        // Sends are paced for the same reason the joining email is: a burst is
-        // sorted differently.
+        // One row per email, covering both taster registers. Sender variants
+        // share a ledger; the two email types have separate sent records.
         const REMINDERS = [
             {
-                // Both taster registers in one roster, deduped by address, so
-                // somebody who registered for each session is sent it once.
-                // Either button is the same email under a different name and
-                // they share a ledger, so pressing the second finds nobody.
-                label: "Invitation for the second taster",
+                label: "Calendar invitation",
+                buttons: [
+                    ["taster-2026-09-13-calendar-frank", "from Frank"],
+                    ["taster-2026-09-13-calendar-askus", "from Dystil"]
+                ]
+            },
+            {
+                label: "Taster session joining link",
                 buttons: [
                     ["taster-2026-09-13-joining-frank", "from Frank"],
                     ["taster-2026-09-13-joining-askus", "from Dystil"]
-                ]
-            },
-            {
-                label: "Bootcamp invitation · first taster",
-                buttons: [
-                    ["bootcamp-2026-09-26-rich-taster1-frank", "from Frank"],
-                    ["bootcamp-2026-09-26-rich-taster1-askus", "from Dystil"]
-                ]
-            },
-            {
-                label: "Bootcamp invitation · second taster",
-                buttons: [
-                    ["bootcamp-2026-09-26-rich-taster2-frank", "from Frank"],
-                    ["bootcamp-2026-09-26-rich-taster2-askus", "from Dystil"]
-                ]
-            },
-            {
-                label: "Bootcamp reminder · first taster (round 2)",
-                buttons: [
-                    ["bootcamp-2026-09-26-reminder-taster1-frank", "from Frank"],
-                    ["bootcamp-2026-09-26-reminder-taster1-askus", "from Dystil"]
-                ]
-            },
-            {
-                label: "Bootcamp reminder · second taster (round 2)",
-                buttons: [
-                    ["bootcamp-2026-09-26-reminder-taster2-frank", "from Frank"],
-                    ["bootcamp-2026-09-26-reminder-taster2-askus", "from Dystil"]
-                ]
-            },
-            {
-                // Draws on the leads register instead of a form: whoever
-                // reached the payment page and did not come back. Anyone who
-                // paid afterwards, under any reference, is left off it.
-                label: "Stopped at payment · chase",
-                buttons: [
-                    ["bootcamp-checkout-abandoned-frank", "from Frank"],
-                    ["bootcamp-checkout-abandoned-askus", "from Dystil"]
-                ]
-            },
-            {
-                // Goes to bootcamp registrations with nothing paid against
-                // them. Anybody who pays first drops off the roster on their
-                // own, so this never chases somebody who has already paid.
-                label: "Confirm your place · unpaid registrations",
-                buttons: [
-                    ["bootcamp-confirm-place-2026-09-frank", "from Frank"],
-                    ["bootcamp-confirm-place-2026-09-askus", "from Dystil"]
                 ]
             }
         ];
@@ -1435,10 +1385,12 @@
         async function reminderSend(reminder, campaign, from, button) {
 
             let waiting;
+            let recipientCount;
 
             try {
                 const roster = await reminderCall(campaign, { action: "list" });
-                const done = new Set(roster.alreadySent);
+                recipientCount = (roster.recipients || []).length;
+                const done = new Set(roster.alreadySent || []);
                 waiting = (roster.recipients || []).filter(function (p) { return !done.has(p.email); });
             } catch (error) {
                 reminderWrite("Could not check who is waiting: " + error.message);
@@ -1446,14 +1398,16 @@
             }
 
             if (!waiting.length) {
-                reminderWrite(reminder.label + ": everyone has already had this one.");
+                reminderWrite(reminder.label + (recipientCount
+                    ? ": this email has already been sent to everyone."
+                    : ": no eligible taster registrations."));
                 await reminderRefresh();
                 return;
             }
 
             const minutes = Math.ceil(waiting.length * PENDING_PACE_MS / 60000);
 
-            if (!confirm("Send “" + reminder.label + "” from " + from
+            if (!confirm("Send “" + reminder.label + "” " + from
                 + " to " + waiting.length + " people?\n\nThis takes about " + minutes
                 + " minutes and cannot be taken back.")) return;
 
@@ -1461,6 +1415,7 @@
             reminderWrite(reminder.label + " (" + from + "): sending to " + waiting.length + ", about " + minutes + " minutes…");
 
             let sent = 0;
+            const original = button.textContent;
 
             try {
                 for (let i = 0; i < waiting.length; i++) {
@@ -1483,6 +1438,7 @@
                 reminderWrite("Stopped: " + error.message);
                 reminderWrite("Anyone already sent is recorded — press again to carry on.");
             } finally {
+                button.textContent = original;
                 reminderButtons().forEach(function (b) { b.disabled = false; });
                 await reminderRefresh();
             }
@@ -1504,6 +1460,7 @@
                     const button = document.createElement("button");
                     button.type = "button";
                     button.textContent = pair[1];
+                    button.disabled = true;
                     button.addEventListener("click", function () {
                         reminderSend(reminder, pair[0], pair[1], button);
                     });
@@ -1532,26 +1489,35 @@
             }
 
             try {
-                const q = await reminderCall(TESTABLE[0].campaign, { action: "quota" });
+                const q = await reminderCall(REMINDERS[0].buttons[0][0], { action: "quota" });
                 const parts = [];
+                const countsKnown = REMINDERS.every(function (r) { return Number.isInteger(r.waitingCount); });
+                const largestRun = countsKnown ? Math.max(...REMINDERS.map(function (r) { return r.waitingCount; })) : null;
+                const remainingSends = countsKnown ? REMINDERS.reduce(function (total, r) { return total + r.waitingCount; }, 0) : null;
 
                 if (q.sentToday !== null) parts.push("<strong>" + q.sentToday + "</strong> emails sent today");
 
                 if (q.remaining !== null) {
                     parts.push("Brevo reports <strong>" + q.remaining + "</strong> emails left"
                         + (q.planType ? " on the " + q.planType + " plan" : ""));
-                    box.className = "quota" + (q.remaining < 88 ? " spent" : (q.remaining < 150 ? " tight" : ""));
+                    box.className = "quota" + (countsKnown && q.remaining < largestRun ? " spent"
+                        : (countsKnown && q.remaining < remainingSends ? " tight" : ""));
                 } else {
                     parts.push("Brevo did not report a remaining figure");
                     box.className = "quota";
                 }
 
-                if (q.remaining !== null && q.remaining < 88) {
-                    parts.push("not enough for a full run of 88");
+                if (countsKnown) {
+                    parts.push("<strong>" + remainingSends + "</strong> sends remaining across both emails");
+                    if (q.remaining !== null && q.remaining < remainingSends) {
+                        parts.push("not enough allowance to complete both emails today");
+                    }
+                } else {
+                    parts.push("recipient counts are unavailable");
                 }
 
                 box.innerHTML = parts.join(" · ")
-                    + ". <span class=\"aside\">Note: each registration costs 2 emails.</span>";
+                    + ". <span class=\"aside\">Each selected email uses one send per recipient. Tests also use the allowance.</span>";
 
                 if (q.statsError || q.accountError) {
                     box.innerHTML += "<br><span style=\"font-size:11.5px;\">"
@@ -1568,7 +1534,6 @@
 
             ready.reminders = true;
             syncPanels();
-            quotaRefresh();
 
             if (!reminderRows.children.length) reminderBuildRows();
 
@@ -1577,18 +1542,24 @@
 
                 try {
                     const roster = await reminderCall(reminder.buttons[0][0], { action: "list" });
-                    const done = new Set(roster.alreadySent);
+                    const recipients = roster.recipients || [];
+                    const done = new Set(roster.alreadySent || []);
                     const waiting = (roster.recipients || []).filter(function (p) { return !done.has(p.email); });
+                    reminder.waitingCount = waiting.length;
 
-                    status.textContent = waiting.length
-                        ? waiting.length + " still to receive it"
-                        : "everyone has had this one";
+                    status.textContent = !recipients.length ? "no eligible taster registrations"
+                        : waiting.length ? waiting.length + " of " + recipients.length + " still to receive it"
+                        : "sent to all " + recipients.length + " recipients";
                     reminderRows.querySelectorAll(".reminder-row")[REMINDERS.indexOf(reminder)]
                         .querySelectorAll("button").forEach(function (b) { b.disabled = !waiting.length; });
                 } catch (error) {
+                    reminder.waitingCount = null;
                     status.textContent = "could not check: " + error.message;
+                    reminderRows.querySelectorAll(".reminder-row")[REMINDERS.indexOf(reminder)]
+                        .querySelectorAll("button").forEach(function (b) { b.disabled = true; });
                 }
             }
+            await quotaRefresh();
         }
 
         /* ---------- TEST AN EMAIL ---------- */
@@ -1597,21 +1568,15 @@
         // nobody on the real list loses their place because of it. The address
         // still has to be one the worker already knows, so this sends fewer
         // emails rather than opening the endpoint up.
-        // What the test panel offers, as { campaign, label }. A test goes to one
-        // person on the team list and is never written to the ledger.
+        // The sender selector applies to either of the two test emails.
         const TESTABLE = [
-            { campaign: "taster-2026-09-13-joining-frank", label: "Taster invitation · Frank" },
-            { campaign: "taster-2026-09-13-joining-askus", label: "Taster invitation · Dystil" },
-            { campaign: "bootcamp-2026-09-26-rich-taster1-frank", label: "Bootcamp invitation · Frank" },
-            { campaign: "bootcamp-2026-09-26-rich-taster1-askus", label: "Bootcamp invitation · Dystil" },
-            { campaign: "bootcamp-confirm-place-2026-09-frank", label: "Confirm your place · Frank" },
-            { campaign: "bootcamp-confirm-place-2026-09-askus", label: "Confirm your place · Dystil" },
-            { campaign: "bootcamp-checkout-abandoned-frank", label: "Stopped at payment · Frank" },
-            { campaign: "bootcamp-checkout-abandoned-askus", label: "Stopped at payment · Dystil" }
+            { campaign: "taster-2026-09-13-calendar", label: "Calendar invitation" },
+            { campaign: "taster-2026-09-13-joining", label: "Taster session joining link" }
         ];
 
         const testPanel = document.getElementById("testing");
         const testWho = document.getElementById("test-who");
+        const testFrom = document.getElementById("test-from");
         const testButtons = document.getElementById("test-buttons");
         const testLog = document.getElementById("test-log");
 
@@ -1630,24 +1595,29 @@
             }
 
             const person = testWho.options[testWho.selectedIndex].textContent;
-            if (!confirm("Send “" + entry.label + "” to " + person + "?")) return;
+            const sender = testFrom.options[testFrom.selectedIndex].textContent;
+            const campaign = entry.campaign + "-" + testFrom.value;
+            if (!confirm("Send “" + entry.label + "” from " + sender + " to " + person + "?")) return;
 
             const original = button.textContent;
             [].slice.call(testButtons.querySelectorAll("button")).forEach(function (b) { b.disabled = true; });
+            testFrom.disabled = true;
             button.textContent = "Sending…";
 
             try {
-                const body = await reminderCall(entry.campaign, { action: "test", email: address });
+                const body = await reminderCall(campaign, { action: "test", email: address });
 
                 body.results.forEach(function (r) {
-                    testWrite(entry.label + " → " + r.email + ": "
+                    testWrite(entry.label + " (from " + sender + ") → " + r.email + ": "
                         + (r.status === "sent" ? "sent" : r.status + " — " + r.reason));
                 });
             } catch (error) {
                 testWrite(entry.label + " failed: " + error.message);
             } finally {
                 [].slice.call(testButtons.querySelectorAll("button")).forEach(function (b) { b.disabled = false; });
+                testFrom.disabled = false;
                 button.textContent = original;
+                await quotaRefresh();
             }
         }
 
@@ -1660,7 +1630,7 @@
             if (testButtons.children.length) return;
 
             try {
-                const roster = await reminderCall(TESTABLE[0].campaign, { action: "list" });
+                const roster = await reminderCall(TESTABLE[0].campaign + "-" + testFrom.value, { action: "list" });
 
                 (roster.testRecipients || []).forEach(function (person) {
                     const option = document.createElement("option");

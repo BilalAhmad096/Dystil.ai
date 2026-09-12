@@ -2142,215 +2142,154 @@ const CONFIRM_PLACE_SUBJECT =
    reader did last rather than opening with the sale.
 --------------------------------------------------------------------------- */
 
-/* ---------------------------------------------------------------------------
-   The joining email for the taster session
-   ---------------------------------------------------------------------------
-   The email that went out for the August session, with the day, the date and
-   the times moved to the September one. It is deliberately not rewritten: it
-   reached people once already and this is the same invitation to the same kind
-   of session, so the copy is left alone and only the facts that changed are
-   changed. Everything that moved is in TASTER_SESSION below, which is the only
-   place a date or a time is written down.
-
-   Five sentences did have to go with them, all of the same kind: things that
-   were true of the August audience and are not true of this one. It called
-   itself our very first taster session, twice. It told the reader they were
-   one of the hundreds who had grabbed a spot, and warned them not to waste it.
-   But this goes to everybody on both taster registers, and ninety-six of the
-   hundred and one never signed up for the September session at all - so a
-   sentence congratulating them on a place they have not taken is the first
-   thing they would notice.
-
-   None of the cuts replaces the claim with anything. The honest replacement
-   would be some version of "this is the second one, and you missed the first",
-   which is the one thing this email is not supposed to bring up.
-
-   It goes to both taster registers at once, grouped by address, so somebody on
-   both lists is one recipient and gets one email rather than two.
---------------------------------------------------------------------------- */
-
-// The same Teams meeting as the first session.
+// Both messages are for everyone who registered for either taster. Keep the
+// copy focused on session details; Gmail still decides each recipient's tab.
 const TASTER_MEETING_URL = "https://teams.microsoft.com/dl/launcher/launcher.html?url=%2F_%23%2Fmeet%2F229072838157592%3Fp%3DcAIRVOIkArp5srCvN5%26anon%3Dtrue&type=meet&deeplinkId=b1481443-9b4f-424f-b23b-02e70811caf7&directDl=true&msLaunch=true&enableMobilePage=true&suppressPrompt=true";
 
-// Every date and time the email states, in one place. `shareBy` is the night
-// the registration page closes, which is what the "tell a friend" line asks
-// people to beat.
 const TASTER_SESSION = {
-    day: "Sunday",
-    date: "Sunday, 13th September 2026",
-    time: "2:00 PM \u2013 3:00 PM UK Time",
-    startsAt: "2:00 PM",
-    shareBy: "Saturday night"
+    startsAt: "2026-09-13T13:00:00Z",
+    endsAt: "2026-09-13T14:00:00Z",
+    timeZone: "Europe/London",
+    uid: "dystil-taster-20260913T130000Z@dystil.ai"
 };
 
-const TASTER_INVITE_SUBJECT =
-    `\u{1F525} Dystil: You\u2019re In. This ${TASTER_SESSION.day} is Going to Be Different \u2014 Here\u2019s What to Expect`;
+const TASTER_DATE = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TASTER_SESSION.timeZone,
+    weekday: "long", day: "numeric", month: "long", year: "numeric"
+}).format(new Date(TASTER_SESSION.startsAt));
 
-const TASTER_AGENDA = [
-    ["\u{1F680}", "01 \u00b7 Future of Work", "what's really happening in your industry right now"],
-    ["\u{1F916}", "02 \u00b7 AI Role Impact Demo", "AI applied to real roles, live"],
-    ["\u{1F4C1}", "03 \u00b7 Profile Preview", "the kind of work that makes employers take notice"],
-    ["\u{1F3AF}", "04 \u00b7 Why Dystil? Pathways & Q&A", "where you could go next, and your questions answered"]
-];
+const TASTER_CLOCK = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TASTER_SESSION.timeZone, hour: "numeric", minute: "2-digit", hour12: true
+});
+const TASTER_TIME = TASTER_CLOCK.format(new Date(TASTER_SESSION.startsAt))
+    + " to " + TASTER_CLOCK.format(new Date(TASTER_SESSION.endsAt)) + " UK time (BST)";
 
-const TASTER_SOCIALS = [
-    ["\u{1F4D8}", "Facebook", "https://www.facebook.com/profile.php?id=61593583825137"],
-    ["\u{1F4F8}", "Instagram", "https://www.instagram.com/dystil.ai"],
-    ["\u{1F3B5}", "TikTok", "https://www.tiktok.com/@dystil.ai"]
-];
-
-function buildTasterJoiningHtml(firstName) {
-    const greeting = firstName ? `Hey ${escapeHtml(firstName)}!` : "Hey!";
-
-    const agenda = TASTER_AGENDA.map(([icon, title, detail]) => `
-        <tr>
-            <td style="padding:8px 0;vertical-align:top;width:34px;font-size:18px;">${icon}</td>
-            <td style="padding:8px 0;line-height:1.5;">
-                <strong style="color:#123f31;">${escapeHtml(title)}</strong>
-                <span style="color:#4c5a54;"> \u2014 ${escapeHtml(detail)}</span>
-            </td>
-        </tr>`).join("");
-
-    const socials = TASTER_SOCIALS.map(([icon, name, href]) =>
-        `<p style="margin:4px 0;">${icon} ${escapeHtml(name)}: <a href="${escapeHtml(href)}" style="color:#147a59;">${escapeHtml(href)}</a></p>`
-    ).join("");
-
-    return `<!doctype html>
-<html><body style="margin:0;background:#f4f7f6;font-family:Arial,Helvetica,sans-serif;color:#16221d;">
-    <div style="max-width:620px;margin:0 auto;padding:32px 16px;">
-        <div style="background:#123f31;color:#ffffff;padding:28px 24px;border-radius:12px 12px 0 0;">
-            <p style="margin:0 0 6px;font-size:12px;letter-spacing:1.6px;color:#8fd3b8;">FREE TASTER SESSION</p>
-            <h1 style="font-size:26px;margin:0;">${greeting}</h1>
-            <p style="margin:8px 0 0;font-size:16px;color:#d8ede5;">Your seat is waiting.</p>
-        </div>
-
-        <div style="background:#ffffff;padding:24px;line-height:1.6;">
-            <p style="margin-top:0;">Now mark the calendar, set the alarm, and show up \u2014 because this ${escapeHtml(TASTER_SESSION.day)} is going to be worth every minute.</p>
-
-            <p>We're kicking off Dystil's Free Taster Session for the Career Accelerator Program.</p>
-
-            <table role="presentation" style="width:100%;border-collapse:collapse;background:#f4f7f6;border-left:4px solid #147a59;margin:20px 0;">
-                <tr><td style="padding:14px 16px 4px;">\u{1F4C5} <strong>${escapeHtml(TASTER_SESSION.date)}</strong></td></tr>
-                <tr><td style="padding:4px 16px;">\u23f0 <strong>${escapeHtml(TASTER_SESSION.time)}</strong></td></tr>
-                <tr><td style="padding:4px 16px 14px;">\u{1F4BB} <strong>Online \u2013 Live Session, <a href="${escapeHtml(TASTER_MEETING_URL)}" style="color:#147a59;">Meeting Link here</a>, calendar invite to follow.</strong></td></tr>
-            </table>
-
-            <p style="text-align:center;margin:24px 0;">
-                <a href="${escapeHtml(TASTER_MEETING_URL)}" style="display:inline-block;background:#147a59;color:#ffffff;text-decoration:none;font-weight:bold;font-size:16px;padding:14px 32px;border-radius:999px;">Join the session on Teams</a>
-            </p>
-
-            <p>You'll get a real look at what the Career Accelerator Program is all about \u2014 the skills, the projects, the confidence, and the career edge. Not a sales pitch. An actual session built to give you something useful from minute one.</p>
-
-            <p style="margin-bottom:4px;"><strong>Here's what's coming your way:</strong></p>
-            <table role="presentation" style="width:100%;border-collapse:collapse;margin-bottom:20px;">${agenda}
-            </table>
-
-            <p>We're building something genuinely exciting, and you're part of that from day one.</p>
-
-            <hr style="border:none;border-top:1px solid #e2e9e6;margin:24px 0;">
-
-            <p style="margin-bottom:4px;"><strong>Know someone who'd benefit? Share it.</strong></p>
-            <p style="margin-top:0;">If you have a friend, classmate, or colleague who's thinking about their career \u2014 send them this link and invite them to register before ${escapeHtml(TASTER_SESSION.shareBy)}:</p>
-            <p style="font-size:17px;">\u{1F449} <a href="https://dystil.ai/students/taster" style="color:#147a59;font-weight:bold;">dystil.ai/students/taster</a></p>
-
-            <p style="margin-bottom:4px;"><strong>Follow us for updates before ${escapeHtml(TASTER_SESSION.day)}:</strong></p>
-            ${socials}
-
-            <hr style="border:none;border-top:1px solid #e2e9e6;margin:24px 0;">
-
-            <p>We'll see you ${escapeHtml(TASTER_SESSION.day)} at ${escapeHtml(TASTER_SESSION.startsAt)} sharp.</p>
-            <p style="margin-bottom:0;">Don't be the one who meant to come and didn't. \u{1F609}</p>
-        </div>
-
-        <div style="background:#ffffff;padding:20px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;">
-            <p style="margin:0 0 12px;"><strong>The Dystil Team</strong></p>
-            <p style="margin:0;font-size:14px;color:#4c5a54;">
-                <strong style="color:#16221d;">Frank M</strong><br>
-                Executive Partner<br>
-                <a href="mailto:askus@dystil.ai" style="color:#147a59;">askus@dystil.ai</a><br>
-                <a href="mailto:frank@dystil.ai" style="color:#147a59;">frank@dystil.ai</a><br>
-                <a href="https://www.dystil.ai" style="color:#147a59;">www.dystil.ai</a>
-            </p>
-        </div>
-
-        <p style="text-align:center;font-size:12px;color:#7c8a84;padding:16px 8px 0;">
-            You're getting this because you registered for the Dystil Free Taster Session.
-        </p>
-    </div>
-</body></html>`;
-}
-
-function buildTasterJoiningText(firstName) {
-    const agenda = TASTER_AGENDA.map(([icon, title, detail]) => `${icon} ${title} \u2014 ${detail}`);
-    const socials = TASTER_SOCIALS.map(([icon, name, href]) => `${icon} ${name}: ${href}`);
-
+// Build the HTML and text from the same paragraphs, so both contain the same
+// facts. The only web link is the existing Teams meeting, with a readable label
+// in HTML. No banner, button, images, social links or referral requests.
+function tasterEmailParagraphs(kind, firstName) {
     return [
-        firstName ? `Hey ${firstName}!` : "Hey!",
-        "Your seat is waiting.",
-        "",
-        `Now mark the calendar, set the alarm, and show up \u2014 because this ${TASTER_SESSION.day} is going to be worth every minute.`,
-        "",
-        "We're kicking off Dystil's Free Taster Session for the Career Accelerator Program.",
-        "",
-        `\u{1F4C5} ${TASTER_SESSION.date}`,
-        `\u23f0 ${TASTER_SESSION.time}`,
-        "\u{1F4BB} Online \u2013 Live Session, Meeting Link here, calendar invite to follow.",
-        "",
-        "Join the session on Teams:",
-        TASTER_MEETING_URL,
-        "",
-        "You'll get a real look at what the Career Accelerator Program is all about \u2014 the skills, the projects, the confidence, and the career edge. Not a sales pitch. An actual session built to give you something useful from minute one.",
-        "",
-        "Here's what's coming your way:",
-        ...agenda,
-        "",
-        "We're building something genuinely exciting, and you're part of that from day one.",
-        "",
-        "---",
-        "",
-        "Know someone who'd benefit? Share it.",
-        `If you have a friend, classmate, or colleague who's thinking about their career \u2014 send them this link and invite them to register before ${TASTER_SESSION.shareBy}:`,
-        "\u{1F449} https://dystil.ai/students/taster",
-        "",
-        `Follow us for updates before ${TASTER_SESSION.day}:`,
-        ...socials,
-        "",
-        "---",
-        "",
-        `We'll see you ${TASTER_SESSION.day} at ${TASTER_SESSION.startsAt} sharp.`,
-        "Don't be the one who meant to come and didn't. \u{1F609}",
-        "",
-        "The Dystil Team",
-        "",
-        "Frank M",
-        "Executive Partner",
-        "askus@dystil.ai",
-        "frank@dystil.ai",
-        "www.dystil.ai",
-        "",
-        "You're getting this because you registered for the Dystil Free Taster Session."
-    ].join("\n");
+        firstName ? "Hi " + firstName + "," : "Hi,",
+        "You registered for a Dystil taster session, and we would like to invite you to join us on " + TASTER_DATE + ".",
+        kind === "calendar"
+            ? "The calendar invitation is attached. Open it to add the session to your calendar. It includes the Teams link and a reminder 30 minutes before the start."
+            : "Here are the joining details for the free online session.",
+        TASTER_DATE + "\n" + TASTER_TIME + "\nOnline on Microsoft Teams",
+        "Join on Microsoft Teams: " + TASTER_MEETING_URL,
+        kind === "calendar"
+            ? "If your email does not show an invitation, open the attached .ics file in your calendar app."
+            : "We will look at how AI is changing work, demonstrate it on real job roles, show examples of practical projects, and leave time for your questions.",
+        "If you have any questions, reply to this email.",
+        "Kind regards,\nThe Dystil Team"
+    ];
 }
 
-// One email under either name, on one ledger across both registers, so a
-// person who registered for both sessions is sent it once and pressing the
-// second button afterwards finds nobody left.
-function buildTasterInviteCampaigns() {
-    const campaigns = {};
+function buildTasterEmailHtml(kind, firstName) {
+    const meetingLine = "Join on Microsoft Teams: " + TASTER_MEETING_URL;
+    const paragraphs = tasterEmailParagraphs(kind, firstName).map((paragraph) => {
+        const content = paragraph === meetingLine
+            ? '<a href="' + escapeHtml(TASTER_MEETING_URL) + '">Join on Microsoft Teams</a>'
+            : escapeHtml(paragraph).replace(/\n/g, "<br>");
+        return '<p style="margin:0 0 16px;">' + content + '</p>';
+    }).join("\n");
+    return '<!doctype html><html><head><meta charset="utf-8"></head>'
+        + '<body style="background:#ffffff;color:#222222;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5;">'
+        + paragraphs + '</body></html>';
+}
 
-    for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
-        campaigns[`taster-2026-09-13-joining-${who}`] = {
-            roster: "tasters",
-            subject: TASTER_INVITE_SUBJECT,
-            buildHtml: buildTasterJoiningHtml,
-            buildText: buildTasterJoiningText,
-            sender,
-            replyTo: sender,
-            dedupeKey: "taster-2026-09-13-joining",
-            testRecipients: TEST_TEAM
-        };
+function escapeIcsText(value) {
+    return String(value).replace(/\\/g, "\\\\").replace(/\r\n|\r|\n/g, "\\n")
+        .replace(/;/g, "\\;").replace(/,/g, "\\,");
+}
+
+// RFC 6868 parameter escaping keeps attendee names from adding properties.
+function quoteIcsParameter(value) {
+    return '"' + String(value).replace(/\^/g, "^^").replace(/\r\n|\r|\n/g, "^n")
+        .replace(/"/g, "^'") + '"';
+}
+
+function foldIcsLine(line) {
+    const encoder = new TextEncoder();
+    let folded = "";
+    let octets = 0;
+    for (const character of line) {
+        const size = encoder.encode(character).length;
+        if (octets + size > 75) {
+            folded += "\r\n ";
+            octets = 1;
+        }
+        folded += character;
+        octets += size;
     }
+    return folded;
+}
 
+function icsTimestamp(value) {
+    return new Date(value).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+function calendarAddress(email) {
+    return "mailto:" + encodeURIComponent(email).replace(/%40/g, "@");
+}
+
+function buildTasterCalendarAttachment(person, sender) {
+    const lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Dystil//Free Taster Session//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:REQUEST",
+        "BEGIN:VEVENT",
+        "UID:" + TASTER_SESSION.uid,
+        "SEQUENCE:0",
+        "DTSTAMP:" + icsTimestamp(new Date()),
+        "DTSTART:" + icsTimestamp(TASTER_SESSION.startsAt),
+        "DTEND:" + icsTimestamp(TASTER_SESSION.endsAt),
+        "SUMMARY:Dystil Free Taster Session",
+        "DESCRIPTION:" + escapeIcsText("Dystil free taster session.\n" + TASTER_DATE + "\n" + TASTER_TIME
+            + "\n\nJoin on Microsoft Teams:\n" + TASTER_MEETING_URL
+            + "\n\nAI and the future of work, a live role demo, practical project examples, and questions."),
+        "LOCATION:Online on Microsoft Teams",
+        "URL:" + TASTER_MEETING_URL,
+        "ORGANIZER;CN=" + quoteIcsParameter(sender.name) + ":" + calendarAddress(sender.email),
+        "ATTENDEE;CN=" + quoteIcsParameter(person.fullName)
+            + ";CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:" + calendarAddress(person.email),
+        "STATUS:CONFIRMED",
+        "TRANSP:OPAQUE",
+        "BEGIN:VALARM",
+        "TRIGGER:-PT30M",
+        "ACTION:DISPLAY",
+        "DESCRIPTION:Dystil Free Taster Session starts in 30 minutes",
+        "END:VALARM",
+        "END:VEVENT",
+        "END:VCALENDAR"
+    ];
+    return {
+        name: "dystil-taster-2026-09-13.ics",
+        content: bytesToBase64(new TextEncoder().encode(lines.map(foldIcsLine).join("\r\n") + "\r\n"))
+    };
+}
+
+function buildTasterCampaigns() {
+    const campaigns = {};
+    for (const kind of ["calendar", "joining"]) {
+        for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
+            campaigns["taster-2026-09-13-" + kind + "-" + who] = {
+                roster: "tasters",
+                subject: (kind === "calendar" ? "Calendar invitation" : "Joining link")
+                    + " | Dystil taster session, " + TASTER_DATE,
+                buildHtml: (firstName) => buildTasterEmailHtml(kind, firstName),
+                buildText: (firstName) => tasterEmailParagraphs(kind, firstName).join("\n\n"),
+                sender,
+                replyTo: sender,
+                attachInvite: kind === "calendar",
+                // Preserve the joining ledger so changing its copy does not
+                // resend it. Calendar and joining are separate messages.
+                dedupeKey: "taster-2026-09-13-" + kind,
+                testRecipients: TEST_TEAM
+            };
+        }
+    }
     return campaigns;
 }
 
@@ -2405,7 +2344,7 @@ const CAMPAIGNS = {
     ...buildBootcampCampaigns(),
     ...buildConfirmPlaceCampaigns(),
     ...buildAbandonedCampaigns(),
-    ...buildTasterInviteCampaigns()
+    ...buildTasterCampaigns()
 };
 
 // Anybody who has asked not to be emailed is left out of every roster, so the
@@ -2590,6 +2529,10 @@ async function handleBroadcast(request, env, corsHeaders) {
             payload.attachment = [{ url: campaign.attachUrl, name: campaign.attachName }];
         }
 
+        if (campaign.attachInvite) {
+            payload.attachment = [buildTasterCalendarAttachment(person, campaign.sender)];
+        }
+
         if (campaign.plainOnly) delete payload.htmlContent;
 
         const sent = campaign.route === "graph"
@@ -2675,6 +2618,10 @@ async function sendBroadcastTest(env, campaign, corsHeaders, onlyEmail) {
         // site rather than being carried through the Worker on every send.
         if (campaign.attachUrl) {
             payload.attachment = [{ url: campaign.attachUrl, name: campaign.attachName }];
+        }
+
+        if (campaign.attachInvite) {
+            payload.attachment = [buildTasterCalendarAttachment(person, campaign.sender)];
         }
 
         if (campaign.plainOnly) delete payload.htmlContent;
