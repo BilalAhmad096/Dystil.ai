@@ -448,7 +448,7 @@
         <div class="reminders" id="reminders" hidden>
             <h2>Send to everyone who registered</h2>
             <p>
-                Both emails go to everyone who registered for either taster session, once per email.
+                Each email goes to everyone who registered for either taster session, once per email.
                 Duplicate addresses and people who opted out are excluded. Choose Frank or Dystil
                 for each email; both sender options share the same sent record. Sends go one at a
                 time, so allow about a minute for every eight people.
@@ -616,7 +616,7 @@
             },
             emails: {
                 title: "Emails",
-                note: "Test both emails against the team list first. Each email goes to everyone who registered for either taster session."
+                note: "Test an email against the team list first. Each one goes to everyone who registered for either taster session."
             }
         };
 
@@ -1351,6 +1351,16 @@
                     ["taster-2026-09-13-joining-frank", "from Frank"],
                     ["taster-2026-09-13-joining-askus", "from Dystil"]
                 ]
+            },
+            {
+                // Its own record, so being sent the link or the calendar
+                // invitation does not take anybody off this one. Press it on
+                // the morning of the session; nothing here is scheduled.
+                label: "Reminder on the day",
+                buttons: [
+                    ["taster-2026-09-13-reminder-frank", "from Frank"],
+                    ["taster-2026-09-13-reminder-askus", "from Dystil"]
+                ]
             }
         ];
 
@@ -1571,7 +1581,8 @@
         // The sender selector applies to either of the two test emails.
         const TESTABLE = [
             { campaign: "taster-2026-09-13-calendar", label: "Calendar invitation" },
-            { campaign: "taster-2026-09-13-joining", label: "Taster session joining link" }
+            { campaign: "taster-2026-09-13-joining", label: "Taster session joining link" },
+            { campaign: "taster-2026-09-13-reminder", label: "Reminder on the day" }
         ];
 
         const testPanel = document.getElementById("testing");

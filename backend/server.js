@@ -2270,26 +2270,193 @@ function buildTasterCalendarAttachment(person, sender) {
     };
 }
 
+/* ---------------------------------------------------------------------------
+   The morning-of reminder
+   ---------------------------------------------------------------------------
+   Sent on the day, to everyone on both taster registers, whether or not they
+   were sent the joining link or the calendar invitation: its own ledger, so
+   nothing anybody has already had takes them off it.
+
+   It is the one taster email that is dressed. The note above CAMPAIGNS records
+   what that costs - the styled bootcamp invitation reached Promotions and the
+   plain notices reached Primary - so this leans on the half of that finding it
+   can still use. What carried the emails that landed was being about something
+   the reader had already done, and a reminder is exactly that: they booked a
+   seat, it starts today. There are no images above the footer, one destination
+   for every link, and a subject that states a fact and an hour.
+--------------------------------------------------------------------------- */
+
+const REMIND_INK = "#16221d";
+const REMIND_DEEP = "#0d2f24";
+const REMIND_GREEN = "#123f31";
+const REMIND_ACCENT = "#147a59";
+const REMIND_MINT = "#8fd3b8";
+const REMIND_PAPER = "#f4f7f6";
+const REMIND_LINE = "#e2e9e6";
+const REMIND_MUTED = "#5b6b64";
+
+// Just the hour, for the places that say "starts at 2:00 pm" rather than
+// printing the whole range again.
+const TASTER_START_TIME = TASTER_CLOCK.format(new Date(TASTER_SESSION.startsAt));
+
+const TASTER_REMINDER_SUBJECT =
+    `Today at ${TASTER_START_TIME} | Dystil taster session`;
+
+const TASTER_REMINDER_POINTS = [
+    ["How AI is changing work", "what is actually happening to ordinary jobs, not the headlines"],
+    ["A live role demo", "the same tools applied to real job roles while you watch"],
+    ["Practical project examples", "the kind of work that gives you something to show"],
+    ["Your questions", "time at the end, and nothing is too basic to ask"]
+];
+
+// The footer logos. They are the only images in the email and they sit below
+// everything that matters, so a client that blocks images loses decoration and
+// nothing else - the alt text still names each account and the link still
+// works.
+function reminderSocialIcons() {
+    return DYSTIL_SOCIALS.map(([, name, url]) => `
+                                    <td style="padding:0 8px;">
+                                        <a href="${escapeHtml(url)}" style="text-decoration:none;"><img src="${SOCIAL_ICONS}${name.toLowerCase()}.png" width="30" height="30" alt="${escapeHtml(name)}" style="display:block;border:0;outline:none;"></a>
+                                    </td>`).join("");
+}
+
+function buildTasterReminderHtml(firstName) {
+    const greeting = firstName ? escapeHtml(firstName) : "there";
+
+    const points = TASTER_REMINDER_POINTS.map(([title, detail]) => `
+                                <tr>
+                                    <td width="26" valign="top" style="padding:6px 0;color:${REMIND_ACCENT};font-size:16px;font-weight:bold;">&#10003;</td>
+                                    <td style="padding:6px 0;font-size:15px;line-height:1.5;color:${REMIND_INK};">
+                                        <strong style="color:${REMIND_INK};">${escapeHtml(title)}</strong>
+                                        <span style="color:${REMIND_MUTED};"> &mdash; ${escapeHtml(detail)}</span>
+                                    </td>
+                                </tr>`).join("");
+
+    return `<!doctype html>
+<html><body style="margin:0;padding:0;background:${REMIND_PAPER};">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">It is today. ${escapeHtml(TASTER_TIME)}, online on Microsoft Teams.</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${REMIND_PAPER};">
+        <tr><td align="center" style="padding:28px 12px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:100%;font-family:Arial,Helvetica,sans-serif;color:${REMIND_INK};">
+
+                <tr><td style="background:${REMIND_GREEN};padding:30px 32px 28px;border-radius:14px 14px 0 0;">
+                    <p style="margin:0 0 20px;font-size:15px;letter-spacing:5px;color:#ffffff;font-weight:bold;">DYSTIL</p>
+                    <p style="margin:0 0 10px;font-size:12px;letter-spacing:2px;color:${REMIND_MINT};font-weight:bold;">IT IS TODAY</p>
+                    <h1 style="margin:0;font-size:31px;line-height:1.25;color:#ffffff;">We will see you at ${escapeHtml(TASTER_START_TIME)}</h1>
+                </td></tr>
+
+                <tr><td style="background:#ffffff;padding:30px 32px 8px;">
+                    <p style="margin:0 0 16px;font-size:16px;line-height:1.6;">Hi ${greeting},</p>
+                    <p style="margin:0 0 22px;font-size:16px;line-height:1.6;">Your free taster session is this afternoon. Here is the link again so it is at the top of your inbox when you need it.</p>
+
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${REMIND_PAPER};border:1px solid ${REMIND_LINE};border-left:4px solid ${REMIND_ACCENT};border-radius:0 8px 8px 0;">
+                        <tr><td style="padding:18px 20px;">
+                            <p style="margin:0 0 6px;font-size:19px;font-weight:bold;color:${REMIND_INK};">${escapeHtml(TASTER_DATE)}</p>
+                            <p style="margin:0 0 4px;font-size:16px;color:${REMIND_INK};">${escapeHtml(TASTER_TIME)}</p>
+                            <p style="margin:0;font-size:15px;color:${REMIND_MUTED};">Online on Microsoft Teams</p>
+                        </td></tr>
+                    </table>
+                </td></tr>
+
+                <tr><td align="center" style="background:#ffffff;padding:28px 32px 8px;">
+                    <a href="${escapeHtml(TASTER_MEETING_URL)}" style="display:inline-block;background:${REMIND_ACCENT};color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:16px 44px;border-radius:8px;">Join the session</a>
+                    <p style="margin:14px 0 0;font-size:13px;color:${REMIND_MUTED};">No download needed &mdash; Teams opens in your browser</p>
+                </td></tr>
+
+                <tr><td style="background:#ffffff;padding:24px 32px 6px;">
+                    <p style="margin:0 0 12px;font-size:13px;letter-spacing:1.6px;color:${REMIND_MUTED};font-weight:bold;">WHAT THE HOUR COVERS</p>
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${points}
+                    </table>
+                </td></tr>
+
+                <tr><td style="background:#ffffff;padding:20px 32px 30px;">
+                    <p style="margin:0;font-size:14px;line-height:1.6;color:${REMIND_MUTED};">Try the link a few minutes early so anything that needs installing has time to. If it will not open, or something has come up, reply to this email or call <a href="${DYSTIL_PHONE_LINK}" style="color:${REMIND_ACCENT};text-decoration:none;">${escapeHtml(DYSTIL_PHONE)}</a>.</p>
+                </td></tr>
+
+                <tr><td align="center" style="background:${REMIND_DEEP};padding:26px 32px;border-radius:0 0 14px 14px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 16px;">
+                        <tr>${reminderSocialIcons()}
+                        </tr>
+                    </table>
+                    <p style="margin:0 0 6px;font-size:14px;color:#ffffff;font-weight:bold;">The Dystil Team</p>
+                    <p style="margin:0;font-size:13px;line-height:1.7;color:${REMIND_MINT};">
+                        <a href="mailto:askus@dystil.ai" style="color:${REMIND_MINT};text-decoration:none;">askus@dystil.ai</a>
+                        &nbsp;&middot;&nbsp; ${escapeHtml(DYSTIL_PHONE)}
+                        &nbsp;&middot;&nbsp; <a href="https://dystil.ai" style="color:${REMIND_MINT};text-decoration:none;">dystil.ai</a>
+                    </p>
+                </td></tr>
+
+            </table>
+        </td></tr>
+    </table>
+</body></html>`;
+}
+
+function buildTasterReminderText(firstName) {
+    return [
+        firstName ? `Hi ${firstName},` : "Hi,",
+        "",
+        "Your free taster session is this afternoon. Here is the link again so it is at the top of your inbox when you need it.",
+        "",
+        TASTER_DATE,
+        TASTER_TIME,
+        "Online on Microsoft Teams",
+        "",
+        "Join the session: " + TASTER_MEETING_URL,
+        "",
+        "What the hour covers:",
+        ...TASTER_REMINDER_POINTS.map(([title, detail]) => `- ${title} - ${detail}`),
+        "",
+        `Try the link a few minutes early so anything that needs installing has time to. If it will not open, or something has come up, reply to this email or call ${DYSTIL_PHONE}.`,
+        "",
+        "Kind regards,",
+        "The Dystil Team",
+        "",
+        ...DYSTIL_SOCIALS.map(([, name, url]) => `${name}: ${url}`)
+    ].join("\n");
+}
+
+// The three messages for the session, each on its own ledger. Being sent one
+// of them does not take anybody off another: the reminder goes to everybody on
+// the day whether or not they were sent the link a few days before.
+const TASTER_EMAILS = {
+    calendar: {
+        subject: "Calendar invitation | Dystil taster session, " + TASTER_DATE,
+        buildHtml: (firstName) => buildTasterEmailHtml("calendar", firstName),
+        buildText: (firstName) => tasterEmailParagraphs("calendar", firstName).join("\n\n"),
+        attachInvite: true
+    },
+    joining: {
+        subject: "Joining link | Dystil taster session, " + TASTER_DATE,
+        buildHtml: (firstName) => buildTasterEmailHtml("joining", firstName),
+        buildText: (firstName) => tasterEmailParagraphs("joining", firstName).join("\n\n")
+    },
+    reminder: {
+        subject: TASTER_REMINDER_SUBJECT,
+        buildHtml: buildTasterReminderHtml,
+        buildText: buildTasterReminderText
+    }
+};
+
 function buildTasterCampaigns() {
     const campaigns = {};
-    for (const kind of ["calendar", "joining"]) {
+
+    for (const [kind, email] of Object.entries(TASTER_EMAILS)) {
         for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
             campaigns["taster-2026-09-13-" + kind + "-" + who] = {
                 roster: "tasters",
-                subject: (kind === "calendar" ? "Calendar invitation" : "Joining link")
-                    + " | Dystil taster session, " + TASTER_DATE,
-                buildHtml: (firstName) => buildTasterEmailHtml(kind, firstName),
-                buildText: (firstName) => tasterEmailParagraphs(kind, firstName).join("\n\n"),
+                ...email,
                 sender,
                 replyTo: sender,
-                attachInvite: kind === "calendar",
-                // Preserve the joining ledger so changing its copy does not
-                // resend it. Calendar and joining are separate messages.
+                // The ledger key is the kind, not the sender, so the two names
+                // are one send. Editing an email's copy does not change its
+                // key, so nobody who has had it is sent it again.
                 dedupeKey: "taster-2026-09-13-" + kind,
                 testRecipients: TEST_TEAM
             };
         }
     }
+
     return campaigns;
 }
 
