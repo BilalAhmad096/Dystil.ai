@@ -2145,12 +2145,25 @@ const CONFIRM_PLACE_SUBJECT =
 /* ---------------------------------------------------------------------------
    The joining email for the taster session
    ---------------------------------------------------------------------------
-   The email that went out for the August session, word for word, with the day,
-   the date and the times moved to the September one. It is deliberately not
-   rewritten: it reached people once already and this is the same invitation to
-   the same kind of session, so the copy is left alone and only the facts that
-   changed are changed. Everything that moved is in TASTER_SESSION below, which
-   is the only place a date or a time is written down.
+   The email that went out for the August session, with the day, the date and
+   the times moved to the September one. It is deliberately not rewritten: it
+   reached people once already and this is the same invitation to the same kind
+   of session, so the copy is left alone and only the facts that changed are
+   changed. Everything that moved is in TASTER_SESSION below, which is the only
+   place a date or a time is written down.
+
+   Five sentences did have to go with them, all of the same kind: things that
+   were true of the August audience and are not true of this one. It called
+   itself our very first taster session, twice. It told the reader they were
+   one of the hundreds who had grabbed a spot, and warned them not to waste it.
+   But this goes to everybody on both taster registers, and ninety-six of the
+   hundred and one never signed up for the September session at all - so a
+   sentence congratulating them on a place they have not taken is the first
+   thing they would notice.
+
+   None of the cuts replaces the claim with anything. The honest replacement
+   would be some version of "this is the second one, and you missed the first",
+   which is the one thing this email is not supposed to bring up.
 
    It goes to both taster registers at once, grouped by address, so somebody on
    both lists is one recipient and gets one email rather than two.
@@ -2208,13 +2221,13 @@ function buildTasterJoiningHtml(firstName) {
         <div style="background:#123f31;color:#ffffff;padding:28px 24px;border-radius:12px 12px 0 0;">
             <p style="margin:0 0 6px;font-size:12px;letter-spacing:1.6px;color:#8fd3b8;">FREE TASTER SESSION</p>
             <h1 style="font-size:26px;margin:0;">${greeting}</h1>
-            <p style="margin:8px 0 0;font-size:16px;color:#d8ede5;">You registered. Smart move.</p>
+            <p style="margin:8px 0 0;font-size:16px;color:#d8ede5;">Your seat is waiting.</p>
         </div>
 
         <div style="background:#ffffff;padding:24px;line-height:1.6;">
             <p style="margin-top:0;">Now mark the calendar, set the alarm, and show up \u2014 because this ${escapeHtml(TASTER_SESSION.day)} is going to be worth every minute.</p>
 
-            <p>We're kicking off Dystil's very first Free Taster Session for the Career Accelerator Program, and you're one of the 100s who grabbed a spot.</p>
+            <p>We're kicking off Dystil's Free Taster Session for the Career Accelerator Program.</p>
 
             <table role="presentation" style="width:100%;border-collapse:collapse;background:#f4f7f6;border-left:4px solid #147a59;margin:20px 0;">
                 <tr><td style="padding:14px 16px 4px;">\u{1F4C5} <strong>${escapeHtml(TASTER_SESSION.date)}</strong></td></tr>
@@ -2232,7 +2245,7 @@ function buildTasterJoiningHtml(firstName) {
             <table role="presentation" style="width:100%;border-collapse:collapse;margin-bottom:20px;">${agenda}
             </table>
 
-            <p>This is our first session ever \u2014 and we're building something genuinely exciting. You're part of that from day one.</p>
+            <p>We're building something genuinely exciting, and you're part of that from day one.</p>
 
             <hr style="border:none;border-top:1px solid #e2e9e6;margin:24px 0;">
 
@@ -2246,7 +2259,7 @@ function buildTasterJoiningHtml(firstName) {
             <hr style="border:none;border-top:1px solid #e2e9e6;margin:24px 0;">
 
             <p>We'll see you ${escapeHtml(TASTER_SESSION.day)} at ${escapeHtml(TASTER_SESSION.startsAt)} sharp.</p>
-            <p style="margin-bottom:0;">Don't be the one who had a spot and didn't show up. \u{1F609}</p>
+            <p style="margin-bottom:0;">Don't be the one who meant to come and didn't. \u{1F609}</p>
         </div>
 
         <div style="background:#ffffff;padding:20px 24px 24px;border-radius:0 0 12px 12px;line-height:1.6;">
@@ -2273,11 +2286,11 @@ function buildTasterJoiningText(firstName) {
 
     return [
         firstName ? `Hey ${firstName}!` : "Hey!",
-        "You registered. Smart move.",
+        "Your seat is waiting.",
         "",
         `Now mark the calendar, set the alarm, and show up \u2014 because this ${TASTER_SESSION.day} is going to be worth every minute.`,
         "",
-        "We're kicking off Dystil's very first Free Taster Session for the Career Accelerator Program, and you're one of the 100s who grabbed a spot.",
+        "We're kicking off Dystil's Free Taster Session for the Career Accelerator Program.",
         "",
         `\u{1F4C5} ${TASTER_SESSION.date}`,
         `\u23f0 ${TASTER_SESSION.time}`,
@@ -2291,7 +2304,7 @@ function buildTasterJoiningText(firstName) {
         "Here's what's coming your way:",
         ...agenda,
         "",
-        "This is our first session ever \u2014 and we're building something genuinely exciting. You're part of that from day one.",
+        "We're building something genuinely exciting, and you're part of that from day one.",
         "",
         "---",
         "",
@@ -2305,7 +2318,7 @@ function buildTasterJoiningText(firstName) {
         "---",
         "",
         `We'll see you ${TASTER_SESSION.day} at ${TASTER_SESSION.startsAt} sharp.`,
-        "Don't be the one who had a spot and didn't show up. \u{1F609}",
+        "Don't be the one who meant to come and didn't. \u{1F609}",
         "",
         "The Dystil Team",
         "",
