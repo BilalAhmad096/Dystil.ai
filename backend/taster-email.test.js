@@ -58,6 +58,9 @@ function makeDatabase() {
     lead.run("LEAD-002", "Bootcamp Registration", "Erin East", "erin@example.com", "Foundation Bootcamp", 29900, "2026-09-10T09:05:00Z", "2026-09-10T09:20:00Z");
     lead.run("LEAD-003", "Bootcamp Registration", "Finn Ford", "finn@example.com", "Foundation Bootcamp", 29900, "2026-09-10T09:10:00Z", null);
     lead.run("LEAD-004", "Bootcamp Registration", "Opted Out", "stop@example.com", "Foundation Bootcamp", 29900, "2026-09-10T09:15:00Z", null);
+    // A team member testing the payment page, in capitals the way a form
+    // might store it: unpaid, and still never to be chased.
+    lead.run("LEAD-005", "Bootcamp Registration", "Bilal Ahmad", " MailboxForBilal@gmail.com ", "Advanced Bootcamp", 89900, "2026-09-10T09:25:00Z", null);
     sqlite.prepare("INSERT INTO submissions VALUES (?, ?, ?, ?, ?)")
         .run("PAID-001", "Bootcamp Registration", "Finn Ford", "finn@example.com", "paid");
 
@@ -198,6 +201,8 @@ test("the bootcamp campaigns are still reachable while that programme is open", 
     const offPage = [
         "bootcamp-checkout-abandoned-frank",
         "bootcamp-checkout-abandoned-askus",
+        "bootcamp-checkout-abandoned-round2-frank",
+        "bootcamp-checkout-abandoned-round2-askus",
         "bootcamp-confirm-place-2026-09-frank",
         "bootcamp-2026-09-26-rich-taster1-frank",
         "bootcamp-2026-09-26-rich-taster2-askus",
@@ -211,17 +216,61 @@ test("the bootcamp campaigns are still reachable while that programme is open", 
         assert.ok(Array.isArray(response.body.recipients), campaign);
     }
 
-    // Not merely answering: the chaser still picks the right people. Dave
-    // stopped at the payment page. Erin paid, Finn paid under another
-    // reference, and the fourth asked not to be emailed, so chasing any of
-    // them would be the worst thing this campaign could do.
-    const chase = await broadcast(env, { action: "list", campaign: "bootcamp-checkout-abandoned-frank" });
-    assert.deepEqual(chase.body.recipients.map((person) => person.email), ["dave@example.com"]);
-    assert.equal(chase.body.recipients[0].package, "Advanced Bootcamp");
+    // Not merely answering: both rounds pick the right people. Dave stopped at
+    // the payment page. Erin paid, Finn paid under another reference, the
+    // fourth asked not to be emailed, and the fifth is the team testing the
+    // checkout - chasing any of those would be the worst thing this could do.
+    for (const campaign of ["bootcamp-checkout-abandoned-frank", "bootcamp-checkout-abandoned-round2-askus"]) {
+        const chase = await broadcast(env, { action: "list", campaign });
+        assert.deepEqual(chase.body.recipients.map((person) => person.email), ["dave@example.com"], campaign);
+        assert.equal(chase.body.recipients[0].package, "Advanced Bootcamp");
+    }
 
     // Reading a roster is not sending to it.
     assert.equal(deliveries.length, 0);
     assert.deepEqual(db.ledger(), []);
+});
+
+// The second round is a second approach, not a repeat of the first send's
+// bookkeeping: somebody the first round reached is reached again, once, and
+// the team address stays refused even when named directly.
+test("the second chase reaches people the first one already did, and never the team", async (t) => {
+    const db = makeDatabase();
+    t.after(() => db.close());
+    const env = makeEnv(db);
+    const deliveries = captureEmail(t);
+
+    const first = await broadcast(env, {
+        action: "send", campaign: "bootcamp-checkout-abandoned-frank",
+        emails: ["dave@example.com", "mailboxforbilal@gmail.com"]
+    });
+    assert.equal(first.status, 200);
+    assert.deepEqual(first.body.results.map((r) => [r.email, r.status]), [
+        ["dave@example.com", "sent"],
+        ["mailboxforbilal@gmail.com", "skipped"]
+    ]);
+
+    const second = await broadcast(env, {
+        action: "send", campaign: "bootcamp-checkout-abandoned-round2-askus",
+        emails: ["dave@example.com", "mailboxforbilal@gmail.com"]
+    });
+    assert.deepEqual(second.body.results.map((r) => [r.email, r.status]), [
+        ["dave@example.com", "sent"],
+        ["mailboxforbilal@gmail.com", "skipped"]
+    ]);
+
+    const again = await broadcast(env, {
+        action: "send", campaign: "bootcamp-checkout-abandoned-round2-frank",
+        emails: ["dave@example.com"]
+    });
+    assert.equal(again.body.results[0].reason, "Already sent.");
+
+    assert.deepEqual(deliveries.map((payload) => payload.to[0].email), ["dave@example.com", "dave@example.com"]);
+    // SQLite hands rows back without a prototype; copy them before comparing.
+    assert.deepEqual(db.ledger().map((row) => ({ ...row })), [
+        { campaign: "bootcamp-checkout-abandoned", email: "dave@example.com" },
+        { campaign: "bootcamp-checkout-abandoned-round2", email: "dave@example.com" }
+    ]);
 });
 
 test("both emails and sender variants target all taster registers once and retain opt-outs", async (t) => {

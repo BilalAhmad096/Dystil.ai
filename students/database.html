@@ -1361,6 +1361,18 @@
                     ["taster-2026-09-13-reminder-frank", "from Frank"],
                     ["taster-2026-09-13-reminder-askus", "from Dystil"]
                 ]
+            },
+            {
+                // Bootcamp registrations that reached the payment page and did
+                // not pay. A second round on its own record, so the people the
+                // first chase reached on 9 September are asked again. Anybody
+                // who has paid under any reference is left off, and so is the
+                // team, whose checkouts there were tests.
+                label: "Stopped at payment · chase again",
+                buttons: [
+                    ["bootcamp-checkout-abandoned-round2-frank", "from Frank"],
+                    ["bootcamp-checkout-abandoned-round2-askus", "from Dystil"]
+                ]
             }
         ];
 
@@ -1582,7 +1594,8 @@
         const TESTABLE = [
             { campaign: "taster-2026-09-13-calendar", label: "Calendar invitation" },
             { campaign: "taster-2026-09-13-joining", label: "Taster session joining link" },
-            { campaign: "taster-2026-09-13-reminder", label: "Reminder on the day" }
+            { campaign: "taster-2026-09-13-reminder", label: "Reminder on the day" },
+            { campaign: "bootcamp-checkout-abandoned-round2", label: "Stopped at payment" }
         ];
 
         const testPanel = document.getElementById("testing");

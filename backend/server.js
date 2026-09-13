@@ -2487,21 +2487,32 @@ const BOOTCAMP_ROUNDS = [
     ["reminder", "reminder"]
 ];
 
+// Each round of the chase has its own ledger, so a second approach reaches the
+// people the first one already reached. The first round's keys are exactly
+// what four sends from 9 September are recorded under: rename them and those
+// records stop meaning anything.
+const ABANDONED_ROUNDS = [
+    ["", "bootcamp-checkout-abandoned"],
+    ["-round2", "bootcamp-checkout-abandoned-round2"]
+];
+
 function buildAbandonedCampaigns() {
     const campaigns = {};
 
-    for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
-        campaigns[`bootcamp-checkout-abandoned-${who}`] = {
-            formType: PAID_FORM,
-            roster: "leads",
-            subject: buildAbandonedSubject,
-            buildHtml: buildAbandonedHtml,
-            buildText: buildAbandonedText,
-            sender,
-            replyTo: sender,
-            dedupeKey: "bootcamp-checkout-abandoned",
-            testRecipients: TEST_TEAM
-        };
+    for (const [suffix, ledger] of ABANDONED_ROUNDS) {
+        for (const [who, sender] of Object.entries(CAMPAIGN_SENDERS)) {
+            campaigns[`bootcamp-checkout-abandoned${suffix}-${who}`] = {
+                formType: PAID_FORM,
+                roster: "leads",
+                subject: buildAbandonedSubject,
+                buildHtml: buildAbandonedHtml,
+                buildText: buildAbandonedText,
+                sender,
+                replyTo: sender,
+                dedupeKey: ledger,
+                testRecipients: TEST_TEAM
+            };
+        }
     }
 
     return campaigns;
@@ -2829,8 +2840,17 @@ async function loadBroadcastRoster(db, campaignName, campaign) {
         db.prepare(BROADCAST_SENT_SQL).bind(campaignName).all()
     ]);
 
+    // The payment page has been tested end to end by the team, and those test
+    // checkouts sit in the leads table beside the real ones. Nobody on the team
+    // is chased to pay for a place they were only testing, so they come off
+    // this roster here rather than their rows being deleted: the records stay,
+    // and a test checkout made tomorrow is left alone too. A test send to the
+    // team is unaffected, because tests pick from TEST_TEAM, not the roster.
+    const team = new Set(TEST_TEAM.map((person) => person.email.toLowerCase()));
+    const rows = (people.results || []).filter((row) => !(fromLeads && team.has(row.email)));
+
     return {
-        recipients: (people.results || []).map((row) => ({
+        recipients: rows.map((row) => ({
             email: row.email,
             fullName: row.full_name,
             firstName: firstNameOf(row.full_name),
