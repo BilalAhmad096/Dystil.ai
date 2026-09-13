@@ -1363,6 +1363,15 @@
                 ]
             },
             {
+                // Press once the session has started. Its own record, so the
+                // reminder going out this morning does not take anybody off it.
+                label: "Session has started · click to join",
+                buttons: [
+                    ["taster-2026-09-13-live-frank", "from Frank"],
+                    ["taster-2026-09-13-live-askus", "from Dystil"]
+                ]
+            },
+            {
                 // Bootcamp registrations that reached the payment page and did
                 // not pay. A second round on its own record, so the people the
                 // first chase reached on 9 September are asked again. Anybody
@@ -1595,6 +1604,7 @@
             { campaign: "taster-2026-09-13-calendar", label: "Calendar invitation" },
             { campaign: "taster-2026-09-13-joining", label: "Taster session joining link" },
             { campaign: "taster-2026-09-13-reminder", label: "Reminder on the day" },
+            { campaign: "taster-2026-09-13-live", label: "Session has started" },
             { campaign: "bootcamp-checkout-abandoned-round2", label: "Stopped at payment" }
         ];
 

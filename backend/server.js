@@ -2416,7 +2416,65 @@ function buildTasterReminderText(firstName) {
     ].join("\n");
 }
 
-// The three messages for the session, each on its own ledger. Being sent one
+/* ---------------------------------------------------------------------------
+   We are live
+   ---------------------------------------------------------------------------
+   Sent once the session has started, for anybody who meant to come and has
+   not. It is read on a phone in the few seconds somebody gives a
+   notification, so it carries one sentence and one button and nothing to
+   scroll past: no agenda, no footer logos, no images at all. Its own ledger,
+   so having had the reminder does not take anybody off it.
+--------------------------------------------------------------------------- */
+
+const TASTER_LIVE_SUBJECT = "We are live now | Dystil taster session";
+
+function buildTasterLiveHtml(firstName) {
+    const greeting = firstName ? escapeHtml(firstName) : "there";
+
+    return `<!doctype html>
+<html><body style="margin:0;padding:0;background:${REMIND_PAPER};">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">The session has started. Click to join on Microsoft Teams.</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${REMIND_PAPER};">
+        <tr><td align="center" style="padding:28px 12px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:100%;font-family:Arial,Helvetica,sans-serif;color:${REMIND_INK};">
+
+                <tr><td style="background:${REMIND_GREEN};padding:28px 32px 26px;border-radius:14px 14px 0 0;">
+                    <p style="margin:0 0 18px;font-size:15px;letter-spacing:5px;color:#ffffff;font-weight:bold;">DYSTIL</p>
+                    <p style="margin:0 0 10px;font-size:12px;letter-spacing:2px;color:${REMIND_MINT};font-weight:bold;">&#9679; LIVE NOW</p>
+                    <h1 style="margin:0;font-size:30px;line-height:1.25;color:#ffffff;">The session has started</h1>
+                </td></tr>
+
+                <tr><td style="background:#ffffff;padding:28px 32px 6px;">
+                    <p style="margin:0 0 14px;font-size:16px;line-height:1.6;">Hi ${greeting},</p>
+                    <p style="margin:0;font-size:16px;line-height:1.6;">We have just started the free taster session on Microsoft Teams. There is still time to join us.</p>
+                </td></tr>
+
+                <tr><td align="center" style="background:#ffffff;padding:26px 32px 32px;border-radius:0 0 14px 14px;">
+                    <a href="${escapeHtml(TASTER_MEETING_URL)}" style="display:inline-block;background:${REMIND_ACCENT};color:#ffffff;text-decoration:none;font-size:18px;font-weight:bold;padding:17px 48px;border-radius:8px;">Click to join</a>
+                    <p style="margin:14px 0 0;font-size:13px;color:${REMIND_MUTED};">${escapeHtml(TASTER_TIME)} &middot; opens in your browser</p>
+                </td></tr>
+
+            </table>
+        </td></tr>
+    </table>
+</body></html>`;
+}
+
+function buildTasterLiveText(firstName) {
+    return [
+        firstName ? `Hi ${firstName},` : "Hi,",
+        "",
+        "We have just started the free taster session on Microsoft Teams. There is still time to join us.",
+        "",
+        "Click to join: " + TASTER_MEETING_URL,
+        "",
+        TASTER_TIME,
+        "",
+        "The Dystil Team"
+    ].join("\n");
+}
+
+// The messages for the session, each on its own ledger. Being sent one
 // of them does not take anybody off another: the reminder goes to everybody on
 // the day whether or not they were sent the link a few days before.
 const TASTER_EMAILS = {
@@ -2435,6 +2493,11 @@ const TASTER_EMAILS = {
         subject: TASTER_REMINDER_SUBJECT,
         buildHtml: buildTasterReminderHtml,
         buildText: buildTasterReminderText
+    },
+    live: {
+        subject: TASTER_LIVE_SUBJECT,
+        buildHtml: buildTasterLiveHtml,
+        buildText: buildTasterLiveText
     }
 };
 
