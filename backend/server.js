@@ -3461,7 +3461,7 @@ function buildAbandonedHtml(firstName, person) {
 
     return `<!doctype html>
 <html><body style="margin:0;padding:0;background:${CHASE_PAPER};">
-    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(closingLine())}. Your form is done — only the payment is outstanding.</div>
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(closingLine())}. Your payment is still pending.</div>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${CHASE_PAPER};">
         <tr><td align="center" style="padding:28px 12px;">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:100%;font-family:Arial,Helvetica,sans-serif;color:${CHASE_INK};">
@@ -3474,7 +3474,7 @@ function buildAbandonedHtml(firstName, person) {
 
                 <tr><td style="background:#ffffff;padding:30px 32px 8px;">
                     <p style="margin:0 0 16px;font-size:16px;line-height:1.6;">Hi ${greeting},</p>
-                    <p style="margin:0 0 22px;font-size:16px;line-height:1.6;">You filled in the form for the ${escapeHtml(BOOTCAMP.name)}, picked your pathway, and got as far as the payment page. Then it stopped there — so your place is not held.</p>
+                    <p style="margin:0 0 22px;font-size:16px;line-height:1.6;">Your payment for the ${escapeHtml(BOOTCAMP.name)} is still pending, so your place is not reserved yet.</p>
 
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${CHASE_AMBER_SOFT};border:1px solid ${CHASE_LINE};border-left:4px solid ${CHASE_AMBER};border-radius:0 8px 8px 0;">
                         <tr><td style="padding:16px 20px;">
@@ -3488,14 +3488,14 @@ function buildAbandonedHtml(firstName, person) {
                 </td></tr>
 
                 <tr><td style="background:#ffffff;padding:24px 32px 4px;">
-                    <p style="margin:0 0 14px;font-size:16px;line-height:1.6;">Everything you typed is already done. The only thing left is the payment, and places are held in the order those arrive.</p>
+                    <p style="margin:0 0 14px;font-size:16px;line-height:1.6;">Complete your payment to reserve your place. Places are held in the order payments arrive.</p>
                     <p style="margin:0 0 12px;font-size:13px;letter-spacing:1.6px;color:${CHASE_MUTED};font-weight:bold;">WHAT IS WAITING ON THE OTHER SIDE</p>
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${missing}
                     </table>
                 </td></tr>
 
                 <tr><td align="center" style="background:#ffffff;padding:28px 32px 10px;">
-                    <a href="${escapeHtml(BOOTCAMP.register)}" style="display:inline-block;background:${CHASE_AMBER};color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:16px 42px;border-radius:8px;">Finish and claim my place</a>
+                    <a href="${escapeHtml(BOOTCAMP.register)}" style="display:inline-block;background:${CHASE_AMBER};color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:16px 42px;border-radius:8px;">Reserve my place</a>
                     <p style="margin:14px 0 0;font-size:13px;color:${CHASE_MUTED};">Takes a couple of minutes${fee ? ` &middot; ${escapeHtml(fee)}` : ""}</p>
                 </td></tr>
 
@@ -3529,15 +3529,15 @@ function buildAbandonedText(firstName, person) {
     return [
         firstName ? `Hi ${firstName},` : "Hi,",
         "",
-        `You filled in the form for the ${BOOTCAMP.name}, picked your pathway, and got as far as the payment page. Then it stopped there — so your place is not held.`,
+        `Your payment for the ${BOOTCAMP.name} is still pending, so your place is not reserved yet.`,
         "",
         closingLine().toUpperCase(),
         `Registration closes ${BOOTCAMP.closes}, and it starts ${BOOTCAMP.starts}.`,
         ...(pathway ? [`You chose ${pathway}${fee ? ` (${fee})` : ""}.`] : []),
         "",
-        "Everything you typed is already done. The only thing left is the payment, and places are held in the order those arrive.",
+        "Complete your payment to reserve your place. Places are held in the order payments arrive.",
         "",
-        "Finish and claim your place: " + BOOTCAMP.register,
+        "Reserve your place: " + BOOTCAMP.register,
         "",
         "Changed your mind? That is a fair answer — reply and say so and we will leave you alone. If something got in the way, reply or call " + DYSTIL_PHONE + " and we will sort it out.",
         "",
