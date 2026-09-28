@@ -2175,6 +2175,7 @@ test("quotes the fees the checkout actually charges", async function() {
         const instructions = calls[0].body.messages[0].content;
 
         assert.match(instructions, /Foundation Bootcamp — £399/);
+        assert.match(instructions, /Foundation Bootcamp runs Saturday 17 and Sunday 18 October 2026/);
         assert.match(instructions, /Advanced Bootcamp — £899/);
     });
 });

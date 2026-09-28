@@ -188,10 +188,9 @@ test("a campaign the Worker has never heard of is refused", async (t) => {
 });
 
 // The Emails tab offers the two taster messages and nothing else. These are
-// not on it, and are still here: the Career Accelerator starts on 26 September
-// with registration open until the 15th, so the campaign that chases a payment
-// someone abandoned halfway is the one thing that must not be deleted while
-// the window is open. Listing them costs nothing and sends nothing; putting a
+// not on it, and are still here: the Career Accelerator runs on 17 and 18
+// October, so the campaign that chases a payment someone abandoned halfway is
+// the one thing that must not be deleted while places are being taken. Listing them costs nothing and sends nothing; putting a
 // row back on the page is one line.
 test("the bootcamp campaigns are still reachable while that programme is open", async (t) => {
     const db = makeDatabase();
@@ -296,6 +295,8 @@ test("the chase sends a taster offer lead back to the offer page", async (t) => 
     assert.match(tara.htmlContent, /href="https:\/\/dystil\.ai\/students\/foundation-offer"/);
     assert.match(tara.textContent, /https:\/\/dystil\.ai\/students\/foundation-offer/);
     assert.doesNotMatch(tara.htmlContent, /students\/register/);
+    assert.match(tara.textContent, /Saturday 17 and Sunday 18 October 2026/);
+    assert.doesNotMatch(tara.textContent + tara.htmlContent, /Registration (closes|has closed)|days left/);
 
     assert.match(dave.htmlContent, /href="https:\/\/dystil\.ai\/students\/register"/);
 });

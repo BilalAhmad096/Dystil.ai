@@ -1884,7 +1884,7 @@ async function handleChat(request, env, corsHeaders) {
                 temperature: 0.4,
                 max_tokens: CHAT_REPLY_TOKENS,
                 messages: [
-                    { role: "system", content: buildAdvisorPrompt(BOOTCAMP_PRICES, page) },
+                    { role: "system", content: buildAdvisorPrompt(BOOTCAMP_PRICES, page, BOOTCAMP.dates) },
                     ...messages
                 ]
             })
@@ -2070,14 +2070,13 @@ const SOCIAL_ICONS = "https://dystil.ai/assets/images/social/";
 // The pathway pages the two bootcamp buttons point at. The query is read by
 // the register page, which preselects the package, so a reader who picked
 // Foundation in the email does not have to pick it again on the form.
-// Everything the bootcamp email says about when it runs. Change these three
-// lines and the subject, the panel, the HTML and the plain text all follow.
+// Everything the bootcamp email says about when it runs. Change the dates line
+// and the subject, the panel, the HTML, the plain text and the advisor follow.
+// There is no registration closing date for this cohort, so nothing counts
+// down to one: an email that invents a deadline is inventing urgency.
 const BOOTCAMP = {
     name: "Career Accelerator",
-    starts: "Saturday 26 September 2026",
-    closes: "Tuesday 15 September 2026",
-    // The same day as `closes`, for counting with rather than reading.
-    closesOn: "2026-09-15",
+    dates: "Saturday 17 and Sunday 18 October 2026",
     // One link, so no ?package= to preselect with: the form asks for the
     // pathway itself, which is one link fewer in the email.
     register: "https://dystil.ai/students/register",
@@ -2114,14 +2113,15 @@ const BOOTCAMP_SUBJECT = `Dates for the ${BOOTCAMP.name} | Dystil`;
    registration. Styling it like the invitation would trade the inbox for a
    letterhead, on the one email where reaching the inbox is the whole point.
 
-   The urgency is the real closing date in BOOTCAMP, not a claim that places
-   are running out. We have never published a number of seats, and inventing
+   There is no closing date for the October cohort, so the subject states
+   when it runs rather than when registration ends. Nor is there a claim that
+   places are running out. We have never published a number of seats, and inventing
    scarcity to hurry somebody into paying is both a lie and, for a paid
    programme, a practice the consumer regulations name specifically.
 --------------------------------------------------------------------------- */
 
 const CONFIRM_PLACE_SUBJECT =
-    `Registration closes ${BOOTCAMP.closes} | your ${BOOTCAMP.name} place`;
+    `${BOOTCAMP.dates} | your ${BOOTCAMP.name} place`;
 
 /* What reaches Primary, measured rather than guessed.
    ---------------------------------------------------------------------------
@@ -3180,8 +3180,7 @@ function buildBootcampPlainText(firstName) {
         "",
         `Our free taster session in August went well: an hour on what AI is doing to ordinary jobs. It was a preview of the ${BOOTCAMP.name}, and that programme now has its dates.`,
         "",
-        `Starts ${BOOTCAMP.starts}`,
-        `Registration closes ${BOOTCAMP.closes}`,
+        `Runs ${BOOTCAMP.dates}`,
         "",
         "There are two pathways. Foundation is for building the basics; Advanced is for harder projects and a stronger profile. Dates, fees and both pathways are on the page, and you choose one when you register.",
         "",
@@ -3238,7 +3237,7 @@ function buildConfirmPlaceHtml(firstName) {
                     <tr>
                         <td style="padding:0 34px;">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid ${RICH_LINE};border-bottom:1px solid ${RICH_LINE};">
-${confirmFact("Starts", BOOTCAMP.starts, false)}${confirmFact("Registration closes", BOOTCAMP.closes, true)}
+${confirmFact("Runs", BOOTCAMP.dates, true)}
                             </table>
                         </td>
                     </tr>
@@ -3285,8 +3284,7 @@ function buildConfirmPlaceText(firstName) {
         "",
         "Please confirm it by filling in the form below. It takes a couple of minutes.",
         "",
-        `Starts ${BOOTCAMP.starts}`,
-        `Registration closes ${BOOTCAMP.closes}`,
+        `Runs ${BOOTCAMP.dates}`,
         "",
         `You choose your pathway when you confirm. Foundation is ${poundsOf(BOOTCAMP_PRICES["Foundation Bootcamp"])} and builds the basics. Advanced is ${poundsOf(BOOTCAMP_PRICES["Advanced Bootcamp"])} and adds a two-week project with mentor support.`,
         "",
@@ -3389,7 +3387,7 @@ function buildBootcampRichHtml(firstName) {
 
     return `<!doctype html>
 <html><body style="margin:0;padding:0;background:${RICH_PAPER};">
-    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Dates are set for the ${escapeHtml(BOOTCAMP.name)}. Registration closes ${escapeHtml(BOOTCAMP.closes)}.</div>
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Dates are set for the ${escapeHtml(BOOTCAMP.name)}: ${escapeHtml(BOOTCAMP.dates)}.</div>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${RICH_PAPER};">
         <tr><td align="center" style="padding:28px 12px;">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:100%;font-family:Arial,Helvetica,sans-serif;color:${RICH_INK};">
@@ -3406,8 +3404,7 @@ function buildBootcampRichHtml(firstName) {
 
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${RICH_PAPER};border-left:4px solid ${RICH_ACCENT};border-radius:0 8px 8px 0;">
                         <tr><td style="padding:16px 20px;">
-                            <p style="margin:0 0 4px;font-size:18px;font-weight:bold;color:${RICH_INK};">Starts ${escapeHtml(BOOTCAMP.starts)}</p>
-                            <p style="margin:0;font-size:15px;color:${RICH_MUTED};">Registration closes ${escapeHtml(BOOTCAMP.closes)}</p>
+                            <p style="margin:0;font-size:18px;font-weight:bold;color:${RICH_INK};">Runs ${escapeHtml(BOOTCAMP.dates)}</p>
                         </td></tr>
                     </table>
                 </td></tr>
@@ -3489,23 +3486,6 @@ function registerLinkFor(person) {
     return person && person.package === TASTER_OFFER_PACKAGE ? TASTER_OFFER_PAGE : BOOTCAMP.register;
 }
 
-// Counted on the day the email goes out, so it cannot be stale in the way a
-// written number would be. Anything at or past the close says so instead.
-function daysUntilClose(now = new Date()) {
-    const close = Date.UTC(...BOOTCAMP.closesOn.split("-").map((v, i) => i === 1 ? Number(v) - 1 : Number(v)));
-    const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    return Math.round((close - today) / 86400000);
-}
-
-function closingLine() {
-    const days = daysUntilClose();
-
-    if (days > 1) return `${days} days left to register`;
-    if (days === 1) return "Last day to register is tomorrow";
-    if (days === 0) return "Registration closes today";
-    return "Registration has closed";
-}
-
 function buildAbandonedSubject(person) {
     const pathway = pathwayName(person);
     return pathway
@@ -3539,7 +3519,7 @@ function buildAbandonedHtml(firstName, person) {
 
     return `<!doctype html>
 <html><body style="margin:0;padding:0;background:${CHASE_PAPER};">
-    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(closingLine())}. Your payment is still pending.</div>
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(BOOTCAMP.name)}, ${escapeHtml(BOOTCAMP.dates)}. Your payment is still pending.</div>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${CHASE_PAPER};">
         <tr><td align="center" style="padding:28px 12px;">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:100%;font-family:Arial,Helvetica,sans-serif;color:${CHASE_INK};">
@@ -3557,8 +3537,7 @@ function buildAbandonedHtml(firstName, person) {
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${CHASE_AMBER_SOFT};border:1px solid ${CHASE_LINE};border-left:4px solid ${CHASE_AMBER};border-radius:0 8px 8px 0;">
                         <tr><td style="padding:16px 20px;">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-                                <tr><td style="padding:0 0 6px;font-size:19px;font-weight:bold;color:${CHASE_AMBER};">${escapeHtml(closingLine())}</td></tr>
-                                <tr><td style="padding:4px 0;font-size:15px;color:${CHASE_MUTED};">Registration closes ${escapeHtml(BOOTCAMP.closes)} &middot; starts ${escapeHtml(BOOTCAMP.starts)}</td></tr>
+                                <tr><td style="padding:0 0 6px;font-size:19px;font-weight:bold;color:${CHASE_AMBER};">${escapeHtml(BOOTCAMP.dates)}</td></tr>
                                 ${chosen}
                             </table>
                         </td></tr>
@@ -3609,8 +3588,7 @@ function buildAbandonedText(firstName, person) {
         "",
         `Your payment for the ${BOOTCAMP.name} is still pending, so your place is not reserved yet.`,
         "",
-        closingLine().toUpperCase(),
-        `Registration closes ${BOOTCAMP.closes}, and it starts ${BOOTCAMP.starts}.`,
+        `It runs ${BOOTCAMP.dates}.`,
         ...(pathway ? [`You chose ${pathway}${fee ? ` (${fee})` : ""}.`] : []),
         "",
         "Complete your payment to reserve your place. Places are held in the order payments arrive.",
