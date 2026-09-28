@@ -273,6 +273,33 @@ test("the second chase reaches people the first one already did, and never the t
     ]);
 });
 
+// Somebody who stopped on the offer page was quoted £299. Sending them to the
+// register page would charge them £399 under an email that says £299.
+test("the chase sends a taster offer lead back to the offer page", async (t) => {
+    const db = makeDatabase();
+    t.after(() => db.close());
+    const env = makeEnv(db);
+    const deliveries = captureEmail(t);
+
+    db.sqlite.prepare("INSERT INTO registration_leads VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .run("LEAD-006", "Bootcamp Registration", "Tara Attendee", "tara@example.com", "Foundation Bootcamp (Taster Offer)", 29900, "2026-09-28T09:00:00Z", null);
+
+    const response = await broadcast(env, {
+        action: "send", campaign: "bootcamp-checkout-abandoned-frank",
+        emails: ["tara@example.com", "dave@example.com"]
+    });
+    assert.equal(response.status, 200);
+
+    const [tara, dave] = deliveries;
+    assert.equal(tara.subject, "Your Foundation place is still unclaimed");
+    assert.match(tara.htmlContent, /£299/);
+    assert.match(tara.htmlContent, /href="https:\/\/dystil\.ai\/students\/foundation-offer"/);
+    assert.match(tara.textContent, /https:\/\/dystil\.ai\/students\/foundation-offer/);
+    assert.doesNotMatch(tara.htmlContent, /students\/register/);
+
+    assert.match(dave.htmlContent, /href="https:\/\/dystil\.ai\/students\/register"/);
+});
+
 test("both emails and sender variants target all taster registers once and retain opt-outs", async (t) => {
     const db = makeDatabase();
     t.after(() => db.close());

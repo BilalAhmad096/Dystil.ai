@@ -14,12 +14,20 @@ const ADMIN_ATTEMPT_LIMIT = 5;
 const ADMIN_ATTEMPT_WINDOW_SECONDS = 900;
 const ADMIN_PAGE_SIZE = 500;
 
+const TASTER_OFFER_PACKAGE = "Foundation Bootcamp (Taster Offer)";
+const TASTER_OFFER_PAGE = "https://dystil.ai/students/foundation-offer";
+
 // Programme fees in pence. They are priced here rather than in the form because
 // the page may say which package somebody chose, but never what it costs: a
 // figure that arrives from a browser is a figure anybody can change.
 const BOOTCAMP_PRICES = {
     "Foundation Bootcamp": 39900,
-    "Advanced Bootcamp": 89900
+    "Advanced Bootcamp": 89900,
+    // The taster attendees' price, taken only on the unlisted offer page. It is
+    // a package of the same registration rather than a form of its own, so an
+    // offer payer sits in the bootcamp list beside everybody else and the
+    // amount is what tells the two apart.
+    [TASTER_OFFER_PACKAGE]: 29900
 };
 
 // The bootcamp is the only form anybody pays for. The rest are enquiries.
@@ -3471,7 +3479,14 @@ const CHASE_MUTED = "#5b6b64";
 // "Advanced Bootcamp" is how the form records it; "Advanced" is how a person
 // says it.
 function pathwayName(person) {
-    return String(person && person.package || "").replace(/\s*Bootcamp\s*$/i, "").trim() || "";
+    return String(person && person.package || "").replace(/\s*\(.*\)\s*$/, "").replace(/\s*Bootcamp\s*$/i, "").trim() || "";
+}
+
+// Somebody who stopped on the offer page is sent back to it. The register page
+// would charge them the full fee the email beside the button says they are not
+// paying.
+function registerLinkFor(person) {
+    return person && person.package === TASTER_OFFER_PACKAGE ? TASTER_OFFER_PAGE : BOOTCAMP.register;
 }
 
 // Counted on the day the email goes out, so it cannot be stale in the way a
@@ -3558,7 +3573,7 @@ function buildAbandonedHtml(firstName, person) {
                 </td></tr>
 
                 <tr><td align="center" style="background:#ffffff;padding:28px 32px 10px;">
-                    <a href="${escapeHtml(BOOTCAMP.register)}" style="display:inline-block;background:${CHASE_AMBER};color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:16px 42px;border-radius:8px;">Reserve my place</a>
+                    <a href="${escapeHtml(registerLinkFor(person))}" style="display:inline-block;background:${CHASE_AMBER};color:#ffffff;text-decoration:none;font-size:17px;font-weight:bold;padding:16px 42px;border-radius:8px;">Reserve my place</a>
                     <p style="margin:14px 0 0;font-size:13px;color:${CHASE_MUTED};">Takes a couple of minutes${fee ? ` &middot; ${escapeHtml(fee)}` : ""}</p>
                 </td></tr>
 
@@ -3600,7 +3615,7 @@ function buildAbandonedText(firstName, person) {
         "",
         "Complete your payment to reserve your place. Places are held in the order payments arrive.",
         "",
-        "Reserve your place: " + BOOTCAMP.register,
+        "Reserve your place: " + registerLinkFor(person),
         "",
         "Changed your mind? That is a fair answer — reply and say so and we will leave you alone. If something got in the way, reply or call " + DYSTIL_PHONE + " and we will sort it out.",
         "",

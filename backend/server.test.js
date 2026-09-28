@@ -1669,6 +1669,50 @@ test("prices the package on the server, not from the form", async function() {
     assert.equal(paidRowFor(paidEnv.DB, "priya@example.com").payment_amount, 89900);
 });
 
+// The unlisted offer page sends name, email and phone, and the package as a
+// hidden field. What it costs is still decided here.
+const tasterOffer = {
+    formType: "Bootcamp Registration",
+    fullName: "Tara Attendee",
+    email: "tara@example.com",
+    phone: "07000 333444",
+    package: "Foundation Bootcamp (Taster Offer)",
+    website: ""
+};
+
+test("charges taster attendees £299 on the offer page", async function() {
+    paidEnv = makePaidEnv();
+
+    const started = await startRegistration({ ...tasterOffer, unit_amount: "1", amount: "1" });
+
+    assert.equal(started.status, 200);
+    assert.equal(started.stripeCalls[0].fields.get("line_items[0][price_data][unit_amount]"), "29900");
+    assert.equal(started.stripeCalls[0].fields.get("line_items[0][price_data][product_data][name]"), "Dystil Launchpad — Foundation Bootcamp (Taster Offer)");
+    assert.equal(paidEnv.DB.leads[0].fee, 29900);
+
+    const paid = await payFor(started, 29900);
+    const row = paidRowFor(paidEnv.DB, "tara@example.com");
+
+    assert.match(row.reference, PAID_REFERENCE);
+    assert.equal(row.payment_amount, 29900);
+    assert.equal(JSON.parse(row.details).package, "Foundation Bootcamp (Taster Offer)");
+    assert.equal(JSON.parse(row.details).phone, "07000 333444");
+    assert.match(paid.emailCalls[0].body.subject, /PAID £299/);
+});
+
+test("still asks the offer page for a working phone number", async function() {
+    paidEnv = makePaidEnv();
+
+    for (const phone of ["", "dada"]) {
+        const started = await startRegistration({ ...tasterOffer, phone });
+
+        assert.equal(started.status, 400);
+        assert.equal(started.stripeCalls.length, 0);
+    }
+
+    assert.equal(paidEnv.DB.pending.length, 0);
+});
+
 // A hold with no payment page to wait on is worse than no hold at all.
 test("throws the hold away when Stripe cannot be reached", async function() {
     paidEnv = makePaidEnv();

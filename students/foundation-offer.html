@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Unlisted: sent to taster attendees only, so kept out of search and the sitemap. -->
+    <meta name="robots" content="noindex, nofollow">
+    <title>Foundation Bootcamp Taster Offer | DYSTIL Launchpad</title>
+    <meta name="description" content="The Foundation Bootcamp at the taster attendee price of £299.">
+    <link rel="canonical" href="https://dystil.ai/students/foundation-offer">
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="icon" type="image/png" href="/assets/images/favicon.png">
+    <link rel="shortcut icon" type="image/x-icon" href="/assets/images/favicon.ico">
+    <link rel="apple-touch-icon" href="/assets/images/favicon.png">
+</head>
+<body>
+
+    <div id="header"></div>
+
+    <main>
+        <section class="form-section">
+            <h1>Foundation Bootcamp: Taster Offer</h1>
+            <p>Thank you for joining our taster session. As an attendee you can book the Foundation Bootcamp for <strong>£299</strong> instead of the usual £399. Fill in your details below and your place is confirmed once the fee is paid.</p>
+
+            <form class="register-form" method="post" action="https://dystil-contact.dystil-ai.workers.dev/api/enquiry" enctype="multipart/form-data" data-enquiry-form data-form-type="Bootcamp Registration">
+                <input type="hidden" name="formType" value="Bootcamp Registration">
+                <!-- The server prices this package; the page never says what it costs. -->
+                <input type="hidden" name="package" value="Foundation Bootcamp (Taster Offer)">
+
+                <label for="offer-full-name">Full Name</label>
+                <input id="offer-full-name" name="fullName" type="text" placeholder="Enter your full name" autocomplete="name" maxlength="120" required>
+
+                <label for="offer-email">Email</label>
+                <input id="offer-email" name="email" type="email" placeholder="Enter your email" autocomplete="email" maxlength="254" required>
+
+                <label for="offer-phone">Phone</label>
+                <input id="offer-phone" name="phone" type="tel" placeholder="Enter your phone number" autocomplete="tel" maxlength="40" inputmode="tel" pattern="\+?[0-9][0-9 ().-]{5,38}" title="Enter a phone number using digits, for example 07700 900123 or +44 7700 900123" required>
+
+                <div class="form-honeypot" aria-hidden="true">
+                    <label for="offer-website">Website</label>
+                    <input id="offer-website" name="website" type="text" tabindex="-1" autocomplete="off">
+                </div>
+
+                <p class="form-privacy">Your details are held while you pay and are recorded only once the programme fee is paid. If you do not complete the payment they are deleted within 24 hours, and we keep only your name and email so that we can follow up. Once paid, we email your details to our team so that we can reply. We do not share your details with anyone else. Email <a href="mailto:askus@dystil.ai">askus@dystil.ai</a> at any time to get a copy of your details or ask us to delete them.</p>
+
+                <button type="submit">Pay £299</button>
+                <p class="form-status" role="status" aria-live="polite"></p>
+            </form>
+        </section>
+    </main>
+
+    <div id="footer"></div>
+    <script src="/assets/js/form-config.js"></script>
+    <script src="/assets/js/script.js"></script>
+    <script>
+        loadStudentLayout();
+    </script>
+    <script src="/assets/js/mobile-menu.js"></script>
+    <script src="/assets/js/chat.js"></script>
+</body>
+</html>
