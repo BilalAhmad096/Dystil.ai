@@ -1687,7 +1687,8 @@ test("charges taster attendees £299 on the offer page", async function() {
 
     assert.equal(started.status, 200);
     assert.equal(started.stripeCalls[0].fields.get("line_items[0][price_data][unit_amount]"), "29900");
-    assert.equal(started.stripeCalls[0].fields.get("line_items[0][price_data][product_data][name]"), "Dystil Launchpad — Foundation Bootcamp (Taster Offer)");
+    assert.equal(started.stripeCalls[0].fields.get("line_items[0][price_data][product_data][name]"), "Dystil Launchpad — Foundation Bootcamp");
+    assert.equal(started.stripeCalls[0].fields.get("metadata[package]"), "Foundation Bootcamp (Taster Offer)");
     assert.equal(paidEnv.DB.leads[0].fee, 29900);
 
     const paid = await payFor(started, 29900);

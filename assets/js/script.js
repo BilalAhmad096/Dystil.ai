@@ -153,19 +153,11 @@ function loadCorporateLayout() {
 }
 
 /* Student bootcamp detail toggle */
-document.addEventListener("click", function(e) {
-    const button = e.target.closest(".choice-link");
-
-    if (!button) return;
-
-    const card = button.closest(".bootcamp-choice");
-
-    if (!card) return;
-
-    const selected = card.getAttribute("data-bootcamp");
+function openBootcampDetail(selected, behavior) {
+    const card = document.querySelector('.bootcamp-choice[data-bootcamp="' + selected + '"]');
     const targetDetail = document.getElementById(selected + "-detail");
 
-    if (!targetDetail) return;
+    if (!card || !targetDetail) return;
 
     document.querySelectorAll(".bootcamp-choice").forEach(function(item) {
         item.classList.remove("active");
@@ -179,9 +171,35 @@ document.addEventListener("click", function(e) {
     targetDetail.classList.add("active");
 
     targetDetail.scrollIntoView({
-        behavior: "smooth",
+        behavior: behavior,
         block: "start"
     });
+}
+
+document.addEventListener("click", function(e) {
+    const button = e.target.closest(".choice-link");
+
+    if (!button) return;
+
+    const card = button.closest(".bootcamp-choice");
+
+    if (!card) return;
+
+    openBootcampDetail(card.getAttribute("data-bootcamp"), "smooth");
+});
+
+/* A link to /students/services#foundation or #advanced arrives with that
+   pathway's details already open. */
+window.addEventListener("load", function() {
+    const selected = window.location.hash.slice(1);
+
+    // A moment's wait, so the scroll lands after the browser has finished
+    // placing the page on load rather than being undone by it.
+    if (selected === "foundation" || selected === "advanced") {
+        setTimeout(function() {
+            openBootcampDetail(selected, "instant");
+        }, 200);
+    }
 });
 
 /* Corporate FAQ accordion */

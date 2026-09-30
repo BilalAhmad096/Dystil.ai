@@ -17,6 +17,12 @@ const ADMIN_PAGE_SIZE = 500;
 const TASTER_OFFER_PACKAGE = "Foundation Bootcamp (Taster Offer)";
 const TASTER_OFFER_PAGE = "https://dystil.ai/students/foundation-offer";
 
+// What the payer reads on Stripe's page and receipt. The offer is never named
+// to them; the package name above is only for telling payers apart in here.
+function customerPackageName(pkg) {
+    return pkg === TASTER_OFFER_PACKAGE ? "Foundation Bootcamp" : pkg;
+}
+
 // Programme fees in pence. They are priced here rather than in the form because
 // the page may say which package somebody chose, but never what it costs: a
 // figure that arrives from a browser is a figure anybody can change.
@@ -1446,7 +1452,7 @@ async function createCheckoutSession(env, reference, values, fee, token) {
         "line_items[0][quantity]": "1",
         "line_items[0][price_data][currency]": "gbp",
         "line_items[0][price_data][unit_amount]": String(fee),
-        "line_items[0][price_data][product_data][name]": `Dystil Launchpad — ${values.package}`,
+        "line_items[0][price_data][product_data][name]": `Dystil Launchpad — ${customerPackageName(values.package)}`,
         "line_items[0][price_data][product_data][description]": `Programme fee, reference ${reference}`,
         "metadata[reference]": reference,
         "metadata[package]": values.package,
